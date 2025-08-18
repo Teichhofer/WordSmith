@@ -41,18 +41,22 @@ def _fetch_ollama_models(url: str) -> List[str]:
 
 
 def main() -> None:
-    topic = input("Topic: ")
-    word_count = _prompt_int("Word count: ")
-    step_count = _prompt_int("Number of steps: ")
-    iterations = _prompt_int("Iterations per step: ")
+    default_topic = "Untitled"
+    topic = input(f"Topic [{default_topic}]: ").strip() or default_topic
+    word_count = _prompt_int("Word count [100]: ", default=100)
+    step_count = _prompt_int("Number of steps [1]: ", default=1)
+    iterations = _prompt_int("Iterations per step [1]: ", default=1)
 
     steps: List[agent.Step] = []
     for i in range(1, step_count + 1):
-        task = input(f"Task for step {i}: ")
+        default_task = f"Step {i}"
+        task = input(f"Task for step {i} [{default_task}]: ").strip() or default_task
         steps.append(agent.Step(task))
 
     provider = (
-        input("LLM provider (stub/ollama/openai): ").strip()
+        input(
+            f"LLM provider (stub/ollama/openai) [{agent.DEFAULT_CONFIG.llm_provider}]: "
+        ).strip()
         or agent.DEFAULT_CONFIG.llm_provider
     )
     if provider == "ollama":
@@ -66,7 +70,10 @@ def main() -> None:
         choice = _prompt_int("Select model [1]: ", default=1)
         model = models[min(max(choice, 1), len(models)) - 1]
     else:
-        model = input("Model name: ").strip() or agent.DEFAULT_CONFIG.model
+        model = (
+            input(f"Model name [{agent.DEFAULT_CONFIG.model}]: ").strip()
+            or agent.DEFAULT_CONFIG.model
+        )
     temperature = _prompt_float(
         f"Temperature [{agent.DEFAULT_CONFIG.temperature}]: ",
         default=agent.DEFAULT_CONFIG.temperature,
@@ -75,6 +82,10 @@ def main() -> None:
         f"Context length [{agent.DEFAULT_CONFIG.context_length}]: ",
         default=agent.DEFAULT_CONFIG.context_length,
     )
+    max_tokens = _prompt_int(
+        f"Max tokens [{agent.DEFAULT_CONFIG.max_tokens}]: ",
+        default=agent.DEFAULT_CONFIG.max_tokens,
+    )
 
     cfg = replace(
         agent.DEFAULT_CONFIG,
@@ -82,6 +93,7 @@ def main() -> None:
         model=model,
         temperature=temperature,
         context_length=context_length,
+        max_tokens=max_tokens,
     )
     writer = agent.WriterAgent(topic, word_count, steps, iterations, config=cfg)
     final_text = writer.run()

@@ -19,6 +19,7 @@ class Config:
     model: str = "gpt-3.5-turbo"
     temperature: float = 0.7
     context_length: int = 2048
+    max_tokens: int = 256
     openai_api_key: str | None = None
     openai_url: str = "https://api.openai.com/v1/chat/completions"
     ollama_url: str = "http://192.168.100.148:11434/api/generate"
