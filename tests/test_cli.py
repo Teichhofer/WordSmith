@@ -17,14 +17,15 @@ def test_cli_main(monkeypatch, tmp_path, capsys):
     captured_cfg = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(topic, word_count, steps, iterations, config):
+    def capturing_writer(topic, word_count, steps, iterations, config, content=""):
         captured_cfg['config'] = config
-        return original_writer(topic, word_count, steps, iterations, config)
+        return original_writer(topic, word_count, steps, iterations, config, content=content)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
     inputs = iter(
         [
+            'n',
             'Cats',
             '5',
             '1',
@@ -63,6 +64,7 @@ def test_cli_invalid_numeric_input(monkeypatch, tmp_path, capsys):
 
     inputs = iter(
         [
+            'n',
             'Cats',
             'five', '5',
             '1',
@@ -98,14 +100,15 @@ def test_cli_ollama_model_selection(monkeypatch, tmp_path, capsys):
     captured_cfg = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(topic, word_count, steps, iterations, config):
+    def capturing_writer(topic, word_count, steps, iterations, config, content=""):
         captured_cfg['config'] = config
-        return original_writer(topic, word_count, steps, iterations, config)
+        return original_writer(topic, word_count, steps, iterations, config, content=content)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
     inputs = iter(
         [
+            'n',
             'Cats',
             '5',
             '1',
@@ -142,6 +145,7 @@ def test_cli_ollama_no_models(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(cli, '_fetch_ollama_models', lambda url: [])
 
     inputs = iter([
+        'n',
         'Cats',
         '5',
         '1',
@@ -170,17 +174,18 @@ def test_cli_defaults(monkeypatch, tmp_path, capsys):
     captured_args = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(topic, word_count, steps, iterations, config):
+    def capturing_writer(topic, word_count, steps, iterations, config, content=""):
         captured_args['topic'] = topic
         captured_args['word_count'] = word_count
         captured_args['steps'] = steps
         captured_args['iterations'] = iterations
         captured_args['config'] = config
-        return original_writer(topic, word_count, steps, iterations, config)
+        captured_args['content'] = content
+        return original_writer(topic, word_count, steps, iterations, config, content=content)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
-    inputs = iter(['', '', '', '', '', '', '', '', '', ''])
+    inputs = iter(['n', '', '', '', '', '', '', '', '', '', ''])
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
 
     cli.main()
@@ -196,3 +201,38 @@ def test_cli_defaults(monkeypatch, tmp_path, capsys):
     assert cfg_used.temperature == cfg.temperature
     assert cfg_used.context_length == cfg.context_length
     assert cfg_used.max_tokens == cfg.max_tokens
+
+
+def test_cli_auto_mode(monkeypatch, tmp_path, capsys):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+    monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
+
+    captured = {}
+    original_writer = agent.WriterAgent
+
+    def capturing_writer(topic, word_count, steps, iterations, config, content=""):
+        captured['topic'] = topic
+        captured['content'] = content
+        captured['iterations'] = iterations
+        captured['steps'] = steps
+        captured['config'] = config
+        return original_writer(topic, word_count, steps, iterations, config, content=content)
+
+    monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
+
+    inputs = iter(['y', 'My Title', 'A cat story', '5', '2'])
+    monkeypatch.setattr('builtins.input', lambda _: next(inputs))
+
+    cli.main()
+
+    out = capsys.readouterr().out
+    assert 'Final text:' in out
+    assert 'iteration 1/2' in out
+    assert captured['steps'] == []
+    assert captured['content'] == 'A cat story'
+    assert captured['iterations'] == 2
+    assert captured['config'] is cfg

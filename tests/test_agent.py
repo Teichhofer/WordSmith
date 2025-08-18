@@ -169,3 +169,36 @@ def test_run_reports_progress(monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     assert 'step 1/1 iteration 1/1' in out
     assert 'tok/s' in out
+
+
+def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=2,
+        config=cfg,
+        content='about cats',
+    )
+
+    calls = []
+
+    def fake_call_llm(prompt, fallback):
+        calls.append(prompt)
+        if 'nächste Schritt' in prompt:
+            return 'Write intro.'
+        return 'Some text.'
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    writer.run_auto()
+
+    out = capsys.readouterr().out
+    assert any('nächste Schritt' in c for c in calls)
+    assert 'iteration 1/2' in out
+    assert (tmp_path / 'output' / 'story.txt').exists()

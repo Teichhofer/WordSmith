@@ -41,6 +41,27 @@ def _fetch_ollama_models(url: str) -> List[str]:
 
 
 def main() -> None:
+    if input("Automatic mode? (y/N): ").strip().lower() == "y":
+        default_topic = "Untitled"
+        topic = input(f"Title [{default_topic}]: ").strip() or default_topic
+        content = input("Desired content: ").strip()
+        word_count = _prompt_int("Word count [100]: ", default=100)
+        iterations = _prompt_int("Number of iterations [1]: ", default=1)
+
+        writer = agent.WriterAgent(
+            topic,
+            word_count,
+            [],
+            iterations,
+            config=agent.DEFAULT_CONFIG,
+            content=content,
+        )
+        final_text = writer.run_auto()
+
+        print("\nFinal text:\n")
+        print(final_text)
+        return
+
     default_topic = "Untitled"
     topic = input(f"Topic [{default_topic}]: ").strip() or default_topic
     word_count = _prompt_int("Word count [100]: ", default=100)
