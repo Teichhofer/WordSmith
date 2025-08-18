@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import urllib.request
+import time
 import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from typing import Iterable, List
 
@@ -69,7 +70,11 @@ class WriterAgent:
             prompt = self._craft_prompt(step.task)
             for iteration in range(1, self.iterations + 1):
                 current_text = " ".join(text)
+                start = time.perf_counter()
                 addition = self._generate(prompt, current_text, iteration)
+                elapsed = time.perf_counter() - start
+                tokens = len(addition.split())
+                tok_per_sec = tokens / (elapsed or 1e-8)
                 text.append(addition)
                 current_text = " ".join(text)
                 self._save_text(current_text)
@@ -80,6 +85,11 @@ class WriterAgent:
                     iteration,
                     self.iterations,
                     addition,
+                )
+                print(
+                    f"step {step_index}/{len(self.steps)} iteration {iteration}/{self.iterations}: "
+                    f"{tokens} tokens ({tok_per_sec:.2f} tok/s)",
+                    flush=True,
                 )
 
         final_text = " ".join(text)

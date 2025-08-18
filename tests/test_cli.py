@@ -42,6 +42,7 @@ def test_cli_main(monkeypatch, tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert 'Final text:' in captured.out
+    assert 'tok/s' in captured.out
     assert (tmp_path / 'logs' / 'run.log').exists()
     assert (tmp_path / 'output' / 'story.txt').exists()
     assert captured_cfg['config'].llm_provider == 'stub'
@@ -78,6 +79,7 @@ def test_cli_invalid_numeric_input(monkeypatch, tmp_path, capsys):
     captured = capsys.readouterr()
     assert captured.out.count('Invalid input') == 3
     assert 'Final text:' in captured.out
+    assert 'tok/s' in captured.out
 
 
 def test_cli_ollama_model_selection(monkeypatch, tmp_path, capsys):
@@ -118,6 +120,7 @@ def test_cli_ollama_model_selection(monkeypatch, tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert 'Final text:' in captured.out
+    assert 'tok/s' in captured.out
     assert captured_cfg['config'].llm_provider == 'ollama'
     assert captured_cfg['config'].model == 'm2'
 
