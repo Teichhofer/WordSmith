@@ -122,11 +122,13 @@ class WriterAgent:
         """
 
         text: List[str] = []
+        self.config.adjust_for_word_count(self.word_count)
         for iteration in range(1, self.iterations + 1):
             current_text = " ".join(text)
             meta_prompt = prompts.META_PROMPT.format(
                 title=self.topic,
                 content=self.content,
+                word_count=self.word_count,
                 current_text=current_text,
             )
             prompt = self._call_llm(
