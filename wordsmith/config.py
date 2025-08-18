@@ -12,6 +12,7 @@ class Config:
 
     log_dir: Path = Path("logs")
     output_dir: Path = Path("output")
+    output_file: str = "current_text.txt"
     log_level: int = logging.INFO
     log_file: str = "run.log"
     llm_provider: str = "stub"
