@@ -18,6 +18,9 @@ The program will prompt for:
 4. **Iterations per step** – how many times each phase should run.
 5. **Task for each step** – a short description of what should happen in that
    step.
+6. **LLM provider** – choose between the stub and real providers. When using
+   the Ollama provider, the available models are fetched automatically and you
+   can select one from a numbered list.
 
 During execution a log is written to `logs/run.log` and the current state of
 the text is stored in `output/current_text.txt`.

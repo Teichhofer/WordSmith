@@ -120,3 +120,30 @@ def test_cli_ollama_model_selection(monkeypatch, tmp_path, capsys):
     assert 'Final text:' in captured.out
     assert captured_cfg['config'].llm_provider == 'ollama'
     assert captured_cfg['config'].model == 'm2'
+
+
+def test_cli_ollama_no_models(monkeypatch, tmp_path, capsys):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+    monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
+
+    # Simulate no models being returned from Ollama
+    monkeypatch.setattr(cli, '_fetch_ollama_models', lambda url: [])
+
+    inputs = iter([
+        'Cats',
+        '5',
+        '1',
+        '1',
+        'intro',
+        'ollama',
+    ])
+    monkeypatch.setattr('builtins.input', lambda _: next(inputs))
+
+    cli.main()
+
+    captured = capsys.readouterr()
+    assert 'No models available from Ollama.' in captured.out

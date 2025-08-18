@@ -57,14 +57,14 @@ def main() -> None:
     )
     if provider == "ollama":
         models = _fetch_ollama_models(agent.DEFAULT_CONFIG.ollama_list_url)
-        if models:
-            print("Available models:")
-            for i, name in enumerate(models, 1):
-                print(f"{i}. {name}")
-            choice = _prompt_int("Select model [1]: ", default=1)
-            model = models[min(max(choice, 1), len(models)) - 1]
-        else:
-            model = input("Model name: ").strip() or agent.DEFAULT_CONFIG.model
+        if not models:
+            print("No models available from Ollama.")
+            return
+        print("Available models:")
+        for i, name in enumerate(models, 1):
+            print(f"{i}. {name}")
+        choice = _prompt_int("Select model [1]: ", default=1)
+        model = models[min(max(choice, 1), len(models)) - 1]
     else:
         model = input("Model name: ").strip() or agent.DEFAULT_CONFIG.model
     temperature = _prompt_float(
