@@ -3,6 +3,7 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 import json
 import urllib.request
+import urllib.error
 
 import wordsmith.agent as agent
 from wordsmith.config import Config
@@ -101,3 +102,21 @@ def test_generate_with_openai(monkeypatch, tmp_path):
     assert captured['data']['temperature'] == cfg.temperature
     assert captured['data']['max_tokens'] == cfg.context_length
     assert 'Authorization' in captured['headers']
+
+
+def test_generate_openai_http_error(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        llm_provider='openai',
+        openai_api_key='test',
+    )
+
+    def fake_urlopen(req):
+        raise urllib.error.HTTPError(req.full_url, 404, 'not found', hdrs=None, fp=None)
+
+    monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
+
+    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+    result = writer._generate('intro', 1)
+    assert result == 'Intro about cats. (iteration 1)'
