@@ -25,7 +25,7 @@ def test_writer_agent_runs(tmp_path):
     assert (tmp_path / 'logs' / 'run.log').exists()
 
 
-def test_generate_with_ollama(monkeypatch, tmp_path):
+def test_call_llm_with_ollama(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
         output_dir=tmp_path / 'output',
@@ -55,15 +55,16 @@ def test_generate_with_ollama(monkeypatch, tmp_path):
     monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
 
     writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
-    result = writer._generate('intro', 1)
+    result = writer._call_llm('intro about cats', fallback='fb')
     assert result == 'ollama text'
     assert captured['url'] == cfg.ollama_url
-    assert captured['data']['prompt'] == 'intro about cats'
+    expected_prompt = f"{writer.system_prompt}\n\nintro about cats"
+    assert captured['data']['prompt'] == expected_prompt
     assert captured['data']['options']['temperature'] == cfg.temperature
     assert captured['data']['options']['num_ctx'] == cfg.context_length
 
 
-def test_generate_with_openai(monkeypatch, tmp_path):
+def test_call_llm_with_openai(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
         output_dir=tmp_path / 'output',
@@ -95,16 +96,18 @@ def test_generate_with_openai(monkeypatch, tmp_path):
     monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
 
     writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
-    result = writer._generate('intro', 1)
+    result = writer._call_llm('intro about cats', fallback='fb')
     assert result == 'openai text'
     assert captured['url'] == cfg.openai_url
-    assert captured['data']['messages'][0]['content'] == 'intro about cats'
+    assert captured['data']['messages'][0]['role'] == 'system'
+    assert captured['data']['messages'][0]['content'] == writer.system_prompt
+    assert captured['data']['messages'][1]['content'] == 'intro about cats'
     assert captured['data']['temperature'] == cfg.temperature
     assert captured['data']['max_tokens'] == cfg.context_length
     assert 'Authorization' in captured['headers']
 
 
-def test_generate_openai_http_error(monkeypatch, tmp_path):
+def test_call_llm_openai_http_error(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
         output_dir=tmp_path / 'output',
@@ -118,5 +121,31 @@ def test_generate_openai_http_error(monkeypatch, tmp_path):
     monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
 
     writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
-    result = writer._generate('intro', 1)
+    result = writer._call_llm('intro about cats', fallback='Intro about cats. (iteration 1)')
     assert result == 'Intro about cats. (iteration 1)'
+
+
+def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    steps = [agent.Step('intro')]
+    writer = agent.WriterAgent('cats', 5, steps, iterations=1, config=cfg)
+
+    calls = []
+
+    def fake_call_llm(prompt, fallback):
+        calls.append(prompt)
+        # First call crafts the prompt, second generates text
+        if 'Provide an optimal prompt' in prompt:
+            return 'Write about cats.'
+        return 'Some text.'
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    writer.run()
+
+    assert any('Provide an optimal prompt' in c for c in calls)
+    assert any('Current text:' in c for c in calls)

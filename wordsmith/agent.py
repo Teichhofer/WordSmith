@@ -43,6 +43,13 @@ class WriterAgent:
 
         self.config.ensure_dirs()
 
+        # System prompt derived from the user's topic. This is attached to every
+        # LLM request so that the model understands the overall context of the
+        # writing task.
+        self.system_prompt = (
+            f"You are a helpful writing assistant focused on {self.topic}."
+        )
+
         logging.basicConfig(
             filename=self.config.log_dir / self.config.log_file,
             level=self.config.log_level,
@@ -57,8 +64,12 @@ class WriterAgent:
 
         text: List[str] = []
         for step_index, step in enumerate(self.steps, start=1):
+            # Ask the LLM for an optimal prompt for this step before running any
+            # iterations.
+            prompt = self._craft_prompt(step.task)
             for iteration in range(1, self.iterations + 1):
-                addition = self._generate(step.task, iteration)
+                current_text = " ".join(text)
+                addition = self._generate(prompt, current_text, iteration)
                 text.append(addition)
                 current_text = " ".join(text)
                 self._save_text(current_text)
@@ -80,23 +91,36 @@ class WriterAgent:
         return final_text
 
     # ------------------------------------------------------------------
-    def _generate(self, task: str, iteration: int) -> str:
-        """Generate text using the configured language model.
+    def _craft_prompt(self, task: str) -> str:
+        """Ask the LLM to craft an optimal prompt for the given task."""
 
-        The default implementation preserves the previous deterministic
-        behaviour. When ``Config.llm_provider`` is set to ``"ollama"`` or
-        ``"openai"`` the respective HTTP API is called instead.
-        """
+        meta_prompt = (
+            f"Provide an optimal prompt to accomplish: {task} about {self.topic}."
+        )
+        fallback = f"{task} about {self.topic}"
+        return self._call_llm(meta_prompt, fallback=fallback)
 
-        prompt = f"{task} about {self.topic}"
+    # ------------------------------------------------------------------
+    def _generate(self, prompt: str, current_text: str, iteration: int) -> str:
+        """Generate text for ``prompt`` given the current text state."""
 
-        fallback = f"{task.capitalize()} about {self.topic}. (iteration {iteration})"
+        user_prompt = (
+            f"{prompt}\n\nCurrent text:\n{current_text}\n\nNext part:"
+        )
+        fallback = f"{prompt}. (iteration {iteration})"
+        return self._call_llm(user_prompt, fallback=fallback)
+
+    # ------------------------------------------------------------------
+    def _call_llm(self, prompt: str, *, fallback: str) -> str:
+        """Internal helper to call the configured language model."""
+
+        full_prompt = f"{self.system_prompt}\n\n{prompt}".strip()
 
         if self.config.llm_provider == "ollama":
             data = json.dumps(
                 {
                     "model": self.config.model,
-                    "prompt": prompt,
+                    "prompt": full_prompt,
                     "options": {
                         "temperature": self.config.temperature,
                         "num_ctx": self.config.context_length,
@@ -125,7 +149,10 @@ class WriterAgent:
             data = json.dumps(
                 {
                     "model": self.config.model,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": [
+                        {"role": "system", "content": self.system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
                     "temperature": self.config.temperature,
                     "max_tokens": self.config.context_length,
                 }
