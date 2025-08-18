@@ -35,12 +35,14 @@ class WriterAgent:
         steps: Iterable[Step],
         iterations: int,
         config: Config | None = None,
+        content: str = "",
     ) -> None:
         self.topic = topic
         self.word_count = word_count
         self.steps: List[Step] = list(steps)
         self.iterations = iterations
         self.config = config or DEFAULT_CONFIG
+        self.content = content
 
         self.config.ensure_dirs()
 
@@ -94,6 +96,57 @@ class WriterAgent:
 
         final_text = " ".join(text)
         # Truncate to desired word count.
+        words = final_text.split()
+        if len(words) > self.word_count:
+            final_text = " ".join(words[: self.word_count])
+        self._save_text(final_text)
+        return final_text
+
+    # ------------------------------------------------------------------
+    def run_auto(self) -> str:
+        """Automatically generate a story over multiple iterations.
+
+        Only the title, desired content and number of iterations are
+        required. For each iteration the agent first asks the LLM for the
+        next prompt to use and then generates the subsequent text.
+        """
+
+        text: List[str] = []
+        for iteration in range(1, self.iterations + 1):
+            current_text = " ".join(text)
+            meta_prompt = (
+                f"Titel: {self.topic}\n"
+                f"Gewünschter Inhalt: {self.content}\n"
+                f"Aktueller Text:\n{current_text}\n\n"
+                "was ist der nächste Schritt um diese Geschichte fertig zu stellen, "
+                "gib mir nur den nötigen prompt für ein LLM"
+            )
+            prompt = self._call_llm(meta_prompt, fallback="Fahre mit der Geschichte fort.")
+            start = time.perf_counter()
+            user_prompt = (
+                f"{prompt}\n\nTitel: {self.topic}\n"
+                f"Gewünschter Inhalt: {self.content}\n"
+                f"Aktueller Text:\n{current_text}\n\nNächster Teil:"
+            )
+            addition = self._call_llm(
+                user_prompt, fallback=f"{prompt}. (iteration {iteration})"
+            )
+            elapsed = time.perf_counter() - start
+            tokens = len(addition.split())
+            tok_per_sec = tokens / (elapsed or 1e-8)
+            text.append(addition)
+            current_text = " ".join(text)
+            self._save_text(current_text)
+            self.logger.info(
+                "iteration %s/%s: %s", iteration, self.iterations, addition
+            )
+            print(
+                f"iteration {iteration}/{self.iterations}: "
+                f"{tokens} tokens ({tok_per_sec:.2f} tok/s)",
+                flush=True,
+            )
+
+        final_text = " ".join(text)
         words = final_text.split()
         if len(words) > self.word_count:
             final_text = " ".join(words[: self.word_count])
