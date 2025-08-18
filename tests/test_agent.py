@@ -6,6 +6,7 @@ import urllib.request
 import urllib.error
 
 import wordsmith.agent as agent
+from wordsmith import prompts
 from wordsmith.config import Config
 
 
@@ -144,6 +145,10 @@ def test_call_llm_logs_prompt_and_response(tmp_path):
     assert 'hello' in content
 
 
+def test_default_meta_prompt_contains_next_step_phrase():
+    assert 'nächste Schritt' in prompts.META_PROMPT
+
+
 def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
@@ -207,15 +212,16 @@ def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
 
     def fake_call_llm(prompt, fallback):
         calls.append(prompt)
-        if 'nächste Schritt' in prompt:
+        if 'sentinel prompt' in prompt:
             return 'Write intro.'
         return 'Some text.'
 
+    monkeypatch.setattr(prompts, 'META_PROMPT', 'sentinel prompt {title} {content} {current_text}')
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
     writer.run_auto()
 
     out = capsys.readouterr().out
-    assert any('nächste Schritt' in c for c in calls)
+    assert any('sentinel prompt' in c for c in calls)
     assert 'iteration 1/2' in out
     assert '[##########----------]' in out
     assert (tmp_path / 'output' / 'story.txt').exists()

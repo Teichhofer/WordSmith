@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Iterable, List
 
 from .config import Config, DEFAULT_CONFIG
+from . import prompts
 
 
 @dataclass
@@ -123,14 +124,14 @@ class WriterAgent:
         text: List[str] = []
         for iteration in range(1, self.iterations + 1):
             current_text = " ".join(text)
-            meta_prompt = (
-                f"Titel: {self.topic}\n"
-                f"Gewünschter Inhalt: {self.content}\n"
-                f"Aktueller Text:\n{current_text}\n\n"
-                "was ist der nächste Schritt um diese Geschichte fertig zu stellen, "
-                "gib mir nur den nötigen prompt für ein LLM"
+            meta_prompt = prompts.META_PROMPT.format(
+                title=self.topic,
+                content=self.content,
+                current_text=current_text,
             )
-            prompt = self._call_llm(meta_prompt, fallback="Fahre mit der Geschichte fort.")
+            prompt = self._call_llm(
+                meta_prompt, fallback="Fahre mit der Geschichte fort."
+            )
             start = time.perf_counter()
             user_prompt = (
                 f"{prompt}\n\nTitel: {self.topic}\n"
