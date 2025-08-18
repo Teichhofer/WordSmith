@@ -48,3 +48,33 @@ def test_cli_main(monkeypatch, tmp_path, capsys):
     assert captured_cfg['config'].model == 'test-model'
     assert captured_cfg['config'].temperature == 0.5
     assert captured_cfg['config'].context_length == 128
+
+
+def test_cli_invalid_numeric_input(monkeypatch, tmp_path, capsys):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+    monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
+
+    inputs = iter(
+        [
+            'Cats',
+            'five', '5',
+            '1',
+            '1',
+            'intro',
+            'stub',
+            'test-model',
+            'abc', '0.5',
+            'xyz', '128',
+        ]
+    )
+    monkeypatch.setattr('builtins.input', lambda _: next(inputs))
+
+    cli.main()
+
+    captured = capsys.readouterr()
+    assert captured.out.count('Invalid input') == 3
+    assert 'Final text:' in captured.out
