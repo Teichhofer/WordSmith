@@ -146,7 +146,7 @@ def test_call_llm_logs_prompt_and_response(tmp_path):
 
 
 def test_default_meta_prompt_contains_next_step_phrase():
-    assert 'nächste Schritt' in prompts.META_PROMPT
+    assert 'nächste sinnvolle Schritt' in prompts.META_PROMPT
 
 
 def test_meta_prompt_includes_word_count():
@@ -157,7 +157,7 @@ def test_meta_prompt_includes_word_count():
         current_text='',
     )
     assert '123' in formatted
-    assert 'Gewünschte Länge' in formatted
+    assert 'gewünschte Länge' in formatted
 
 
 def test_system_prompt_template(tmp_path):
@@ -282,4 +282,4 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
 
     assert cfg.context_length == 40
     assert cfg.max_tokens == 20
-    assert any('Gewünschte Länge' in p for p in captured_prompts)
+    assert any('gewünschte Länge' in p for p in captured_prompts)
