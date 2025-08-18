@@ -48,12 +48,70 @@ def main() -> None:
         word_count = _prompt_int("Word count [100]: ", default=100)
         iterations = _prompt_int("Number of iterations [1]: ", default=1)
 
+        provider = (
+            input(
+                f"LLM provider (stub/ollama/openai) [{agent.DEFAULT_CONFIG.llm_provider}]: "
+            ).strip()
+            or agent.DEFAULT_CONFIG.llm_provider
+        )
+        if provider == "ollama":
+            ollama_url = (
+                input(
+                    f"Ollama API URL [{agent.DEFAULT_CONFIG.ollama_url}]: "
+                ).strip()
+                or agent.DEFAULT_CONFIG.ollama_url
+            )
+            list_url = (
+                input(
+                    f"Ollama list URL [{agent.DEFAULT_CONFIG.ollama_list_url}]: "
+                ).strip()
+                or agent.DEFAULT_CONFIG.ollama_list_url
+            )
+            models = _fetch_ollama_models(list_url)
+            if not models:
+                print("No models available from Ollama.")
+                return
+            print("Available models:")
+            for i, name in enumerate(models, 1):
+                print(f"{i}. {name}")
+            choice = _prompt_int("Select model [1]: ", default=1)
+            model = models[min(max(choice, 1), len(models)) - 1]
+            cfg = replace(
+                agent.DEFAULT_CONFIG,
+                llm_provider=provider,
+                model=model,
+                ollama_url=ollama_url,
+                ollama_list_url=list_url,
+            )
+        else:
+            model = (
+                input(f"Model name [{agent.DEFAULT_CONFIG.model}]: ").strip()
+                or agent.DEFAULT_CONFIG.model
+            )
+            if provider == "openai":
+                openai_url = (
+                    input(
+                        f"OpenAI API URL [{agent.DEFAULT_CONFIG.openai_url}]: "
+                    ).strip()
+                    or agent.DEFAULT_CONFIG.openai_url
+                )
+                cfg = replace(
+                    agent.DEFAULT_CONFIG,
+                    llm_provider=provider,
+                    model=model,
+                    openai_url=openai_url,
+                )
+            else:
+                cfg = replace(
+                    agent.DEFAULT_CONFIG, llm_provider=provider, model=model
+                )
+
         writer = agent.WriterAgent(
             topic,
             word_count,
             [],
             iterations,
-            config=agent.DEFAULT_CONFIG,
+            config=cfg,
             content=content,
         )
         final_text = writer.run_auto()
