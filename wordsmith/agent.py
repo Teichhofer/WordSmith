@@ -61,6 +61,15 @@ class WriterAgent:
         )
         self.logger = logging.getLogger(__name__)
 
+        llm_handler = logging.FileHandler(
+            self.config.log_dir / self.config.llm_log_file
+        )
+        llm_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+        llm_handler.setLevel(self.config.log_level)
+        self.llm_logger = logging.getLogger(f"{__name__}.llm")
+        self.llm_logger.addHandler(llm_handler)
+        self.llm_logger.propagate = False
+
     # ------------------------------------------------------------------
     def run(self) -> str:
         """Execute the writing process and return the final text."""
@@ -178,6 +187,9 @@ class WriterAgent:
         """Internal helper to call the configured language model."""
 
         full_prompt = f"{self.system_prompt}\n\n{prompt}".strip()
+        self.llm_logger.info("prompt: %s", full_prompt)
+
+        result = fallback
 
         if self.config.llm_provider == "ollama":
             data = json.dumps(
@@ -199,12 +211,12 @@ class WriterAgent:
             try:
                 with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
                     payload = json.loads(resp.read().decode("utf8"))
-                return payload.get("response", "").strip()
+                result = payload.get("response", "").strip()
             except urllib.error.URLError as exc:
                 self.logger.error("ollama request failed: %s", exc)
-                return fallback
+                result = fallback
 
-        if self.config.llm_provider == "openai":
+        elif self.config.llm_provider == "openai":
             api_key = self.config.openai_api_key or os.environ.get("OPENAI_API_KEY", "")
             headers = {
                 "Content-Type": "application/json",
@@ -225,12 +237,13 @@ class WriterAgent:
             try:
                 with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
                     payload = json.loads(resp.read().decode("utf8"))
-                return payload["choices"][0]["message"]["content"].strip()
+                result = payload["choices"][0]["message"]["content"].strip()
             except urllib.error.URLError as exc:
                 self.logger.error("openai request failed: %s", exc)
-                return fallback
+                result = fallback
 
-        return fallback
+        self.llm_logger.info("response: %s", result)
+        return result
 
     # ------------------------------------------------------------------
     def _save_text(self, text: str) -> None:
