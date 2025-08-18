@@ -224,7 +224,7 @@ def test_cli_auto_mode(monkeypatch, tmp_path, capsys):
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
-    inputs = iter(['y', 'My Title', 'A cat story', '5', '2'])
+    inputs = iter(['y', 'My Title', 'A cat story', '5', '2', 'stub', 'test-model'])
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
 
     cli.main()
@@ -235,4 +235,38 @@ def test_cli_auto_mode(monkeypatch, tmp_path, capsys):
     assert captured['steps'] == []
     assert captured['content'] == 'A cat story'
     assert captured['iterations'] == 2
-    assert captured['config'] is cfg
+    cfg_used = captured['config']
+    assert cfg_used.llm_provider == 'stub'
+    assert cfg_used.model == 'test-model'
+
+
+def test_cli_auto_mode_openai_endpoint(monkeypatch, tmp_path, capsys):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+    monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
+
+    captured = {}
+    original_writer = agent.WriterAgent
+
+    def capturing_writer(topic, word_count, steps, iterations, config, content=""):
+        captured['config'] = config
+        return original_writer(topic, word_count, steps, iterations, config, content=content)
+
+    monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
+
+    inputs = iter(
+        ['y', 'T', 'C', '5', '1', 'openai', 'gpt', 'http://custom']
+    )
+    monkeypatch.setattr('builtins.input', lambda _: next(inputs))
+
+    cli.main()
+
+    out = capsys.readouterr().out
+    assert 'Final text:' in out
+    cfg_used = captured['config']
+    assert cfg_used.llm_provider == 'openai'
+    assert cfg_used.model == 'gpt'
+    assert cfg_used.openai_url == 'http://custom'
