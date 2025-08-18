@@ -7,6 +7,6 @@ META_PROMPT = (
     "Es Soll darin um diesen Inhalt gehen : {content}\n"
     "Die Gewünschte Länge des Fertigen Texttes soll etwa: {word_count} Wörter\n"
     "Aktueller Stand des Texttes ist:\n{current_text}\n\n"
-    "was ist der nächste Sinnvolle Schritt um diese Text besser zu machen, "
+    "was ist der nächste Schritt um diese Text besser zu machen, "
     "gib mir nur den nötigen prompt für ein LLM, mit einer eine Anweisung um am Text Weiter zu Arbeiten"
 )
