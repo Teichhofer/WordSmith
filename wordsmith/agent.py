@@ -211,24 +211,8 @@ class WriterAgent:
             )
             try:
                 with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
-                    raw = resp.read().decode("utf8")
-                try:
-                    payload = json.loads(raw)
-                    result = payload.get("response", "").strip()
-                except json.JSONDecodeError:
-                    pieces = []
-                    for line in raw.splitlines():
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            chunk = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-                        part = chunk.get("response")
-                        if part:
-                            pieces.append(part)
-                    result = "".join(pieces).strip() or fallback
+                    payload = json.loads(resp.read().decode("utf8"))
+                result = payload.get("response", "").strip() or fallback
             except urllib.error.URLError as exc:
                 self.logger.error("ollama request failed: %s", exc)
                 result = fallback
