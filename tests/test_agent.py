@@ -149,3 +149,20 @@ def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
 
     assert any('Provide an optimal prompt' in c for c in calls)
     assert any('Current text:' in c for c in calls)
+
+
+def test_run_reports_progress(monkeypatch, tmp_path, capsys):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    steps = [agent.Step('intro')]
+    writer = agent.WriterAgent('cats', 5, steps, iterations=1, config=cfg)
+
+    writer.run()
+
+    out = capsys.readouterr().out
+    assert 'step 1/1 iteration 1/1' in out
+    assert 'tok/s' in out
