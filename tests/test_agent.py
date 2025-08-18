@@ -217,4 +217,5 @@ def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     assert any('nächste Schritt' in c for c in calls)
     assert 'iteration 1/2' in out
+    assert '[##########----------]' in out
     assert (tmp_path / 'output' / 'story.txt').exists()

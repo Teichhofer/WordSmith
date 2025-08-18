@@ -149,8 +149,11 @@ class WriterAgent:
             self.logger.info(
                 "iteration %s/%s: %s", iteration, self.iterations, addition
             )
+            bar_len = 20
+            filled = int(bar_len * iteration / self.iterations)
+            bar = "#" * filled + "-" * (bar_len - filled)
             print(
-                f"iteration {iteration}/{self.iterations}: "
+                f"iteration {iteration}/{self.iterations} [{bar}]: "
                 f"{tokens} tokens ({tok_per_sec:.2f} tok/s)",
                 flush=True,
             )
