@@ -128,6 +128,21 @@ def test_call_llm_openai_http_error(monkeypatch, tmp_path):
     assert result == 'Intro about cats. (iteration 1)'
 
 
+def test_call_llm_logs_prompt_and_response(tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+    )
+    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+    result = writer._call_llm('say hi', fallback='hello')
+    assert result == 'hello'
+    log_path = tmp_path / 'logs' / cfg.llm_log_file
+    assert log_path.exists()
+    content = log_path.read_text()
+    assert 'say hi' in content
+    assert 'hello' in content
+
+
 def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
