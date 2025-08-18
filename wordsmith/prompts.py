@@ -1,5 +1,7 @@
 """Prompt templates used by WriterAgent."""
 
+SYSTEM_PROMPT = "You are a helpful writing assistant focused on {topic}."
+
 META_PROMPT = (
     "Titel: {title}\n"
     "Gewünschter Inhalt: {content}\n"

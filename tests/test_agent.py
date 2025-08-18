@@ -160,6 +160,18 @@ def test_meta_prompt_includes_word_count():
     assert 'Gewünschte Länge' in formatted
 
 
+def test_system_prompt_template(tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+    expected = prompts.SYSTEM_PROMPT.format(topic='cats')
+    assert writer.system_prompt == expected
+    assert 'cats' in expected
+
+
 def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',

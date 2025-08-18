@@ -50,9 +50,7 @@ class WriterAgent:
         # System prompt derived from the user's topic. This is attached to every
         # LLM request so that the model understands the overall context of the
         # writing task.
-        self.system_prompt = (
-            f"You are a helpful writing assistant focused on {self.topic}."
-        )
+        self.system_prompt = prompts.SYSTEM_PROMPT.format(topic=self.topic)
 
         logging.basicConfig(
             filename=self.config.log_dir / self.config.log_file,
