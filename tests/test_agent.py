@@ -61,9 +61,41 @@ def test_call_llm_with_ollama(monkeypatch, tmp_path):
     assert captured['url'] == cfg.ollama_url
     expected_prompt = f"{writer.system_prompt}\n\nintro about cats"
     assert captured['data']['prompt'] == expected_prompt
+    assert captured['data']['stream'] is False
     assert captured['data']['options']['temperature'] == cfg.temperature
     assert captured['data']['options']['num_ctx'] == cfg.context_length
     assert captured['data']['options']['num_predict'] == cfg.max_tokens
+
+
+def test_call_llm_with_ollama_streaming(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        llm_provider='ollama',
+    )
+
+    class DummyResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return (
+                b'{"response": "hello", "done": false}\n'
+                b'{"response": " world", "done": false}\n'
+                b'{"response": "!", "done": true}'
+            )
+
+    def fake_urlopen(req):
+        return DummyResponse()
+
+    monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
+
+    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+    result = writer._call_llm('intro about cats', fallback='fb')
+    assert result == 'hello world!'
 
 
 def test_call_llm_with_openai(monkeypatch, tmp_path):
