@@ -90,9 +90,16 @@ class WriterAgent:
         prompt = f"{task} about {self.topic}"
 
         if self.config.llm_provider == "ollama":
-            data = json.dumps({"model": self.config.model, "prompt": prompt}).encode(
-                "utf8"
-            )
+            data = json.dumps(
+                {
+                    "model": self.config.model,
+                    "prompt": prompt,
+                    "options": {
+                        "temperature": self.config.temperature,
+                        "num_ctx": self.config.context_length,
+                    },
+                }
+            ).encode("utf8")
             req = urllib.request.Request(
                 self.config.ollama_url,
                 data=data,
@@ -112,6 +119,8 @@ class WriterAgent:
                 {
                     "model": self.config.model,
                     "messages": [{"role": "user", "content": prompt}],
+                    "temperature": self.config.temperature,
+                    "max_tokens": self.config.context_length,
                 }
             ).encode("utf8")
             req = urllib.request.Request(self.config.openai_url, data=data, headers=headers)
