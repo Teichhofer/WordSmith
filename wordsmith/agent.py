@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from typing import Iterable, List
 
@@ -89,6 +90,8 @@ class WriterAgent:
 
         prompt = f"{task} about {self.topic}"
 
+        fallback = f"{task.capitalize()} about {self.topic}. (iteration {iteration})"
+
         if self.config.llm_provider == "ollama":
             data = json.dumps(
                 {
@@ -105,9 +108,13 @@ class WriterAgent:
                 data=data,
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
-                payload = json.loads(resp.read().decode("utf8"))
-            return payload.get("response", "").strip()
+            try:
+                with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
+                    payload = json.loads(resp.read().decode("utf8"))
+                return payload.get("response", "").strip()
+            except urllib.error.URLError as exc:
+                self.logger.error("ollama request failed: %s", exc)
+                return fallback
 
         if self.config.llm_provider == "openai":
             api_key = self.config.openai_api_key or os.environ.get("OPENAI_API_KEY", "")
@@ -124,11 +131,15 @@ class WriterAgent:
                 }
             ).encode("utf8")
             req = urllib.request.Request(self.config.openai_url, data=data, headers=headers)
-            with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
-                payload = json.loads(resp.read().decode("utf8"))
-            return payload["choices"][0]["message"]["content"].strip()
+            try:
+                with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
+                    payload = json.loads(resp.read().decode("utf8"))
+                return payload["choices"][0]["message"]["content"].strip()
+            except urllib.error.URLError as exc:
+                self.logger.error("openai request failed: %s", exc)
+                return fallback
 
-        return f"{task.capitalize()} about {self.topic}. (iteration {iteration})"
+        return fallback
 
     # ------------------------------------------------------------------
     def _save_text(self, text: str) -> None:
