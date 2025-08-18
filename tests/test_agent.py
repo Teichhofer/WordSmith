@@ -9,14 +9,18 @@ from wordsmith.config import Config
 
 
 def test_writer_agent_runs(tmp_path):
-    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
 
     steps = [agent.Step('intro'), agent.Step('body')]
     writer = agent.WriterAgent('dogs', 5, steps, iterations=1, config=cfg)
     result = writer.run()
 
     assert len(result.split()) <= 5
-    assert (tmp_path / 'output' / 'current_text.txt').exists()
+    assert (tmp_path / 'output' / 'story.txt').exists()
     assert (tmp_path / 'logs' / 'run.log').exists()
 
 
@@ -26,6 +30,8 @@ def test_generate_with_ollama(monkeypatch, tmp_path):
         output_dir=tmp_path / 'output',
         llm_provider='ollama',
         model='test-model',
+        temperature=0.2,
+        context_length=128,
     )
 
     captured = {}
@@ -52,6 +58,8 @@ def test_generate_with_ollama(monkeypatch, tmp_path):
     assert result == 'ollama text'
     assert captured['url'] == cfg.ollama_url
     assert captured['data']['prompt'] == 'intro about cats'
+    assert captured['data']['options']['temperature'] == cfg.temperature
+    assert captured['data']['options']['num_ctx'] == cfg.context_length
 
 
 def test_generate_with_openai(monkeypatch, tmp_path):
@@ -61,6 +69,8 @@ def test_generate_with_openai(monkeypatch, tmp_path):
         llm_provider='openai',
         openai_api_key='test',
         model='gpt-test',
+        temperature=0.3,
+        context_length=64,
     )
 
     captured = {}
@@ -88,4 +98,6 @@ def test_generate_with_openai(monkeypatch, tmp_path):
     assert result == 'openai text'
     assert captured['url'] == cfg.openai_url
     assert captured['data']['messages'][0]['content'] == 'intro about cats'
+    assert captured['data']['temperature'] == cfg.temperature
+    assert captured['data']['max_tokens'] == cfg.context_length
     assert 'Authorization' in captured['headers']

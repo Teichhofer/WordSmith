@@ -6,3 +6,5 @@ Guidelines for coding agents working on this repository:
 - Run `pytest` and ensure all tests pass before committing.
 - Avoid adding external dependencies without discussion.
 - Generated artifacts like logs/ and output/ are ignored by git.
+- Store application settings in `wordsmith/config.py` rather than
+  scattering them throughout the codebase.

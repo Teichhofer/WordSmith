@@ -12,10 +12,13 @@ class Config:
 
     log_dir: Path = Path("logs")
     output_dir: Path = Path("output")
+    output_file: str = "current_text.txt"
     log_level: int = logging.INFO
     log_file: str = "run.log"
     llm_provider: str = "stub"
     model: str = "gpt-3.5-turbo"
+    temperature: float = 0.7
+    context_length: int = 2048
     openai_api_key: str | None = None
     openai_url: str = "https://api.openai.com/v1/chat/completions"
     ollama_url: str = "http://192.168.100.148:11436/api/generate"
