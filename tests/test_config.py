@@ -11,3 +11,4 @@ def test_config_creates_directories(tmp_path):
     assert cfg.output_dir.exists()
     assert cfg.temperature == 0.7
     assert cfg.context_length == 2048
+    assert cfg.max_tokens == 256

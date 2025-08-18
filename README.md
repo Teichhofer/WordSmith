@@ -21,6 +21,13 @@ The program will prompt for:
 6. **LLM provider** – choose between the stub and real providers. When using
    the Ollama provider, the available models are fetched automatically and you
    can select one from a numbered list.
+7. **Model name** – which LLM model to use.
+8. **Temperature** – randomness of the model's output.
+9. **Context length** – maximum token context for the model.
+10. **Max tokens** – limit for tokens generated per request.
+
+Each prompt displays a default value in square brackets. Pressing Enter
+accepts the default.
 
 During execution a log is written to `logs/run.log` and the current state of
 the text is stored in `output/current_text.txt`.

@@ -34,6 +34,7 @@ def test_cli_main(monkeypatch, tmp_path, capsys):
             'test-model',
             '0.5',
             '128',
+            '256',
         ]
     )
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
@@ -49,6 +50,7 @@ def test_cli_main(monkeypatch, tmp_path, capsys):
     assert captured_cfg['config'].model == 'test-model'
     assert captured_cfg['config'].temperature == 0.5
     assert captured_cfg['config'].context_length == 128
+    assert captured_cfg['config'].max_tokens == 256
 
 
 def test_cli_invalid_numeric_input(monkeypatch, tmp_path, capsys):
@@ -70,6 +72,7 @@ def test_cli_invalid_numeric_input(monkeypatch, tmp_path, capsys):
             'test-model',
             'abc', '0.5',
             'xyz', '128',
+            'pqr', '256',
         ]
     )
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
@@ -77,7 +80,7 @@ def test_cli_invalid_numeric_input(monkeypatch, tmp_path, capsys):
     cli.main()
 
     captured = capsys.readouterr()
-    assert captured.out.count('Invalid input') == 3
+    assert captured.out.count('Invalid input') == 4
     assert 'Final text:' in captured.out
     assert 'tok/s' in captured.out
 
@@ -112,6 +115,7 @@ def test_cli_ollama_model_selection(monkeypatch, tmp_path, capsys):
             '2',
             '0.5',
             '128',
+            '256',
         ]
     )
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
@@ -123,6 +127,7 @@ def test_cli_ollama_model_selection(monkeypatch, tmp_path, capsys):
     assert 'tok/s' in captured.out
     assert captured_cfg['config'].llm_provider == 'ollama'
     assert captured_cfg['config'].model == 'm2'
+    assert captured_cfg['config'].max_tokens == 256
 
 
 def test_cli_ollama_no_models(monkeypatch, tmp_path, capsys):
@@ -150,3 +155,44 @@ def test_cli_ollama_no_models(monkeypatch, tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert 'No models available from Ollama.' in captured.out
+
+
+def test_cli_defaults(monkeypatch, tmp_path, capsys):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+        model='default-model',
+        max_tokens=64,
+    )
+    monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
+
+    captured_args = {}
+    original_writer = agent.WriterAgent
+
+    def capturing_writer(topic, word_count, steps, iterations, config):
+        captured_args['topic'] = topic
+        captured_args['word_count'] = word_count
+        captured_args['steps'] = steps
+        captured_args['iterations'] = iterations
+        captured_args['config'] = config
+        return original_writer(topic, word_count, steps, iterations, config)
+
+    monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
+
+    inputs = iter(['', '', '', '', '', '', '', '', '', ''])
+    monkeypatch.setattr('builtins.input', lambda _: next(inputs))
+
+    cli.main()
+
+    assert captured_args['topic'] == 'Untitled'
+    assert captured_args['word_count'] == 100
+    assert len(captured_args['steps']) == 1
+    assert captured_args['steps'][0].task == 'Step 1'
+    assert captured_args['iterations'] == 1
+    cfg_used = captured_args['config']
+    assert cfg_used.llm_provider == 'stub'
+    assert cfg_used.model == 'default-model'
+    assert cfg_used.temperature == cfg.temperature
+    assert cfg_used.context_length == cfg.context_length
+    assert cfg_used.max_tokens == cfg.max_tokens

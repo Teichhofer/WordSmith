@@ -134,6 +134,7 @@ class WriterAgent:
                     "options": {
                         "temperature": self.config.temperature,
                         "num_ctx": self.config.context_length,
+                        "num_predict": self.config.max_tokens,
                     },
                 }
             ).encode("utf8")
@@ -164,7 +165,7 @@ class WriterAgent:
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": self.config.temperature,
-                    "max_tokens": self.config.context_length,
+                    "max_tokens": self.config.max_tokens,
                 }
             ).encode("utf8")
             req = urllib.request.Request(self.config.openai_url, data=data, headers=headers)

@@ -33,6 +33,7 @@ def test_call_llm_with_ollama(monkeypatch, tmp_path):
         model='test-model',
         temperature=0.2,
         context_length=128,
+        max_tokens=50,
     )
 
     captured = {}
@@ -62,6 +63,7 @@ def test_call_llm_with_ollama(monkeypatch, tmp_path):
     assert captured['data']['prompt'] == expected_prompt
     assert captured['data']['options']['temperature'] == cfg.temperature
     assert captured['data']['options']['num_ctx'] == cfg.context_length
+    assert captured['data']['options']['num_predict'] == cfg.max_tokens
 
 
 def test_call_llm_with_openai(monkeypatch, tmp_path):
@@ -73,6 +75,7 @@ def test_call_llm_with_openai(monkeypatch, tmp_path):
         model='gpt-test',
         temperature=0.3,
         context_length=64,
+        max_tokens=40,
     )
 
     captured = {}
@@ -103,7 +106,7 @@ def test_call_llm_with_openai(monkeypatch, tmp_path):
     assert captured['data']['messages'][0]['content'] == writer.system_prompt
     assert captured['data']['messages'][1]['content'] == 'intro about cats'
     assert captured['data']['temperature'] == cfg.temperature
-    assert captured['data']['max_tokens'] == cfg.context_length
+    assert captured['data']['max_tokens'] == cfg.max_tokens
     assert 'Authorization' in captured['headers']
 
 
