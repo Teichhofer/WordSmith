@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
+import os
+import urllib.request
 from dataclasses import dataclass
 from typing import Iterable, List
 
@@ -77,12 +80,44 @@ class WriterAgent:
 
     # ------------------------------------------------------------------
     def _generate(self, task: str, iteration: int) -> str:
-        """Naive text generation used as a placeholder for an LLM.
+        """Generate text using the configured language model.
 
-        In a real project this method would call an actual language model. To
-        keep the project self-contained, we generate deterministic sentences
-        instead.
+        The default implementation preserves the previous deterministic
+        behaviour. When ``Config.llm_provider`` is set to ``"ollama"`` or
+        ``"openai"`` the respective HTTP API is called instead.
         """
+
+        prompt = f"{task} about {self.topic}"
+
+        if self.config.llm_provider == "ollama":
+            data = json.dumps({"model": self.config.model, "prompt": prompt}).encode(
+                "utf8"
+            )
+            req = urllib.request.Request(
+                self.config.ollama_url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
+                payload = json.loads(resp.read().decode("utf8"))
+            return payload.get("response", "").strip()
+
+        if self.config.llm_provider == "openai":
+            api_key = self.config.openai_api_key or os.environ.get("OPENAI_API_KEY", "")
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            }
+            data = json.dumps(
+                {
+                    "model": self.config.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                }
+            ).encode("utf8")
+            req = urllib.request.Request(self.config.openai_url, data=data, headers=headers)
+            with urllib.request.urlopen(req) as resp:  # type: ignore[assignment]
+                payload = json.loads(resp.read().decode("utf8"))
+            return payload["choices"][0]["message"]["content"].strip()
 
         return f"{task.capitalize()} about {self.topic}. (iteration {iteration})"
 

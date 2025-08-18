@@ -10,7 +10,7 @@ def test_cli_main(monkeypatch, tmp_path, capsys):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
     monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
 
-    inputs = iter(['Cats', '5', '1', '1', 'intro'])
+    inputs = iter(['Cats', '5', '1', '1', 'stub', 'intro'])
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
 
     cli.main()
