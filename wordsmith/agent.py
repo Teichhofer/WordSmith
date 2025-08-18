@@ -125,6 +125,6 @@ class WriterAgent:
     def _save_text(self, text: str) -> None:
         # Ensure a trailing newline so the shell prompt does not run into the
         # file contents when viewed with ``cat``.
-        (self.config.output_dir / "current_text.txt").write_text(
+        (self.config.output_dir / self.config.output_file).write_text(
             text + "\n", encoding="utf8"
         )

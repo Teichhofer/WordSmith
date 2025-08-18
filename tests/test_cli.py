@@ -7,7 +7,11 @@ from wordsmith.config import Config
 
 
 def test_cli_main(monkeypatch, tmp_path, capsys):
-    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
     monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
 
     inputs = iter(['Cats', '5', '1', '1', 'stub', 'intro'])
@@ -18,4 +22,4 @@ def test_cli_main(monkeypatch, tmp_path, capsys):
     captured = capsys.readouterr()
     assert 'Final text:' in captured.out
     assert (tmp_path / 'logs' / 'run.log').exists()
-    assert (tmp_path / 'output' / 'current_text.txt').exists()
+    assert (tmp_path / 'output' / 'story.txt').exists()
