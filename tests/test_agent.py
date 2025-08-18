@@ -149,6 +149,17 @@ def test_default_meta_prompt_contains_next_step_phrase():
     assert 'nächste Schritt' in prompts.META_PROMPT
 
 
+def test_meta_prompt_includes_word_count():
+    formatted = prompts.META_PROMPT.format(
+        title='T',
+        content='C',
+        word_count=123,
+        current_text='',
+    )
+    assert '123' in formatted
+    assert 'Gewünschte Länge' in formatted
+
+
 def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
@@ -216,7 +227,11 @@ def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
             return 'Write intro.'
         return 'Some text.'
 
-    monkeypatch.setattr(prompts, 'META_PROMPT', 'sentinel prompt {title} {content} {current_text}')
+    monkeypatch.setattr(
+        prompts,
+        'META_PROMPT',
+        'sentinel prompt {title} {content} {word_count} {current_text}',
+    )
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
     writer.run_auto()
 
@@ -225,3 +240,34 @@ def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
     assert 'iteration 1/2' in out
     assert '[##########----------]' in out
     assert (tmp_path / 'output' / 'story.txt').exists()
+
+
+def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        context_length=1,
+        max_tokens=1,
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=1,
+        config=cfg,
+        content='content',
+    )
+
+    captured_prompts = []
+
+    def fake_call_llm(prompt, fallback):
+        captured_prompts.append(prompt)
+        return ''
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    writer.run_auto()
+
+    assert cfg.context_length == 40
+    assert cfg.max_tokens == 20
+    assert any('Gewünschte Länge' in p for p in captured_prompts)

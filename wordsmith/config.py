@@ -21,6 +21,8 @@ class Config:
     temperature: float = 0.7
     context_length: int = 2048
     max_tokens: int = 256
+    auto_ctx_multiplier: int = 4
+    auto_token_multiplier: int = 2
     openai_api_key: str | None = None
     openai_url: str = "https://api.openai.com/v1/chat/completions"
     ollama_url: str = "http://192.168.100.148:11434/api/generate"
@@ -30,6 +32,16 @@ class Config:
         """Create directories referenced in the configuration."""
         self.log_dir.mkdir(exist_ok=True)
         self.output_dir.mkdir(exist_ok=True)
+
+    def adjust_for_word_count(self, word_count: int) -> None:
+        """Adjust context and token limits for automatic mode.
+
+        The ``word_count`` defines the desired length of the story. To give the
+        language model enough room for context and generation we scale the
+        configuration based on this value.
+        """
+        self.context_length = word_count * self.auto_ctx_multiplier
+        self.max_tokens = word_count * self.auto_token_multiplier
 
 
 # Default configuration used by the application.
