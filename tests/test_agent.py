@@ -2,14 +2,14 @@ import sys, pathlib
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 import wordsmith.agent as agent
+from wordsmith.config import Config
 
 
-def test_writer_agent_runs(monkeypatch, tmp_path):
-    monkeypatch.setattr(agent, 'LOG_DIR', tmp_path / 'logs')
-    monkeypatch.setattr(agent, 'OUTPUT_DIR', tmp_path / 'output')
+def test_writer_agent_runs(tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
 
     steps = [agent.Step('intro'), agent.Step('body')]
-    writer = agent.WriterAgent('dogs', 5, steps, iterations=1)
+    writer = agent.WriterAgent('dogs', 5, steps, iterations=1, config=cfg)
     result = writer.run()
 
     assert len(result.split()) <= 5

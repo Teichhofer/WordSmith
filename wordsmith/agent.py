@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Iterable, List
 
-LOG_DIR = Path("logs")
-OUTPUT_DIR = Path("output")
+from .config import Config, DEFAULT_CONFIG
 
 
 @dataclass
@@ -25,18 +23,25 @@ class WriterAgent:
     natural language generation.
     """
 
-    def __init__(self, topic: str, word_count: int, steps: Iterable[Step], iterations: int) -> None:
+    def __init__(
+        self,
+        topic: str,
+        word_count: int,
+        steps: Iterable[Step],
+        iterations: int,
+        config: Config | None = None,
+    ) -> None:
         self.topic = topic
         self.word_count = word_count
         self.steps: List[Step] = list(steps)
         self.iterations = iterations
+        self.config = config or DEFAULT_CONFIG
 
-        LOG_DIR.mkdir(exist_ok=True)
-        OUTPUT_DIR.mkdir(exist_ok=True)
+        self.config.ensure_dirs()
 
         logging.basicConfig(
-            filename=LOG_DIR / "run.log",
-            level=logging.INFO,
+            filename=self.config.log_dir / self.config.log_file,
+            level=self.config.log_level,
             format="%(asctime)s - %(message)s",
             force=True,
         )
@@ -85,4 +90,6 @@ class WriterAgent:
     def _save_text(self, text: str) -> None:
         # Ensure a trailing newline so the shell prompt does not run into the
         # file contents when viewed with ``cat``.
-        (OUTPUT_DIR / "current_text.txt").write_text(text + "\n", encoding="utf8")
+        (self.config.output_dir / "current_text.txt").write_text(
+            text + "\n", encoding="utf8"
+        )

@@ -3,11 +3,12 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 import wordsmith.agent as agent
 from wordsmith import cli
+from wordsmith.config import Config
 
 
 def test_cli_main(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(agent, 'LOG_DIR', tmp_path / 'logs')
-    monkeypatch.setattr(agent, 'OUTPUT_DIR', tmp_path / 'output')
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
+    monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
 
     inputs = iter(['Cats', '5', '1', '1', 'intro'])
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
