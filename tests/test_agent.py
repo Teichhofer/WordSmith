@@ -140,7 +140,7 @@ def test_call_llm_logs_prompt_and_response(tmp_path):
     assert result == 'hello'
     log_path = tmp_path / 'logs' / cfg.llm_log_file
     assert log_path.exists()
-    content = log_path.read_text(encoding='utf-16')
+    content = log_path.read_text(encoding='utf-8')
     assert 'say hi' in content
     assert 'hello' in content
 

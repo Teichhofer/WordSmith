@@ -12,7 +12,7 @@ def test_config_creates_directories(tmp_path):
     assert cfg.temperature == 0.7
     assert cfg.context_length == 2048
     assert cfg.max_tokens == 256
-    assert cfg.log_encoding == 'utf-16'
+    assert cfg.log_encoding == 'utf-8'
 
 
 def test_adjust_for_word_count():

@@ -16,7 +16,7 @@ class Config:
     log_level: int = logging.INFO
     log_file: str = "run.log"
     llm_log_file: str = "llm.log"
-    log_encoding: str = "utf-16"
+    log_encoding: str = "utf-8"
     llm_provider: str = "stub"
     model: str = "gpt-3.5-turbo"
     temperature: float = 0.7
