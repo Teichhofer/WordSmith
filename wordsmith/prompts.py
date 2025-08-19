@@ -20,11 +20,13 @@ META_PROMPT = (
 )
 
 INITIAL_AUTO_PROMPT = (
-    "Schreibe diesen Text.\n"
+    "Schreibe diesen Text als erfahrene Autorin mit jahrzenten an erfahung.\n"
     "Titel: {title}\n"
     "Textart: {text_type}\n"
     "Inhalt: {content}\n"
     "Er soll etwa {word_count} Wörter umfassen."
+    "Achte auf einen klaren, ansprechenden Stil und logische Übergänge. "
+    "Achte darauf die Konventionen der Textart {text_type} zu beachten.\n"
 )
 
 
