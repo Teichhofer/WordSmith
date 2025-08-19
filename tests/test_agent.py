@@ -58,10 +58,11 @@ def test_call_llm_with_ollama(monkeypatch, tmp_path):
     monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
 
     writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
-    result = writer._call_llm('intro about cats', fallback='fb')
+    extra_system = "Extra system"
+    result = writer._call_llm('intro about cats', fallback='fb', system_prompt=extra_system)
     assert result == 'ollama text'
     assert captured['url'] == cfg.ollama_url
-    expected_prompt = f"{writer.system_prompt}\n\nintro about cats"
+    expected_prompt = f"{writer.system_prompt}\n\n{extra_system}\n\nintro about cats"
     assert captured['data']['prompt'] == expected_prompt
     assert captured['data']['stream'] is False
     assert captured['data']['options']['temperature'] == cfg.temperature
@@ -102,11 +103,13 @@ def test_call_llm_with_openai(monkeypatch, tmp_path):
     monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
 
     writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
-    result = writer._call_llm('intro about cats', fallback='fb')
+    extra_system = "Extra system"
+    result = writer._call_llm('intro about cats', fallback='fb', system_prompt=extra_system)
     assert result == 'openai text'
     assert captured['url'] == cfg.openai_url
     assert captured['data']['messages'][0]['role'] == 'system'
-    assert captured['data']['messages'][0]['content'] == writer.system_prompt
+    expected_system = f"{writer.system_prompt}\n\n{extra_system}"
+    assert captured['data']['messages'][0]['content'] == expected_system
     assert captured['data']['messages'][1]['content'] == 'intro about cats'
     assert captured['data']['temperature'] == cfg.temperature
     assert captured['data']['max_tokens'] == cfg.max_tokens
@@ -189,8 +192,8 @@ def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
 
     calls = []
 
-    def fake_call_llm(prompt, fallback):
-        calls.append(prompt)
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        calls.append((prompt, system_prompt))
         # First call crafts the prompt, second generates text
         return 'Write about cats.' if len(calls) == 1 else 'Some text.'
 
@@ -198,8 +201,10 @@ def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
     writer.run()
     expected_meta = prompts.PROMPT_CRAFTING_PROMPT.format(task='intro', topic='cats')
     expected_user = prompts.STEP_PROMPT.format(prompt='Write about cats.', current_text='')
-    assert calls[0] == expected_meta
-    assert calls[1] == expected_user
+    assert calls[0][0] == expected_meta
+    assert calls[0][1] == prompts.PROMPT_CRAFTING_SYSTEM_PROMPT
+    assert calls[1][0] == expected_user
+    assert calls[1][1] == prompts.STEP_SYSTEM_PROMPT
 
 
 def test_run_reports_progress(monkeypatch, tmp_path, capsys):
@@ -219,6 +224,36 @@ def test_run_reports_progress(monkeypatch, tmp_path, capsys):
     assert 'tok/s' in out
 
 
+def test_craft_prompt_uses_system_prompt(monkeypatch, tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+
+    captured = {}
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        captured['system'] = system_prompt
+        return 'crafted'
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    writer._craft_prompt('intro')
+    assert captured['system'] == prompts.PROMPT_CRAFTING_SYSTEM_PROMPT
+
+
+def test_generate_uses_system_prompt(monkeypatch, tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+
+    captured = {}
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        captured['system'] = system_prompt
+        return ''
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    writer._generate('prompt', '', 1)
+    assert captured['system'] == prompts.STEP_SYSTEM_PROMPT
+
+
 def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
@@ -236,7 +271,7 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
         text_type='Essay',
     )
 
-    calls: list[str] = []
+    calls: list[tuple[str, str | None]] = []
     responses = iter(
         [
             '1. Intro (5)\n2. End (5)',
@@ -246,8 +281,8 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
         ]
     )
 
-    def fake_call_llm(prompt, fallback):
-        calls.append(prompt)
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        calls.append((prompt, system_prompt))
         return next(responses)
 
     saved = []
@@ -259,10 +294,14 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
     monkeypatch.setattr(writer, '_save_text', fake_save_text)
     writer.run_auto()
 
-    assert 'Erstelle eine gegliederte Outline' in calls[0]
-    assert 'Schreibe den Abschnitt' in calls[1]
-    assert 'Schreibe den Abschnitt' in calls[2]
-    assert 'Überarbeite den folgenden' in calls[3]
+    assert 'Erstelle eine gegliederte Outline' in calls[0][0]
+    assert calls[0][1] == prompts.OUTLINE_SYSTEM_PROMPT
+    assert 'Schreibe den Abschnitt' in calls[1][0]
+    assert calls[1][1] == prompts.SECTION_SYSTEM_PROMPT
+    assert 'Schreibe den Abschnitt' in calls[2][0]
+    assert calls[2][1] == prompts.SECTION_SYSTEM_PROMPT
+    assert 'Überarbeite den folgenden' in calls[3][0]
+    assert calls[3][1] == prompts.REVISION_SYSTEM_PROMPT
     assert saved[0] == 'intro text'
     assert saved[1] == 'intro text end text'
     assert saved[-1] == 'edited text'
@@ -287,8 +326,8 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
 
     prompts_seen = []
 
-    def fake_call_llm(prompt, fallback):
-        prompts_seen.append(prompt)
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        prompts_seen.append((prompt, system_prompt))
         return ''
 
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
@@ -296,7 +335,7 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
 
     assert cfg.context_length == 40
     assert cfg.max_tokens == 20
-    assert any(str(writer.word_count) in p for p in prompts_seen)
+    assert any(str(writer.word_count) in p[0] for p in prompts_seen)
 
 
 def test_parse_outline(tmp_path):
@@ -324,7 +363,7 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
 
     responses = iter(['1. Part (5)', 'draft', 'edited'])
 
-    def fake_call_llm(prompt, fallback):
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
         return next(responses)
 
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
