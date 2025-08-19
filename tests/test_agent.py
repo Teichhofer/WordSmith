@@ -220,7 +220,7 @@ def test_run_reports_progress(monkeypatch, tmp_path, capsys):
     assert 'tok/s' in out
 
 
-def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
+def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
         output_dir=tmp_path / 'output',
@@ -231,40 +231,42 @@ def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
         'Title',
         10,
         [],
-        iterations=2,
+        iterations=1,
         config=cfg,
         content='about cats',
         text_type='Essay',
     )
 
-    calls = []
+    calls: list[str] = []
+    responses = iter(
+        [
+            '1. Intro (5)\n2. End (5)',
+            'intro text',
+            'end text',
+            'edited text',
+        ]
+    )
 
     def fake_call_llm(prompt, fallback):
         calls.append(prompt)
-        if prompt.startswith('meta'):
-            return 'next step'
-        return 'text part'
+        return next(responses)
 
-    monkeypatch.setattr(
-        prompts,
-        'INITIAL_AUTO_PROMPT',
-        'initial {title} {text_type} {content} {word_count}',
-    )
-    monkeypatch.setattr(
-        prompts,
-        'META_PROMPT',
-        'meta {title} {text_type} {content} {word_count} {current_text}',
-    )
+    saved = []
+
+    def fake_save_text(text: str) -> None:
+        saved.append(text)
+
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    monkeypatch.setattr(writer, '_save_text', fake_save_text)
     writer.run_auto()
 
-    out = capsys.readouterr().out
-    assert calls[0] == 'initial Title Essay about cats 10'
-    assert calls[1].startswith('meta Title Essay about cats 10')
-    assert calls[2].startswith('next step')
-    assert 'iteration 1/2' in out
-    assert '[##########----------]' in out
-    assert (tmp_path / 'output' / 'story.txt').exists()
+    assert 'Erstelle eine gegliederte Outline' in calls[0]
+    assert 'Schreibe den Abschnitt' in calls[1]
+    assert 'Schreibe den Abschnitt' in calls[2]
+    assert 'Überarbeite den folgenden' in calls[3]
+    assert saved[0] == 'intro text'
+    assert saved[1] == 'intro text end text'
+    assert saved[-1] == 'edited text'
 
 
 def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
@@ -284,10 +286,10 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
         content='content',
     )
 
-    captured_prompts = []
+    prompts_seen = []
 
     def fake_call_llm(prompt, fallback):
-        captured_prompts.append(prompt)
+        prompts_seen.append(prompt)
         return ''
 
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
@@ -295,47 +297,14 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
 
     assert cfg.context_length == 40
     assert cfg.max_tokens == 20
-    assert any(str(writer.word_count) in p for p in captured_prompts)
+    assert any(str(writer.word_count) in p for p in prompts_seen)
 
 
-def test_run_auto_saves_text_each_iteration(monkeypatch, tmp_path):
-    cfg = Config(
-        log_dir=tmp_path / 'logs',
-        output_dir=tmp_path / 'output',
-        output_file='story.txt',
-    )
-
-    writer = agent.WriterAgent(
-        'Title',
-        10,
-        [],
-        iterations=2,
-        config=cfg,
-        content='about cats',
-    )
-
-    # Capture text passed to _save_text to ensure progress is written after each
-    # iteration and once more at the end.
-    saved = []
-
-    def fake_save_text(text: str) -> None:
-        saved.append(text)
-
-    monkeypatch.setattr(writer, '_save_text', fake_save_text)
-
-    # ``run_auto`` calls the LLM once for the first iteration and then twice per
-    # subsequent iteration (meta prompt + user prompt). We return deterministic
-    # values so we can assert the saved progression.
-    responses = iter(['part1', 'meta2', 'part2'])
-
-    def fake_call_llm(prompt, fallback):
-        return next(responses)
-
-    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
-
-    writer.run_auto()
-
-    assert saved == ['part1', 'part1 part2', 'part1 part2']
+def test_parse_outline(tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('T', 10, [], iterations=0, config=cfg)
+    outline = '1. Intro (3)\n2. Body (5)'
+    assert writer._parse_outline(outline) == [('Intro', 3), ('Body', 5)]
 
 
 def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
@@ -349,12 +318,12 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
         'Title',
         10,
         [],
-        iterations=2,
+        iterations=1,
         config=cfg,
         content='about cats',
     )
 
-    responses = iter(['part1', 'meta2', 'part2'])
+    responses = iter(['1. Part (5)', 'draft', 'edited'])
 
     def fake_call_llm(prompt, fallback):
         return next(responses)
@@ -364,6 +333,4 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
     writer.run_auto()
 
     iter1 = (tmp_path / 'output' / cfg.auto_iteration_file_template.format(1)).read_text(encoding='utf-8').strip()
-    iter2 = (tmp_path / 'output' / cfg.auto_iteration_file_template.format(2)).read_text(encoding='utf-8').strip()
-    assert iter1 == 'part1'
-    assert iter2 == 'part1 part2'
+    assert iter1 == 'edited'

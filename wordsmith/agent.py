@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
 from .config import Config, DEFAULT_CONFIG
 from . import prompts
@@ -122,61 +123,64 @@ class WriterAgent:
 
     # ------------------------------------------------------------------
     def run_auto(self) -> str:
-        """Automatically generate a story over multiple iterations.
-
-        Only the title, desired content and number of iterations are
-        required. In the first iteration the agent uses a predefined prompt
-        based on these inputs. In later iterations it first asks the LLM for
-        the next prompt to use and then generates the subsequent text.
-        """
+        """Automatically generate a text based on an outline and edit it."""
 
         text: List[str] = []
         self.config.adjust_for_word_count(self.word_count)
-        for iteration in range(1, self.iterations + 1):
+
+        outline_prompt = prompts.OUTLINE_PROMPT.format(
+            title=self.topic,
+            text_type=self.text_type,
+            content=self.content,
+            word_count=self.word_count,
+        )
+        outline = self._call_llm(outline_prompt, fallback="1. Einleitung (100)")
+        sections = self._parse_outline(outline)
+
+        for idx, (title, words) in enumerate(sections, start=1):
             current_text = " ".join(text)
-            if iteration == 1:
-                user_prompt = prompts.INITIAL_AUTO_PROMPT.format(
-                    title=self.topic,
-                    text_type=self.text_type,
-                    content=self.content,
-                    word_count=self.word_count,
-                )
-                start = time.perf_counter()
-                addition = self._call_llm(
-                    user_prompt,
-                    fallback=f"Schreibe einen Text über {self.topic}. (iteration {iteration})",
-                )
-            else:
-                meta_prompt = prompts.META_PROMPT.format(
-                    title=self.topic,
-                    text_type=self.text_type,
-                    content=self.content,
-                    word_count=self.word_count,
-                    current_text=current_text,
-                )
-                prompt = self._call_llm(
-                    meta_prompt, fallback="Fahre mit der Geschichte fort."
-                )
-                start = time.perf_counter()
-                user_prompt = (
-                    f"{prompt}\n\nTitel: {self.topic}\n"
-                    f"Textart: {self.text_type}\n"
-                    f"Gewünschter Inhalt: {self.content}\n"
-                    f"Aktueller Text:\n{current_text}\n\nNächster Abschnitt:"
-                )
-                addition = self._call_llm(
-                    user_prompt, fallback=f"{prompt}. (iteration {iteration})"
-                )
+            section_prompt = prompts.SECTION_PROMPT.format(
+                outline=outline,
+                current_text=current_text,
+                title=title,
+                word_count=words or 0,
+            )
+            start = time.perf_counter()
+            addition = self._call_llm(section_prompt, fallback=title)
             elapsed = time.perf_counter() - start
             tokens = len(addition.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
             text.append(addition)
             current_text = " ".join(text)
             self._save_text(current_text)
-            self._save_iteration_text(current_text, iteration)
-            self.logger.info(
-                "iteration %s/%s: %s", iteration, self.iterations, addition
+            print(
+                f"section {idx}/{len(sections)}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
+                flush=True,
             )
+
+        final_text = " ".join(text)
+        words_list = final_text.split()
+        if len(words_list) > self.word_count:
+            final_text = " ".join(words_list[: self.word_count])
+        self._save_text(final_text)
+
+        for iteration in range(1, self.iterations + 1):
+            revision_prompt = prompts.REVISION_PROMPT.format(
+                title=self.topic,
+                text_type=self.text_type,
+                content=self.content,
+                word_count=self.word_count,
+                outline=outline,
+                current_text=final_text,
+            )
+            start = time.perf_counter()
+            revised = self._call_llm(revision_prompt, fallback=final_text)
+            elapsed = time.perf_counter() - start
+            tokens = len(revised.split())
+            tok_per_sec = tokens / (elapsed or 1e-8)
+            final_text = revised
+            self._save_text(final_text)
+            self._save_iteration_text(final_text, iteration)
             bar_len = 20
             filled = int(bar_len * iteration / self.iterations)
             bar = "#" * filled + "-" * (bar_len - filled)
@@ -185,14 +189,26 @@ class WriterAgent:
                 f"{tokens} tokens ({tok_per_sec:.2f} tok/s)",
                 flush=True,
             )
+            self.logger.info("iteration %s/%s: %s", iteration, self.iterations, "edited")
 
-        final_text = " ".join(text)
-        words = final_text.split()
-        if len(words) > self.word_count:
-            final_text = " ".join(words[: self.word_count])
-        self._save_text(final_text)
-        self._save_iteration_text(final_text, self.iterations)
         return final_text
+
+    # ------------------------------------------------------------------
+    def _parse_outline(self, outline: str) -> List[Tuple[str, int]]:
+        """Parse an outline into (title, word_count) tuples."""
+
+        sections: List[Tuple[str, int]] = []
+        for line in outline.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            line = line.split(".", 1)[-1].strip() if "." in line else line
+            match = re.search(r"^(.*?)(?:\((\d+)[^)]*\))?$", line)
+            if match:
+                title = match.group(1).strip()
+                words = int(match.group(2)) if match.group(2) else 0
+                sections.append((title, words))
+        return sections
 
     # ------------------------------------------------------------------
     def _craft_prompt(self, task: str) -> str:
