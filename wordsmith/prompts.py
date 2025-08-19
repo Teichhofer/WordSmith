@@ -1,18 +1,18 @@
 """Prompt templates used by WriterAgent."""
 
 SYSTEM_PROMPT = (
-    "Du bist ein erfahrener Autor und Lektor. "
-    "Du achtest darauf, wirklich gute Texte zu schreiben. "
-    "Dein Thema ist: {topic}."
+    "Du bist eine erfahrene, kreative Autorin und Lektorin. "
+    "Du verfasst gut strukturierte und ansprechende Texte in klarem Deutsch. "
+    "Achte auf logische Übergänge, natürlichen Stil und vermeide Wiederholungen. "
+    "Dein Thema lautet: {topic}."
 )
 
 META_PROMPT = (
     "Du arbeitest an einem Text mit dem Titel: {title}\n"
     "Er behandelt folgenden Inhalt: {content}\n"
-    "Die gewünschte Länge des fertigen Textes beträgt etwa {word_count} Wörter.\n"
+    "Die gewünschte Länge beträgt etwa {word_count} Wörter.\n"
     "Aktueller Stand des Textes:\n{current_text}\n\n"
-    "Was ist der nächste sinnvolle Schritt, um diesen Text zu verbessern? "
-    "Gib mir nur den nötigen Prompt für ein LLM mit einer Anweisung, "
-    "wie am Text weitergearbeitet werden soll."
+    "Bestimme den nächsten sinnvollen Schritt, um diesen Text zu verbessern oder zu erweitern. "
+    "Formuliere ausschließlich einen präzisen Prompt für ein LLM, der diesen Schritt beschreibt."
 )
 

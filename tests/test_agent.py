@@ -146,7 +146,7 @@ def test_call_llm_logs_prompt_and_response(tmp_path):
 
 
 def test_default_meta_prompt_contains_next_step_phrase():
-    assert 'nächste sinnvolle Schritt' in prompts.META_PROMPT
+    assert 'nächsten sinnvollen Schritt' in prompts.META_PROMPT
 
 
 def test_meta_prompt_includes_word_count():
@@ -187,15 +187,15 @@ def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
     def fake_call_llm(prompt, fallback):
         calls.append(prompt)
         # First call crafts the prompt, second generates text
-        if 'Provide an optimal prompt' in prompt:
+        if 'Formuliere einen klaren und konkreten Prompt' in prompt:
             return 'Write about cats.'
         return 'Some text.'
 
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
     writer.run()
 
-    assert any('Provide an optimal prompt' in c for c in calls)
-    assert any('Current text:' in c for c in calls)
+    assert any('Formuliere einen klaren und konkreten Prompt' in c for c in calls)
+    assert any('Aktueller Text:' in c for c in calls)
 
 
 def test_run_reports_progress(monkeypatch, tmp_path, capsys):
