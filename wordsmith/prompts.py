@@ -56,4 +56,16 @@ REVISION_PROMPT = (
 )
 
 
+PROMPT_CRAFTING_PROMPT = (
+    "Formuliere einen klaren und konkreten Prompt für ein LLM, "
+    "um die Aufgabe '{task}' zum Thema '{topic}' umzusetzen. "
+    "Gib nur den Prompt zurück."
+)
+
+
+STEP_PROMPT = (
+    "{prompt}\n\nAktueller Text:\n{current_text}\n\nNächster Abschnitt:"
+)
+
+
 

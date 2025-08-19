@@ -192,15 +192,14 @@ def test_run_uses_crafted_prompt(monkeypatch, tmp_path):
     def fake_call_llm(prompt, fallback):
         calls.append(prompt)
         # First call crafts the prompt, second generates text
-        if 'Formuliere einen klaren und konkreten Prompt' in prompt:
-            return 'Write about cats.'
-        return 'Some text.'
+        return 'Write about cats.' if len(calls) == 1 else 'Some text.'
 
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
     writer.run()
-
-    assert any('Formuliere einen klaren und konkreten Prompt' in c for c in calls)
-    assert any('Aktueller Text:' in c for c in calls)
+    expected_meta = prompts.PROMPT_CRAFTING_PROMPT.format(task='intro', topic='cats')
+    expected_user = prompts.STEP_PROMPT.format(prompt='Write about cats.', current_text='')
+    assert calls[0] == expected_meta
+    assert calls[1] == expected_user
 
 
 def test_run_reports_progress(monkeypatch, tmp_path, capsys):
