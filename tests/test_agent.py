@@ -283,3 +283,43 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
     assert cfg.context_length == 40
     assert cfg.max_tokens == 20
     assert any('gewünschte Länge' in p for p in captured_prompts)
+
+
+def test_run_auto_saves_text_each_iteration(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=2,
+        config=cfg,
+        content='about cats',
+    )
+
+    # Capture text passed to _save_text to ensure progress is written after each
+    # iteration and once more at the end.
+    saved = []
+
+    def fake_save_text(text: str) -> None:
+        saved.append(text)
+
+    monkeypatch.setattr(writer, '_save_text', fake_save_text)
+
+    # ``run_auto`` calls the LLM twice per iteration: first for the meta prompt
+    # and then for the user prompt. We return deterministic values so we can
+    # assert the saved progression.
+    responses = iter(['meta1', 'part1', 'meta2', 'part2'])
+
+    def fake_call_llm(prompt, fallback):
+        return next(responses)
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+
+    writer.run_auto()
+
+    assert saved == ['part1', 'part1 part2', 'part1 part2']

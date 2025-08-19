@@ -254,8 +254,16 @@ class WriterAgent:
 
     # ------------------------------------------------------------------
     def _save_text(self, text: str) -> None:
-        # Ensure a trailing newline so the shell prompt does not run into the
-        # file contents when viewed with ``cat``.
-        (self.config.output_dir / self.config.output_file).write_text(
-            text + "\n", encoding="utf8"
-        )
+        """Persist ``text`` to the configured output file.
+
+        The content is written with a trailing newline and flushed to disk so
+        that other processes can observe the progress immediately. This mirrors
+        the behaviour of the interactive mode where the current text file is
+        updated after each iteration.
+        """
+        path = self.config.output_dir / self.config.output_file
+        self.config.output_dir.mkdir(exist_ok=True)
+        with path.open("w", encoding="utf8") as fh:
+            fh.write(text + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
