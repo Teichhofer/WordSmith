@@ -214,10 +214,8 @@ class WriterAgent:
     def _craft_prompt(self, task: str) -> str:
         """Ask the LLM to craft an optimal prompt for the given task."""
 
-        meta_prompt = (
-            f"Formuliere einen klaren und konkreten Prompt für ein LLM, "
-            f"um die Aufgabe '{task}' zum Thema '{self.topic}' umzusetzen. "
-            f"Gib nur den Prompt zurück."
+        meta_prompt = prompts.PROMPT_CRAFTING_PROMPT.format(
+            task=task, topic=self.topic
         )
         fallback = f"{task} über {self.topic}"
         return self._call_llm(meta_prompt, fallback=fallback)
@@ -226,8 +224,8 @@ class WriterAgent:
     def _generate(self, prompt: str, current_text: str, iteration: int) -> str:
         """Generate text for ``prompt`` given the current text state."""
 
-        user_prompt = (
-            f"{prompt}\n\nAktueller Text:\n{current_text}\n\nNächster Abschnitt:"
+        user_prompt = prompts.STEP_PROMPT.format(
+            prompt=prompt, current_text=current_text
         )
         fallback = f"{prompt}. (Iteration {iteration})"
         return self._call_llm(user_prompt, fallback=fallback)
