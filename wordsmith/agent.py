@@ -136,7 +136,7 @@ class WriterAgent:
             user_prompt = (
                 f"{prompt}\n\nTitel: {self.topic}\n"
                 f"Gewünschter Inhalt: {self.content}\n"
-                f"Aktueller Text:\n{current_text}\n\nNächster Teil:"
+                f"Aktueller Text:\n{current_text}\n\nNächster Abschnitt:"
             )
             addition = self._call_llm(
                 user_prompt, fallback=f"{prompt}. (iteration {iteration})"
@@ -171,9 +171,11 @@ class WriterAgent:
         """Ask the LLM to craft an optimal prompt for the given task."""
 
         meta_prompt = (
-            f"Provide an optimal prompt to accomplish: {task} about {self.topic}."
+            f"Formuliere einen klaren und konkreten Prompt für ein LLM, "
+            f"um die Aufgabe '{task}' zum Thema '{self.topic}' umzusetzen. "
+            f"Gib nur den Prompt zurück."
         )
-        fallback = f"{task} about {self.topic}"
+        fallback = f"{task} über {self.topic}"
         return self._call_llm(meta_prompt, fallback=fallback)
 
     # ------------------------------------------------------------------
@@ -181,9 +183,9 @@ class WriterAgent:
         """Generate text for ``prompt`` given the current text state."""
 
         user_prompt = (
-            f"{prompt}\n\nCurrent text:\n{current_text}\n\nNext part:"
+            f"{prompt}\n\nAktueller Text:\n{current_text}\n\nNächster Abschnitt:"
         )
-        fallback = f"{prompt}. (iteration {iteration})"
+        fallback = f"{prompt}. (Iteration {iteration})"
         return self._call_llm(user_prompt, fallback=fallback)
 
     # ------------------------------------------------------------------
