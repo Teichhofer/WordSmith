@@ -4,6 +4,7 @@ sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 import json
 import urllib.request
 import urllib.error
+from datetime import datetime
 
 import wordsmith.agent as agent
 from wordsmith import prompts
@@ -140,9 +141,12 @@ def test_call_llm_logs_prompt_and_response(tmp_path):
     assert result == 'hello'
     log_path = tmp_path / 'logs' / cfg.llm_log_file
     assert log_path.exists()
-    content = log_path.read_text(encoding='utf-8')
-    assert 'say hi' in content
-    assert 'hello' in content
+    content = log_path.read_text(encoding='utf-8').strip().splitlines()
+    entries = [json.loads(line) for line in content]
+    assert any(e["event"] == "prompt" and 'say hi' in e["text"] for e in entries)
+    assert any(e["event"] == "response" and e["text"] == 'hello' for e in entries)
+    for e in entries:
+        datetime.fromisoformat(e["time"])
 
 
 def test_default_meta_prompt_contains_next_step_phrase():

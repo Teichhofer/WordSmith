@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Iterable, List
 
 from .config import Config, DEFAULT_CONFIG
@@ -71,7 +72,8 @@ class WriterAgent:
             encoding=self.config.log_encoding,
             errors="backslashreplace",
         )
-        llm_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+        # Use a minimal formatter; timestamps are included in JSON payloads
+        llm_handler.setFormatter(logging.Formatter("%(message)s"))
         llm_handler.setLevel(self.config.log_level)
         self.llm_logger = logging.getLogger(f"{__name__}.llm")
         self.llm_logger.addHandler(llm_handler)
@@ -219,7 +221,17 @@ class WriterAgent:
         """Internal helper to call the configured language model."""
 
         full_prompt = f"{self.system_prompt}\n\n{prompt}".strip()
-        self.llm_logger.info("prompt: %s", full_prompt)
+        # Log structured JSON to allow easier parsing and to keep entries on a single line
+        self.llm_logger.info(
+            json.dumps(
+                {
+                    "time": datetime.now(timezone.utc).isoformat(),
+                    "event": "prompt",
+                    "text": full_prompt,
+                },
+                ensure_ascii=False,
+            )
+        )
 
         result = fallback
 
@@ -275,7 +287,16 @@ class WriterAgent:
                 self.logger.error("openai request failed: %s", exc)
                 result = fallback
 
-        self.llm_logger.info("response: %s", result)
+        self.llm_logger.info(
+            json.dumps(
+                {
+                    "time": datetime.now(timezone.utc).isoformat(),
+                    "event": "response",
+                    "text": result,
+                },
+                ensure_ascii=False,
+            )
+        )
         return result
 
     # ------------------------------------------------------------------
