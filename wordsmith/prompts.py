@@ -33,5 +33,27 @@ INITIAL_AUTO_PROMPT = (
     "Achte darauf die Konventionen der Textart {text_type} zu beachten.\n"
 )
 
+OUTLINE_PROMPT = (
+    "Erstelle eine gegliederte Outline für einen {text_type} mit dem Titel: {title}\n"
+    "Der Text behandelt folgenden Inhalt: {content}\n"
+    "Die Gesamtlänge beträgt etwa {word_count} Wörter.\n"
+    "Gib eine nummerierte Liste der Abschnitte zurück und vermerke in Klammern den ungefähren Wortumfang jedes Abschnitts."
+)
+
+SECTION_PROMPT = (
+    "Outline:\n{outline}\n\n"
+    "Bisheriger Text:\n{current_text}\n\n"
+    "Schreibe den Abschnitt '{title}' mit etwa {word_count} Wörtern."
+    "Schreibe nur diesen Abschnitt."
+)
+
+REVISION_PROMPT = (
+    "Überarbeite den folgenden {text_type} basierend auf der Outline."
+    "Die Gesamtlänge soll etwa {word_count} Wörter betragen.\n\n"
+    "Outline:\n{outline}\n\n"
+    "Aktueller Text:\n{current_text}\n\n"
+    "Überarbeiteter Text:"
+)
+
 
 
