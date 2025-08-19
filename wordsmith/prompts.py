@@ -8,6 +8,7 @@ SYSTEM_PROMPT = (
     "Dein Thema lautet: {topic}."
 )
 
+META_SYSTEM_PROMPT = "Du bist ein kreativer Schreibcoach, der Autorinnen hilft, den nächsten sinnvollen Schritt zu planen."
 META_PROMPT = (
     "Du arbeitest an einem {text_type} mit dem Titel: {title}\n"
     "Er behandelt folgenden Inhalt: {content}\n"
@@ -23,6 +24,7 @@ META_PROMPT = (
 )
 
 
+INITIAL_AUTO_SYSTEM_PROMPT = "Du bist eine erfahrene Autorin, die aus kurzen Vorgaben einen ersten Rohtext entwickelt."
 INITIAL_AUTO_PROMPT = (
     "Schreibe diesen Text als erfahrene Autorin mit jahrzenten an erfahung.\n"
     "Titel: {title}\n"
@@ -33,6 +35,7 @@ INITIAL_AUTO_PROMPT = (
     "Achte darauf die Konventionen der Textart {text_type} zu beachten.\n"
 )
 
+OUTLINE_SYSTEM_PROMPT = "Du gliederst Themen in übersichtliche, gut strukturierte Outlines."
 OUTLINE_PROMPT = (
     "Erstelle eine gegliederte Outline für einen {text_type} mit dem Titel: {title}\n"
     "Der Text behandelt folgenden Inhalt: {content}\n"
@@ -40,6 +43,7 @@ OUTLINE_PROMPT = (
     "Gib eine nummerierte Liste der Abschnitte zurück und vermerke in Klammern den ungefähren Wortumfang jedes Abschnitts."
 )
 
+SECTION_SYSTEM_PROMPT = "Du schreibst einzelne Abschnitte und hältst dich an Outline und bisherigen Text."
 SECTION_PROMPT = (
     "Outline:\n{outline}\n\n"
     "Bisheriger Text:\n{current_text}\n\n"
@@ -47,6 +51,7 @@ SECTION_PROMPT = (
     "Schreibe nur diesen Abschnitt."
 )
 
+REVISION_SYSTEM_PROMPT = "Du überarbeitest Texte präzise und orientierst dich an einer vorgegebenen Outline."
 REVISION_PROMPT = (
     "Überarbeite den folgenden {text_type} basierend auf der Outline."
     "Die Gesamtlänge soll etwa {word_count} Wörter betragen.\n\n"
@@ -56,6 +61,7 @@ REVISION_PROMPT = (
 )
 
 
+PROMPT_CRAFTING_SYSTEM_PROMPT = "Du formulierst knappe, klare Prompts für andere Sprachmodelle."
 PROMPT_CRAFTING_PROMPT = (
     "Formuliere einen klaren und konkreten Prompt für ein LLM, "
     "um die Aufgabe '{task}' zum Thema '{topic}' umzusetzen. "
@@ -63,6 +69,7 @@ PROMPT_CRAFTING_PROMPT = (
 )
 
 
+STEP_SYSTEM_PROMPT = "Du führst eine begonnene Erzählung stilgetreu fort."
 STEP_PROMPT = (
     "{prompt}\n\nAktueller Text:\n{current_text}\n\nNächster Abschnitt:"
 )
