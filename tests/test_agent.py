@@ -152,6 +152,7 @@ def test_default_meta_prompt_contains_next_step_phrase():
 def test_meta_prompt_includes_word_count():
     formatted = prompts.META_PROMPT.format(
         title='T',
+        text_type='Text',
         content='C',
         word_count=123,
         current_text='',
@@ -167,7 +168,7 @@ def test_system_prompt_template(tmp_path):
         output_file='story.txt',
     )
     writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
-    expected = prompts.SYSTEM_PROMPT.format(topic='cats')
+    expected = prompts.SYSTEM_PROMPT.format(topic='cats', text_type='Text')
     assert writer.system_prompt == expected
     assert 'cats' in expected
 
@@ -229,6 +230,7 @@ def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
         iterations=2,
         config=cfg,
         content='about cats',
+        text_type='Essay',
     )
 
     calls = []
@@ -242,13 +244,14 @@ def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(
         prompts,
         'META_PROMPT',
-        'sentinel prompt {title} {content} {word_count} {current_text}',
+        'sentinel prompt {title} {text_type} {content} {word_count} {current_text}',
     )
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
     writer.run_auto()
 
     out = capsys.readouterr().out
     assert any('sentinel prompt' in c for c in calls)
+    assert 'Essay' in calls[0]
     assert 'iteration 1/2' in out
     assert '[##########----------]' in out
     assert (tmp_path / 'output' / 'story.txt').exists()

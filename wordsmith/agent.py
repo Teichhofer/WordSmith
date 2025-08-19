@@ -37,6 +37,7 @@ class WriterAgent:
         iterations: int,
         config: Config | None = None,
         content: str = "",
+        text_type: str = "Text",
     ) -> None:
         self.topic = topic
         self.word_count = word_count
@@ -44,13 +45,16 @@ class WriterAgent:
         self.iterations = iterations
         self.config = config or DEFAULT_CONFIG
         self.content = content
+        self.text_type = text_type
 
         self.config.ensure_dirs()
 
         # System prompt derived from the user's topic. This is attached to every
         # LLM request so that the model understands the overall context of the
         # writing task.
-        self.system_prompt = prompts.SYSTEM_PROMPT.format(topic=self.topic)
+        self.system_prompt = prompts.SYSTEM_PROMPT.format(
+            topic=self.topic, text_type=self.text_type
+        )
 
         logging.basicConfig(
             filename=self.config.log_dir / self.config.log_file,
@@ -127,6 +131,7 @@ class WriterAgent:
             current_text = " ".join(text)
             meta_prompt = prompts.META_PROMPT.format(
                 title=self.topic,
+                text_type=self.text_type,
                 content=self.content,
                 word_count=self.word_count,
                 current_text=current_text,
@@ -137,6 +142,7 @@ class WriterAgent:
             start = time.perf_counter()
             user_prompt = (
                 f"{prompt}\n\nTitel: {self.topic}\n"
+                f"Textart: {self.text_type}\n"
                 f"Gewünschter Inhalt: {self.content}\n"
                 f"Aktueller Text:\n{current_text}\n\nNächster Abschnitt:"
             )

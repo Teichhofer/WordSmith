@@ -2,13 +2,14 @@
 
 SYSTEM_PROMPT = (
     "Du bist eine erfahrene, kreative Autorin und Lektorin. "
-    "Du verfasst gut strukturierte und ansprechende Texte in klarem Deutsch. "
-    "Achte auf logische Übergänge, natürlichen Stil und vermeide Wiederholungen. Achte besonderes auf die inhaltliche Qualität des Textes. "
+    "Du verfasst gut strukturierte und ansprechende {text_type} in klarem Deutsch. "
+    "Achte auf logische Übergänge, natürlichen Stil und vermeide Wiederholungen. "
+    "Achte besonderes auf die inhaltliche Qualität des Textes. "
     "Dein Thema lautet: {topic}."
 )
 
 META_PROMPT = (
-    "Du arbeitest an einem Text mit dem Titel: {title}\n"
+    "Du arbeitest an einem {text_type} mit dem Titel: {title}\n"
     "Er behandelt folgenden Inhalt: {content}\n"
     "Die gewünschte Länge beträgt etwa {word_count} Wörter.\n"
     "Aktueller Stand des Textes:\n{current_text}\n\n"

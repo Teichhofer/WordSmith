@@ -45,6 +45,7 @@ def _run_cli() -> None:
         default_topic = "Untitled"
         topic = input(f"Title [{default_topic}]: ").strip() or default_topic
         content = input("Desired content: ").strip()
+        text_type = input("Text type: ").strip() or "Text"
         word_count = _prompt_int("Word count [100]: ", default=100)
         iterations = _prompt_int("Number of iterations [1]: ", default=1)
 
@@ -113,6 +114,7 @@ def _run_cli() -> None:
             iterations,
             config=cfg,
             content=content,
+            text_type=text_type,
         )
         final_text = writer.run_auto()
 
