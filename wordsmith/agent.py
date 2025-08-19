@@ -121,34 +121,48 @@ class WriterAgent:
         """Automatically generate a story over multiple iterations.
 
         Only the title, desired content and number of iterations are
-        required. For each iteration the agent first asks the LLM for the
-        next prompt to use and then generates the subsequent text.
+        required. In the first iteration the agent uses a predefined prompt
+        based on these inputs. In later iterations it first asks the LLM for
+        the next prompt to use and then generates the subsequent text.
         """
 
         text: List[str] = []
         self.config.adjust_for_word_count(self.word_count)
         for iteration in range(1, self.iterations + 1):
             current_text = " ".join(text)
-            meta_prompt = prompts.META_PROMPT.format(
-                title=self.topic,
-                text_type=self.text_type,
-                content=self.content,
-                word_count=self.word_count,
-                current_text=current_text,
-            )
-            prompt = self._call_llm(
-                meta_prompt, fallback="Fahre mit der Geschichte fort."
-            )
-            start = time.perf_counter()
-            user_prompt = (
-                f"{prompt}\n\nTitel: {self.topic}\n"
-                f"Textart: {self.text_type}\n"
-                f"Gewünschter Inhalt: {self.content}\n"
-                f"Aktueller Text:\n{current_text}\n\nNächster Abschnitt:"
-            )
-            addition = self._call_llm(
-                user_prompt, fallback=f"{prompt}. (iteration {iteration})"
-            )
+            if iteration == 1:
+                user_prompt = prompts.INITIAL_AUTO_PROMPT.format(
+                    title=self.topic,
+                    text_type=self.text_type,
+                    content=self.content,
+                    word_count=self.word_count,
+                )
+                start = time.perf_counter()
+                addition = self._call_llm(
+                    user_prompt,
+                    fallback=f"Schreibe einen Text über {self.topic}. (iteration {iteration})",
+                )
+            else:
+                meta_prompt = prompts.META_PROMPT.format(
+                    title=self.topic,
+                    text_type=self.text_type,
+                    content=self.content,
+                    word_count=self.word_count,
+                    current_text=current_text,
+                )
+                prompt = self._call_llm(
+                    meta_prompt, fallback="Fahre mit der Geschichte fort."
+                )
+                start = time.perf_counter()
+                user_prompt = (
+                    f"{prompt}\n\nTitel: {self.topic}\n"
+                    f"Textart: {self.text_type}\n"
+                    f"Gewünschter Inhalt: {self.content}\n"
+                    f"Aktueller Text:\n{current_text}\n\nNächster Abschnitt:"
+                )
+                addition = self._call_llm(
+                    user_prompt, fallback=f"{prompt}. (iteration {iteration})"
+                )
             elapsed = time.perf_counter() - start
             tokens = len(addition.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
