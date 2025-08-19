@@ -169,6 +169,7 @@ class WriterAgent:
             text.append(addition)
             current_text = " ".join(text)
             self._save_text(current_text)
+            self._save_iteration_text(current_text, iteration)
             self.logger.info(
                 "iteration %s/%s: %s", iteration, self.iterations, addition
             )
@@ -186,6 +187,7 @@ class WriterAgent:
         if len(words) > self.word_count:
             final_text = " ".join(words[: self.word_count])
         self._save_text(final_text)
+        self._save_iteration_text(final_text, self.iterations)
         return final_text
 
     # ------------------------------------------------------------------
@@ -273,6 +275,18 @@ class WriterAgent:
 
         self.llm_logger.info("response: %s", result)
         return result
+
+    # ------------------------------------------------------------------
+    def _save_iteration_text(self, text: str, iteration: int) -> None:
+        """Persist ``text`` of the current iteration to a separate file."""
+
+        filename = self.config.auto_iteration_file_template.format(iteration)
+        path = self.config.output_dir / filename
+        self.config.output_dir.mkdir(exist_ok=True)
+        with path.open("w", encoding="utf8") as fh:
+            fh.write(text + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
 
     # ------------------------------------------------------------------
     def _save_text(self, text: str) -> None:
