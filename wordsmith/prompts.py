@@ -17,3 +17,11 @@ META_PROMPT = (
     "Formuliere ausschließlich einen präzisen Prompt für ein LLM, der diesen Schritt beschreibt."
 )
 
+INITIAL_AUTO_PROMPT = (
+    "Schreibe diesen Text.\n"
+    "Titel: {title}\n"
+    "Textart: {text_type}\n"
+    "Inhalt: {content}\n"
+    "Er soll etwa {word_count} Wörter umfassen."
+)
+
