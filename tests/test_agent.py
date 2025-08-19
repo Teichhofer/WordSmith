@@ -332,3 +332,34 @@ def test_run_auto_saves_text_each_iteration(monkeypatch, tmp_path):
     writer.run_auto()
 
     assert saved == ['part1', 'part1 part2', 'part1 part2']
+
+
+def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=2,
+        config=cfg,
+        content='about cats',
+    )
+
+    responses = iter(['part1', 'meta2', 'part2'])
+
+    def fake_call_llm(prompt, fallback):
+        return next(responses)
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+
+    writer.run_auto()
+
+    iter1 = (tmp_path / 'output' / cfg.auto_iteration_file_template.format(1)).read_text(encoding='utf-8').strip()
+    iter2 = (tmp_path / 'output' / cfg.auto_iteration_file_template.format(2)).read_text(encoding='utf-8').strip()
+    assert iter1 == 'part1'
+    assert iter2 == 'part1 part2'
