@@ -13,6 +13,7 @@ class Config:
     log_dir: Path = Path("logs")
     output_dir: Path = Path("output")
     output_file: str = "current_text.txt"
+    auto_iteration_file_template: str = "iteration_{:02d}.txt"
     log_level: int = logging.INFO
     log_file: str = "run.log"
     llm_log_file: str = "llm.log"
