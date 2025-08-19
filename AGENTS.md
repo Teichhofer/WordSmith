@@ -8,3 +8,5 @@ Guidelines for coding agents working on this repository:
 - Generated artifacts like logs/ and output/ are ignored by git.
 - Store application settings in `wordsmith/config.py` rather than
   scattering them throughout the codebase.
+
+- Keep prompts in `wordsmith/prompts.py` instead of inlining them elsewhere.
