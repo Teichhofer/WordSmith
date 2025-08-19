@@ -134,7 +134,11 @@ class WriterAgent:
             content=self.content,
             word_count=self.word_count,
         )
-        outline = self._call_llm(outline_prompt, fallback="1. Einleitung (100)")
+        outline = self._call_llm(
+            outline_prompt,
+            fallback="1. Einleitung (100)",
+            system_prompt=prompts.OUTLINE_SYSTEM_PROMPT,
+        )
         sections = self._parse_outline(outline)
 
         for idx, (title, words) in enumerate(sections, start=1):
@@ -146,7 +150,11 @@ class WriterAgent:
                 word_count=words or 0,
             )
             start = time.perf_counter()
-            addition = self._call_llm(section_prompt, fallback=title)
+            addition = self._call_llm(
+                section_prompt,
+                fallback=title,
+                system_prompt=prompts.SECTION_SYSTEM_PROMPT,
+            )
             elapsed = time.perf_counter() - start
             tokens = len(addition.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
@@ -174,7 +182,11 @@ class WriterAgent:
                 current_text=final_text,
             )
             start = time.perf_counter()
-            revised = self._call_llm(revision_prompt, fallback=final_text)
+            revised = self._call_llm(
+                revision_prompt,
+                fallback=final_text,
+                system_prompt=prompts.REVISION_SYSTEM_PROMPT,
+            )
             elapsed = time.perf_counter() - start
             tokens = len(revised.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
@@ -218,7 +230,11 @@ class WriterAgent:
             task=task, topic=self.topic
         )
         fallback = f"{task} über {self.topic}"
-        return self._call_llm(meta_prompt, fallback=fallback)
+        return self._call_llm(
+            meta_prompt,
+            fallback=fallback,
+            system_prompt=prompts.PROMPT_CRAFTING_SYSTEM_PROMPT,
+        )
 
     # ------------------------------------------------------------------
     def _generate(self, prompt: str, current_text: str, iteration: int) -> str:
@@ -228,13 +244,23 @@ class WriterAgent:
             prompt=prompt, current_text=current_text
         )
         fallback = f"{prompt}. (Iteration {iteration})"
-        return self._call_llm(user_prompt, fallback=fallback)
+        return self._call_llm(
+            user_prompt,
+            fallback=fallback,
+            system_prompt=prompts.STEP_SYSTEM_PROMPT,
+        )
 
     # ------------------------------------------------------------------
-    def _call_llm(self, prompt: str, *, fallback: str) -> str:
+    def _call_llm(
+        self, prompt: str, *, fallback: str, system_prompt: str | None = None
+    ) -> str:
         """Internal helper to call the configured language model."""
 
-        full_prompt = f"{self.system_prompt}\n\n{prompt}".strip()
+        combined_system = self.system_prompt
+        if system_prompt:
+            combined_system = f"{combined_system}\n\n{system_prompt}".strip()
+
+        full_prompt = f"{combined_system}\n\n{prompt}".strip()
         # Log structured JSON to allow easier parsing and to keep entries on a single line
         self.llm_logger.info(
             json.dumps(
@@ -285,7 +311,7 @@ class WriterAgent:
                 {
                     "model": self.config.model,
                     "messages": [
-                        {"role": "system", "content": self.system_prompt},
+                        {"role": "system", "content": combined_system},
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": self.config.temperature,
