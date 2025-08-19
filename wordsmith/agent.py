@@ -57,10 +57,11 @@ class WriterAgent:
         )
 
         logging.basicConfig(
-            filename=self.config.log_dir / self.config.log_file,
+            filename=str(self.config.log_dir / self.config.log_file),
             level=self.config.log_level,
             format="%(asctime)s - %(message)s",
             encoding=self.config.log_encoding,
+            errors="backslashreplace",
             force=True,
         )
         self.logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ class WriterAgent:
         llm_handler = logging.FileHandler(
             self.config.log_dir / self.config.llm_log_file,
             encoding=self.config.log_encoding,
+            errors="backslashreplace",
         )
         llm_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
         llm_handler.setLevel(self.config.log_level)
