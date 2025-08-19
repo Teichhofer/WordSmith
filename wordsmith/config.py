@@ -21,10 +21,10 @@ class Config:
     llm_provider: str = "stub"
     model: str = "gpt-3.5-turbo"
     temperature: float = 0.7
-    context_length: int = 4096
-    max_tokens: int = 4096
-    auto_ctx_multiplier: int = 8
-    auto_token_multiplier: int = 4
+    context_length: int = 2048
+    max_tokens: int = 256
+    auto_ctx_multiplier: int = 4
+    auto_token_multiplier: int = 2
     openai_api_key: str | None = None
     openai_url: str = "https://api.openai.com/v1/chat/completions"
     ollama_url: str = "http://192.168.100.148:11434/api/generate"
