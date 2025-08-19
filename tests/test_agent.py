@@ -237,21 +237,27 @@ def test_run_auto_requests_prompt(monkeypatch, tmp_path, capsys):
 
     def fake_call_llm(prompt, fallback):
         calls.append(prompt)
-        if 'sentinel prompt' in prompt:
-            return 'Write intro.'
-        return 'Some text.'
+        if prompt.startswith('meta'):
+            return 'next step'
+        return 'text part'
 
     monkeypatch.setattr(
         prompts,
+        'INITIAL_AUTO_PROMPT',
+        'initial {title} {text_type} {content} {word_count}',
+    )
+    monkeypatch.setattr(
+        prompts,
         'META_PROMPT',
-        'sentinel prompt {title} {text_type} {content} {word_count} {current_text}',
+        'meta {title} {text_type} {content} {word_count} {current_text}',
     )
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
     writer.run_auto()
 
     out = capsys.readouterr().out
-    assert any('sentinel prompt' in c for c in calls)
-    assert 'Essay' in calls[0]
+    assert calls[0] == 'initial Title Essay about cats 10'
+    assert calls[1].startswith('meta Title Essay about cats 10')
+    assert calls[2].startswith('next step')
     assert 'iteration 1/2' in out
     assert '[##########----------]' in out
     assert (tmp_path / 'output' / 'story.txt').exists()
@@ -285,7 +291,7 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
 
     assert cfg.context_length == 40
     assert cfg.max_tokens == 20
-    assert any('gewünschte Länge' in p for p in captured_prompts)
+    assert any(str(writer.word_count) in p for p in captured_prompts)
 
 
 def test_run_auto_saves_text_each_iteration(monkeypatch, tmp_path):
@@ -313,10 +319,10 @@ def test_run_auto_saves_text_each_iteration(monkeypatch, tmp_path):
 
     monkeypatch.setattr(writer, '_save_text', fake_save_text)
 
-    # ``run_auto`` calls the LLM twice per iteration: first for the meta prompt
-    # and then for the user prompt. We return deterministic values so we can
-    # assert the saved progression.
-    responses = iter(['meta1', 'part1', 'meta2', 'part2'])
+    # ``run_auto`` calls the LLM once for the first iteration and then twice per
+    # subsequent iteration (meta prompt + user prompt). We return deterministic
+    # values so we can assert the saved progression.
+    responses = iter(['part1', 'meta2', 'part2'])
 
     def fake_call_llm(prompt, fallback):
         return next(responses)
