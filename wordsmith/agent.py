@@ -56,12 +56,14 @@ class WriterAgent:
             filename=self.config.log_dir / self.config.log_file,
             level=self.config.log_level,
             format="%(asctime)s - %(message)s",
+            encoding=self.config.log_encoding,
             force=True,
         )
         self.logger = logging.getLogger(__name__)
 
         llm_handler = logging.FileHandler(
-            self.config.log_dir / self.config.llm_log_file
+            self.config.log_dir / self.config.llm_log_file,
+            encoding=self.config.log_encoding,
         )
         llm_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
         llm_handler.setLevel(self.config.log_level)
