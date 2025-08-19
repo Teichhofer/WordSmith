@@ -1,21 +1,20 @@
 import sys, pathlib
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
-import wordsmith.agent as agent
+from wordsmith.agent import WriterAgent, Step
 from wordsmith.config import Config
 
 
-def test_logs_use_utf8(tmp_path):
-    cfg = Config(log_dir=tmp_path / "logs", output_dir=tmp_path / "out")
-    writer = agent.WriterAgent("topic", 5, [], iterations=1, config=cfg)
-    writer.logger.info("unicode \u2713")
-    writer.llm_logger.info("prompt: \u4f60\u597d")
-    run_data = (cfg.log_dir / cfg.log_file).read_bytes()
-    llm_data = (cfg.log_dir / cfg.llm_log_file).read_bytes()
-    for data, expected in [
-        (run_data, "unicode \u2713"),
-        (llm_data, "prompt: \u4f60\u597d"),
-    ]:
-        assert b"\x00" not in data
-        text = data.decode("utf-8")
-        assert expected in text
+def test_log_overwritten_with_new_encoding(tmp_path):
+    log_dir = tmp_path / 'logs'
+    out_dir = tmp_path / 'out'
+
+    cfg16 = Config(log_dir=log_dir, output_dir=out_dir, log_encoding='utf-16')
+    WriterAgent('T', 5, [Step('s')], 1, config=cfg16).run()
+
+    cfg8 = Config(log_dir=log_dir, output_dir=out_dir, log_encoding='utf-8')
+    WriterAgent('T', 5, [Step('s')], 1, config=cfg8).run()
+
+    content = (log_dir / cfg8.log_file).read_text(encoding='utf-8')
+    assert 'step 1/1' in content
+

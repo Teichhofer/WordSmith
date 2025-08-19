@@ -61,6 +61,7 @@ class WriterAgent:
             level=self.config.log_level,
             format="%(asctime)s - %(message)s",
             encoding=self.config.log_encoding,
+            filemode="w",
             force=True,
         )
         self.logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ class WriterAgent:
         llm_handler = logging.FileHandler(
             self.config.log_dir / self.config.llm_log_file,
             encoding=self.config.log_encoding,
+            mode="w",
         )
         llm_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
         llm_handler.setLevel(self.config.log_level)
@@ -283,7 +285,7 @@ class WriterAgent:
         filename = self.config.auto_iteration_file_template.format(iteration)
         path = self.config.output_dir / filename
         self.config.output_dir.mkdir(exist_ok=True)
-        with path.open("w", encoding="utf8") as fh:
+        with path.open("w", encoding=self.config.log_encoding) as fh:
             fh.write(text + "\n")
             fh.flush()
             os.fsync(fh.fileno())
@@ -299,7 +301,7 @@ class WriterAgent:
         """
         path = self.config.output_dir / self.config.output_file
         self.config.output_dir.mkdir(exist_ok=True)
-        with path.open("w", encoding="utf8") as fh:
+        with path.open("w", encoding=self.config.log_encoding) as fh:
             fh.write(text + "\n")
             fh.flush()
             os.fsync(fh.fileno())

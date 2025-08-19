@@ -13,7 +13,7 @@ META_PROMPT = (
     "Er behandelt folgenden Inhalt: {content}\n"
     "Die gewünschte Länge beträgt etwa {word_count} Wörter.\n"
     "Aktueller Stand des Textes:\n{current_text}\n\n"
-    "Überlege nun, welcher nächste erzählerische Schritt den Text literarisch vertiefen würde. "
+    "Überlege nun den nächsten sinnvollen Schritt, der den Text literarisch vertiefen würde. "
     "Achte darauf, dass Atmosphäre, Spannung und innere Konflikte verstärkt werden und die Figuren "
     "lebendiger, widersprüchlicher und psychologisch nachvollziehbarer wirken. "
     "Lege Wert auf subtile Andeutungen, emotionale Zwischentöne und mögliche symbolische Elemente, "
