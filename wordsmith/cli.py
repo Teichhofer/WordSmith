@@ -40,7 +40,7 @@ def _fetch_ollama_models(url: str) -> List[str]:
         return []
 
 
-def main() -> None:
+def _run_cli() -> None:
     if input("Automatic mode? (y/N): ").strip().lower() == "y":
         default_topic = "Untitled"
         topic = input(f"Title [{default_topic}]: ").strip() or default_topic
@@ -179,6 +179,13 @@ def main() -> None:
 
     print("\nFinal text:\n")
     print(final_text)
+
+
+def main() -> None:
+    try:
+        _run_cli()
+    except KeyboardInterrupt:
+        print("\nAborted.")
 
 
 if __name__ == "__main__":

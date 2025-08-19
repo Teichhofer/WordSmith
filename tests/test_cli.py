@@ -270,3 +270,15 @@ def test_cli_auto_mode_openai_endpoint(monkeypatch, tmp_path, capsys):
     assert cfg_used.llm_provider == 'openai'
     assert cfg_used.model == 'gpt'
     assert cfg_used.openai_url == 'http://custom'
+
+
+def test_cli_keyboard_interrupt(monkeypatch, capsys):
+    def raise_interrupt(_):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr('builtins.input', raise_interrupt)
+
+    cli.main()
+
+    out = capsys.readouterr().out
+    assert 'Aborted.' in out
