@@ -139,6 +139,12 @@ class WriterAgent:
             fallback="1. Einleitung (100)",
             system_prompt=prompts.OUTLINE_SYSTEM_PROMPT,
         )
+        improve_prompt = prompts.OUTLINE_IMPROVEMENT_PROMPT.format(outline=outline)
+        outline = self._call_llm(
+            improve_prompt,
+            fallback=outline,
+            system_prompt=prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT,
+        )
         self._save_iteration_text(outline, 0)
         sections = self._parse_outline(outline)
 

@@ -53,6 +53,16 @@ OUTLINE_PROMPT = (
     "Jede Zeile beginnt mit # und enthält eine kurze Charakterisierung."
 )
 
+OUTLINE_IMPROVEMENT_SYSTEM_PROMPT = (
+    "Du überarbeitest Outlines, vertiefst die Charakterisierung der Figuren und sorgst für eine klare, konsistente Struktur."
+)
+OUTLINE_IMPROVEMENT_PROMPT = (
+    "Überarbeite die folgende Outline.\n"
+    "Schärfe besonders die Charakterisierungen der Figuren und ergänze, wo sinnvoll, weitere Details.\n"
+    "Erhalte die nummerierte Gliederung sowie die abschließende Figurenliste.\n\n"
+    "Outline:\n{outline}\n"
+)
+
 SECTION_SYSTEM_PROMPT = (
     "Du schreibst einzelne Abschnitte, orientierst dich exakt an Outline und bisherigem Text "
     "und bleibst konsistent im Stil."
