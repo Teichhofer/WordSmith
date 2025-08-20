@@ -150,6 +150,7 @@ class WriterAgent:
                 current_text=current_text,
                 title=title,
                 word_count=words or 0,
+                text_type=self.text_type,
             )
             start = time.perf_counter()
             addition = self._call_llm(
