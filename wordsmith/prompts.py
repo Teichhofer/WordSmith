@@ -58,7 +58,7 @@ SECTION_SYSTEM_PROMPT = (
 SECTION_PROMPT = (
     "Outline:\n{outline}\n\n"
     "Bisheriger Text:\n{current_text}\n\n"
-    "Schreibe den Abschnitt '{title}' mit etwa {word_count} Wörtern."
+    "Schreibe den Abschnitt '{title}' mit mindesten {word_count} Wörtern."
     "Schreibe nur diesen Abschnitt."
 )
 
