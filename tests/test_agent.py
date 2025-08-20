@@ -280,6 +280,7 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
             'intro text',
             'end text',
             'check',
+            'fixed text',
             'edited text',
         ]
     )
@@ -309,8 +310,10 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
     assert calls[4][1] == prompts.SECTION_SYSTEM_PROMPT
     assert 'Prüfe, ob der folgende Text' in calls[5][0]
     assert calls[5][1] == prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
-    assert 'Überarbeite den folgenden' in calls[6][0]
-    assert calls[6][1] == prompts.REVISION_SYSTEM_PROMPT
+    assert 'Der Textcheck hat ergeben' in calls[6][0]
+    assert calls[6][1] == prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT
+    assert 'Überarbeite den folgenden' in calls[7][0]
+    assert calls[7][1] == prompts.REVISION_SYSTEM_PROMPT
     assert saved[0] == 'intro text'
     assert saved[1] == 'intro text end text'
     assert saved[-1] == 'edited text'
@@ -381,6 +384,7 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
         '1. Part (5) improved',
         'draft',
         'check',
+        'draft',
         'edited',
     ])
 
@@ -427,6 +431,7 @@ def test_run_auto_skips_duplicate_sections_and_revisions(monkeypatch, tmp_path):
         'dup',
         'dup',
         'check',
+        'dup',
         'dup',
     ])
 
@@ -487,6 +492,46 @@ def test_run_auto_refines_outline(monkeypatch, tmp_path):
 
     assert calls[2][1] == prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT
     assert 'Charakterisierung' in calls[2][0]
+
+
+def test_run_auto_uses_text_type_fix(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=0,
+        config=cfg,
+        content='about cats',
+    )
+
+    responses = iter([
+        'better idea',
+        '1. Part (5)',
+        '1. Part (5) improved',
+        'Nein: Fehler',
+        'fixed text',
+    ])
+
+    calls: list[tuple[str, str | None]] = []
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        calls.append((prompt, system_prompt))
+        return next(responses)
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    monkeypatch.setattr(writer, '_parse_outline', lambda o: [])
+
+    writer.run_auto()
+
+    assert calls[3][1] == prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
+    assert calls[4][1] == prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT
+    assert 'Nein: Fehler' in calls[4][0]
 
 
 def test_save_text_only_writes_on_change(monkeypatch, tmp_path):

@@ -128,5 +128,15 @@ TEXT_TYPE_CHECK_PROMPT = (
     "Text:\n{current_text}\n"
 )
 
+TEXT_TYPE_FIX_SYSTEM_PROMPT = (
+    "Du überarbeitest Texte anhand eines Textchecks und behebst die genannten Mängel präzise."
+)
+TEXT_TYPE_FIX_PROMPT = (
+    "Der Textcheck hat ergeben, dass es folgende Mängel im Text gibt:\n"
+    "{issues}\n"
+    "Behebe sie im folgenden Text und liefere die verbesserte Version:\n"
+    "{current_text}\n"
+)
+
 
 
