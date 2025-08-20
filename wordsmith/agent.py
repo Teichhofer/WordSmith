@@ -127,7 +127,12 @@ class WriterAgent:
 
         text: List[str] = []
         self.config.adjust_for_word_count(self.word_count)
-
+        idea_prompt = prompts.IDEA_IMPROVEMENT_PROMPT.format(content=self.content)
+        self.content = self._call_llm(
+            idea_prompt,
+            fallback=self.content,
+            system_prompt=prompts.IDEA_IMPROVEMENT_SYSTEM_PROMPT,
+        )
         outline_prompt = prompts.OUTLINE_PROMPT.format(
             title=self.topic,
             text_type=self.text_type,
