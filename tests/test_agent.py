@@ -277,6 +277,7 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
             '1. Intro (5)\n2. End (5)',
             'intro text',
             'end text',
+            'check',
             'edited text',
         ]
     )
@@ -300,8 +301,10 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
     assert calls[1][1] == prompts.SECTION_SYSTEM_PROMPT
     assert 'Schreibe den Abschnitt' in calls[2][0]
     assert calls[2][1] == prompts.SECTION_SYSTEM_PROMPT
-    assert 'Überarbeite den folgenden' in calls[3][0]
-    assert calls[3][1] == prompts.REVISION_SYSTEM_PROMPT
+    assert 'Prüfe, ob der folgende Text' in calls[3][0]
+    assert calls[3][1] == prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
+    assert 'Überarbeite den folgenden' in calls[4][0]
+    assert calls[4][1] == prompts.REVISION_SYSTEM_PROMPT
     assert saved[0] == 'intro text'
     assert saved[1] == 'intro text end text'
     assert saved[-1] == 'edited text'
@@ -361,7 +364,7 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
         content='about cats',
     )
 
-    responses = iter(['1. Part (5)', 'draft', 'edited'])
+    responses = iter(['1. Part (5)', 'draft', 'check', 'edited'])
 
     def fake_call_llm(prompt, fallback, *, system_prompt=None):
         return next(responses)
@@ -403,6 +406,7 @@ def test_run_auto_skips_duplicate_sections_and_revisions(monkeypatch, tmp_path):
         '1. Part (5)\n2. Second (5)',
         'dup',
         'dup',
+        'check',
         'dup',
     ])
 
