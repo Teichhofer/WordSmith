@@ -40,6 +40,17 @@ INITIAL_AUTO_PROMPT = (
     "Beachte die Konventionen der Textart {text_type}.\n"
 )
 
+IDEA_IMPROVEMENT_SYSTEM_PROMPT = (
+    "Du überarbeitest Ideen, korrigierst Rechtschreib- und Grammatikfehler und formulierst sie klarer. "
+    "Wenn sinnvoll, ergänzt du ein oder zwei originelle Aspekte."
+)
+IDEA_IMPROVEMENT_PROMPT = (
+    "Überarbeite die folgende Idee.\n"
+    "Korrigiere Rechtschreib- und Grammatikfehler, formuliere sie prägnanter und ergänze, "
+    "falls passend, ein oder zwei originelle Aspekte.\n\n"
+    "Idee:\n{content}\n"
+)
+
 OUTLINE_SYSTEM_PROMPT = (
     "Du gliederst Themen in übersichtliche, gut strukturierte Outlines und achtest auf klare Hierarchien "
     "sowie eine sinnvolle Reihenfolge."
