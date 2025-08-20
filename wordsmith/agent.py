@@ -139,6 +139,7 @@ class WriterAgent:
             fallback="1. Einleitung (100)",
             system_prompt=prompts.OUTLINE_SYSTEM_PROMPT,
         )
+        self._save_iteration_text(outline, 0)
         sections = self._parse_outline(outline)
 
         for idx, (title, words) in enumerate(sections, start=1):
@@ -171,7 +172,7 @@ class WriterAgent:
         if len(words_list) > self.word_count:
             final_text = " ".join(words_list[: self.word_count])
         self._save_text(final_text)
-        self._save_iteration_text(final_text, 0)
+        self._save_iteration_text(final_text, 1)
 
         for iteration in range(1, self.iterations + 1):
             revision_prompt = prompts.REVISION_PROMPT.format(
@@ -193,7 +194,7 @@ class WriterAgent:
             tok_per_sec = tokens / (elapsed or 1e-8)
             final_text = revised
             self._save_text(final_text)
-            self._save_iteration_text(final_text, iteration)
+            self._save_iteration_text(final_text, iteration + 1)
             bar_len = 20
             filled = int(bar_len * iteration / self.iterations)
             bar = "#" * filled + "-" * (bar_len - filled)

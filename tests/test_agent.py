@@ -375,5 +375,9 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
     iter1 = (
         tmp_path / 'output' / cfg.auto_iteration_file_template.format(1)
     ).read_text(encoding='utf-8').strip()
-    assert iter0 == 'draft'
-    assert iter1 == 'edited'
+    iter2 = (
+        tmp_path / 'output' / cfg.auto_iteration_file_template.format(2)
+    ).read_text(encoding='utf-8').strip()
+    assert iter0 == '1. Part (5)'
+    assert iter1 == 'draft'
+    assert iter2 == 'edited'
