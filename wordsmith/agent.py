@@ -171,6 +171,7 @@ class WriterAgent:
         if len(words_list) > self.word_count:
             final_text = " ".join(words_list[: self.word_count])
         self._save_text(final_text)
+        self._save_iteration_text(final_text, 0)
 
         for iteration in range(1, self.iterations + 1):
             revision_prompt = prompts.REVISION_PROMPT.format(
