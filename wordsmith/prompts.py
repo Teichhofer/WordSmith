@@ -68,7 +68,7 @@ REVISION_SYSTEM_PROMPT = (
 )
 REVISION_PROMPT = (
     "Überarbeite den folgenden {text_type} basierend auf der Outline."
-    "Die Gesamtlänge soll etwa {word_count} Wörter betragen.\n\n"
+    "Die Gesamtlänge soll mindestens {word_count} Wörter betragen.\n\n"
     "Outline:\n{outline}\n\n"
     "Aktueller Text:\n{current_text}\n\n"
     "Überarbeiteter Text:"
