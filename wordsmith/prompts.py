@@ -90,8 +90,8 @@ PROMPT_CRAFTING_PROMPT = (
 
 
 STEP_SYSTEM_PROMPT = (
-    "Du führst eine begonnene Erzählung stilgetreu fort und greifst Figuren, Ton und Spannung des bisherigen "
-    "Textes exakt auf."
+    "Du führst als erfahrene Autorin eine begonnene Erzählung stilgetreu fort und greifst Figuren, Ton und Spannung des bisherigen "
+    "Textes auf."
 )
 STEP_PROMPT = (
     "{prompt}\n\nAktueller Text:\n{current_text}\n\nNächster Abschnitt:"
@@ -99,7 +99,7 @@ STEP_PROMPT = (
 
 
 TEXT_TYPE_CHECK_SYSTEM_PROMPT = (
-    "Du prüfst Texte darauf, ob sie den Merkmalen der angegebenen Textart entsprechen."
+    "Du prüfst als seit 20 Jahren erfahrene Lektorin Texte darauf, ob sie den Merkmalen der angegebenen Textart entsprechen."
 )
 TEXT_TYPE_CHECK_PROMPT = (
     "Prüfe, ob der folgende Text die Anforderungen der Textart {text_type} erfüllt. "
