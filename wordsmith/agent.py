@@ -237,7 +237,7 @@ class WriterAgent:
         sections: List[Tuple[str, int]] = []
         for line in outline.splitlines():
             line = line.strip()
-            if not line or line.startswith(('*', '-', '+')):
+            if not line or line.startswith(('*', '-', '+', '#')):
                 continue
             if not re.match(r"\d+\.", line):
                 continue
