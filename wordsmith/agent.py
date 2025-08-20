@@ -224,9 +224,11 @@ class WriterAgent:
         sections: List[Tuple[str, int]] = []
         for line in outline.splitlines():
             line = line.strip()
-            if not line:
+            if not line or line.startswith(('*', '-', '+')):
                 continue
-            line = line.split(".", 1)[-1].strip() if "." in line else line
+            if not re.match(r"\d+\.", line):
+                continue
+            line = line.split(".", 1)[1].strip()
             match = re.search(r"^(.*?)(?:\((\d+)[^)]*\))?$", line)
             if match:
                 title = match.group(1).strip()
