@@ -275,6 +275,7 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
     responses = iter(
         [
             '1. Intro (5)\n2. End (5)',
+            '1. Intro (5)\n2. End (5) improved',
             'intro text',
             'end text',
             'check',
@@ -297,14 +298,16 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
 
     assert 'Erstelle eine gegliederte Outline' in calls[0][0]
     assert calls[0][1] == prompts.OUTLINE_SYSTEM_PROMPT
-    assert 'Schreibe den Abschnitt' in calls[1][0]
-    assert calls[1][1] == prompts.SECTION_SYSTEM_PROMPT
+    assert 'Überarbeite die folgende Outline' in calls[1][0]
+    assert calls[1][1] == prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT
     assert 'Schreibe den Abschnitt' in calls[2][0]
     assert calls[2][1] == prompts.SECTION_SYSTEM_PROMPT
-    assert 'Prüfe, ob der folgende Text' in calls[3][0]
-    assert calls[3][1] == prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
-    assert 'Überarbeite den folgenden' in calls[4][0]
-    assert calls[4][1] == prompts.REVISION_SYSTEM_PROMPT
+    assert 'Schreibe den Abschnitt' in calls[3][0]
+    assert calls[3][1] == prompts.SECTION_SYSTEM_PROMPT
+    assert 'Prüfe, ob der folgende Text' in calls[4][0]
+    assert calls[4][1] == prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
+    assert 'Überarbeite den folgenden' in calls[5][0]
+    assert calls[5][1] == prompts.REVISION_SYSTEM_PROMPT
     assert saved[0] == 'intro text'
     assert saved[1] == 'intro text end text'
     assert saved[-1] == 'edited text'
@@ -369,7 +372,7 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
         content='about cats',
     )
 
-    responses = iter(['1. Part (5)', 'draft', 'check', 'edited'])
+    responses = iter(['1. Part (5)', '1. Part (5) improved', 'draft', 'check', 'edited'])
 
     def fake_call_llm(prompt, fallback, *, system_prompt=None):
         return next(responses)
@@ -386,7 +389,7 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
     iter2 = (
         tmp_path / 'output' / cfg.auto_iteration_file_template.format(2)
     ).read_text(encoding='utf-8').strip()
-    assert iter0 == '1. Part (5)'
+    assert iter0 == '1. Part (5) improved'
     assert iter1 == 'draft'
     assert iter2 == 'edited'
 
@@ -408,6 +411,7 @@ def test_run_auto_skips_duplicate_sections_and_revisions(monkeypatch, tmp_path):
     )
 
     responses = iter([
+        '1. Part (5)\n2. Second (5)',
         '1. Part (5)\n2. Second (5)',
         'dup',
         'dup',
@@ -435,6 +439,41 @@ def test_run_auto_skips_duplicate_sections_and_revisions(monkeypatch, tmp_path):
 
     assert saved == ['dup']
     assert iterations_saved == [(0, '1. Part (5)\n2. Second (5)'), (1, 'dup')]
+
+
+def test_run_auto_refines_outline(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=0,
+        config=cfg,
+        content='about cats',
+    )
+
+    calls: list[tuple[str, str | None]] = []
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        calls.append((prompt, system_prompt))
+        if len(calls) == 1:
+            return '1. Part (5)'
+        elif len(calls) == 2:
+            return '1. Part (5) improved'
+        return ''
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    monkeypatch.setattr(writer, '_parse_outline', lambda o: [])
+
+    writer.run_auto()
+
+    assert calls[1][1] == prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT
+    assert 'Charakterisierung' in calls[1][0]
 
 
 def test_save_text_only_writes_on_change(monkeypatch, tmp_path):

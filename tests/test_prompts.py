@@ -6,6 +6,7 @@ def test_prompts_have_system_prompts():
     assert prompts.META_SYSTEM_PROMPT.strip()
     assert prompts.INITIAL_AUTO_SYSTEM_PROMPT.strip()
     assert prompts.OUTLINE_SYSTEM_PROMPT.strip()
+    assert prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT.strip()
     assert prompts.SECTION_SYSTEM_PROMPT.strip()
     assert prompts.REVISION_SYSTEM_PROMPT.strip()
     assert prompts.PROMPT_CRAFTING_SYSTEM_PROMPT.strip()
@@ -18,6 +19,7 @@ def test_system_prompts_quality_phrases():
     assert "strukturierter Schreibcoach" in prompts.META_SYSTEM_PROMPT
     assert "hochwertigen ersten Rohtext" in prompts.INITIAL_AUTO_SYSTEM_PROMPT
     assert "klare Hierarchien" in prompts.OUTLINE_SYSTEM_PROMPT
+    assert "Charakterisierung der Figuren" in prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT
     assert "konsistent im Stil" in prompts.SECTION_SYSTEM_PROMPT
     assert "Stil, Kohärenz und Grammatik" in prompts.REVISION_SYSTEM_PROMPT
     assert "vermeidest Mehrdeutigkeiten" in prompts.PROMPT_CRAFTING_SYSTEM_PROMPT
