@@ -369,6 +369,11 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
     monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
 
     writer.run_auto()
-
-    iter1 = (tmp_path / 'output' / cfg.auto_iteration_file_template.format(1)).read_text(encoding='utf-8').strip()
+    iter0 = (
+        tmp_path / 'output' / cfg.auto_iteration_file_template.format(0)
+    ).read_text(encoding='utf-8').strip()
+    iter1 = (
+        tmp_path / 'output' / cfg.auto_iteration_file_template.format(1)
+    ).read_text(encoding='utf-8').strip()
+    assert iter0 == 'draft'
     assert iter1 == 'edited'
