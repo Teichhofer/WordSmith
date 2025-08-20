@@ -94,4 +94,14 @@ STEP_PROMPT = (
 )
 
 
+TEXT_TYPE_CHECK_SYSTEM_PROMPT = (
+    "Du prüfst Texte darauf, ob sie den Merkmalen der angegebenen Textart entsprechen."
+)
+TEXT_TYPE_CHECK_PROMPT = (
+    "Prüfe, ob der folgende Text die Anforderungen der Textart {text_type} erfüllt. "
+    "Antworte knapp mit Ja oder Nein und einer kurzen Begründung.\n\n"
+    "Text:\n{current_text}\n"
+)
+
+
 

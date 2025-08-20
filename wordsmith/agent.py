@@ -180,6 +180,18 @@ class WriterAgent:
             last_saved = final_text
         self._save_iteration_text(final_text, 1)
 
+        check_prompt = prompts.TEXT_TYPE_CHECK_PROMPT.format(
+            text_type=self.text_type,
+            current_text=final_text,
+        )
+        check_result = self._call_llm(
+            check_prompt,
+            fallback="",
+            system_prompt=prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT,
+        )
+        self.logger.info("text type check: %s", check_result)
+        print(f"text type check: {check_result}", flush=True)
+
         for iteration in range(1, self.iterations + 1):
             revision_prompt = prompts.REVISION_PROMPT.format(
                 title=self.topic,
