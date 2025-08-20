@@ -23,3 +23,8 @@ def test_system_prompts_quality_phrases():
     assert "vermeidest Mehrdeutigkeiten" in prompts.PROMPT_CRAFTING_SYSTEM_PROMPT
     assert "Figuren, Ton und Spannung" in prompts.STEP_SYSTEM_PROMPT
     assert "Merkmalen der angegebenen Textart" in prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
+
+
+def test_section_prompt_mentions_text_type():
+    assert "Textart: {text_type}" in prompts.SECTION_PROMPT
+    assert "Anforderungen und Konventionen der Textart" in prompts.SECTION_PROMPT
