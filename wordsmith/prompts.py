@@ -20,6 +20,7 @@ META_PROMPT = (
     "Beschreibe den nächsten sinnvollen Schritt der Geschichte, der den Text literarisch vertiefen würde. "
     "Achte darauf, dass Atmosphäre, Spannung und innere Konflikte verstärkt werden und die Figuren "
     "lebendiger, widersprüchlicher und psychologisch nachvollziehbarer wirken. "
+    "Berücksichtige die spezifischen Anforderungen und Konventionen der Textart {text_type}. "
     "Lege Wert auf subtile Andeutungen, emotionale Zwischentöne und mögliche symbolische Elemente, "
     "die den Text dichter und vielschichtiger machen. "
     "Formuliere ausschließlich einen präzisen Prompt für ein LLM, der genau diesen nächsten sinnvollen Schritt beschreibt, "

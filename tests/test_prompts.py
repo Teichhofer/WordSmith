@@ -28,3 +28,7 @@ def test_system_prompts_quality_phrases():
 def test_section_prompt_mentions_text_type():
     assert "Textart: {text_type}" in prompts.SECTION_PROMPT
     assert "Anforderungen und Konventionen der Textart" in prompts.SECTION_PROMPT
+
+
+def test_meta_prompt_mentions_text_type_requirements():
+    assert "Anforderungen und Konventionen der Textart" in prompts.META_PROMPT
