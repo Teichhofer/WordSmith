@@ -204,6 +204,22 @@ class WriterAgent:
         self.logger.info("text type check: %s", check_result)
         print(f"text type check: {check_result}", flush=True)
 
+        fix_prompt = prompts.TEXT_TYPE_FIX_PROMPT.format(
+            issues=check_result,
+            current_text=final_text,
+        )
+        fixed_text = self._call_llm(
+            fix_prompt,
+            fallback=final_text,
+            system_prompt=prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT,
+        )
+        if fixed_text.strip() != final_text.strip():
+            final_text = fixed_text
+            if final_text != last_saved:
+                self._save_text(final_text)
+                last_saved = final_text
+            self._save_iteration_text(final_text, 1)
+
         for iteration in range(1, self.iterations + 1):
             revision_prompt = prompts.REVISION_PROMPT.format(
                 title=self.topic,

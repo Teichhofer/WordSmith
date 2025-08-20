@@ -13,6 +13,7 @@ def test_prompts_have_system_prompts():
     assert prompts.PROMPT_CRAFTING_SYSTEM_PROMPT.strip()
     assert prompts.STEP_SYSTEM_PROMPT.strip()
     assert prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT.strip()
+    assert prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT.strip()
 
 
 def test_system_prompts_quality_phrases():
@@ -27,6 +28,7 @@ def test_system_prompts_quality_phrases():
     assert "vermeidest Mehrdeutigkeiten" in prompts.PROMPT_CRAFTING_SYSTEM_PROMPT
     assert "Figuren, Ton und Spannung" in prompts.STEP_SYSTEM_PROMPT
     assert "Merkmalen der angegebenen Textart" in prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
+    assert "Textchecks" in prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT
 
 
 def test_section_prompt_mentions_text_type():
@@ -42,3 +44,12 @@ def test_outline_prompt_mentions_character_lines():
         word_count=100,
     )
     assert 'Jede Zeile beginnt mit #' in text
+
+
+def test_text_type_fix_prompt_mentions_issues():
+    text = prompts.TEXT_TYPE_FIX_PROMPT.format(
+        issues='Fehler',
+        current_text='Inhalt',
+    )
+    assert 'Textcheck hat ergeben' in text
+    assert 'Behebe sie' in text
