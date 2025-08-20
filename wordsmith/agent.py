@@ -127,7 +127,12 @@ class WriterAgent:
 
         text: List[str] = []
         self.config.adjust_for_word_count(self.word_count)
-
+        idea_prompt = prompts.IDEA_IMPROVEMENT_PROMPT.format(content=self.content)
+        self.content = self._call_llm(
+            idea_prompt,
+            fallback=self.content,
+            system_prompt=prompts.IDEA_IMPROVEMENT_SYSTEM_PROMPT,
+        )
         outline_prompt = prompts.OUTLINE_PROMPT.format(
             title=self.topic,
             text_type=self.text_type,
@@ -138,6 +143,12 @@ class WriterAgent:
             outline_prompt,
             fallback="1. Einleitung (100)",
             system_prompt=prompts.OUTLINE_SYSTEM_PROMPT,
+        )
+        improve_prompt = prompts.OUTLINE_IMPROVEMENT_PROMPT.format(outline=outline)
+        outline = self._call_llm(
+            improve_prompt,
+            fallback=outline,
+            system_prompt=prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT,
         )
         self._save_iteration_text(outline, 0)
         sections = self._parse_outline(outline)

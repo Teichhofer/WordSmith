@@ -40,6 +40,17 @@ INITIAL_AUTO_PROMPT = (
     "Beachte die Konventionen der Textart {text_type}.\n"
 )
 
+IDEA_IMPROVEMENT_SYSTEM_PROMPT = (
+    "Du überarbeitest Ideen, korrigierst Rechtschreib- und Grammatikfehler und formulierst sie klarer. "
+    "Wenn sinnvoll, ergänzt du ein oder zwei originelle Aspekte."
+)
+IDEA_IMPROVEMENT_PROMPT = (
+    "Überarbeite die folgende Idee.\n"
+    "Korrigiere Rechtschreib- und Grammatikfehler, formuliere sie prägnanter und ergänze, "
+    "falls passend, ein oder zwei originelle Aspekte.\n\n"
+    "Idee:\n{content}\n"
+)
+
 OUTLINE_SYSTEM_PROMPT = (
     "Du gliederst Themen in übersichtliche, gut strukturierte Outlines und achtest auf klare Hierarchien "
     "sowie eine sinnvolle Reihenfolge."
@@ -51,6 +62,16 @@ OUTLINE_PROMPT = (
     "Gib eine nummerierte Liste der Abschnitte zurück und vermerke in Klammern den ungefähren Wortumfang jedes Abschnitts.\n"
     "Füge am Ende eine Liste aller Figuren hinzu, die vorkommen sollen. "
     "Jede Zeile beginnt mit # und enthält eine kurze Charakterisierung."
+)
+
+OUTLINE_IMPROVEMENT_SYSTEM_PROMPT = (
+    "Du überarbeitest Outlines, vertiefst die Charakterisierung der Figuren und sorgst für eine klare, konsistente Struktur."
+)
+OUTLINE_IMPROVEMENT_PROMPT = (
+    "Überarbeite die folgende Outline.\n"
+    "Schärfe besonders die Charakterisierungen der Figuren und ergänze, wo sinnvoll, weitere Details.\n"
+    "Erhalte die nummerierte Gliederung sowie die abschließende Figurenliste.\n\n"
+    "Outline:\n{outline}\n"
 )
 
 SECTION_SYSTEM_PROMPT = (
