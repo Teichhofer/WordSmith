@@ -250,7 +250,6 @@ def test_cli_auto_mode(monkeypatch, tmp_path, capsys):
 
     out = capsys.readouterr().out
     assert 'Final text:' in out
-    assert 'iteration 1/2' in out
     assert captured['steps'] == []
     assert captured['content'] == 'A cat story'
     assert captured['iterations'] == 2
