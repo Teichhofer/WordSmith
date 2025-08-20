@@ -28,3 +28,13 @@ def test_system_prompts_quality_phrases():
 def test_section_prompt_mentions_text_type():
     assert "Textart: {text_type}" in prompts.SECTION_PROMPT
     assert "Anforderungen und Konventionen der Textart" in prompts.SECTION_PROMPT
+
+
+def test_outline_prompt_mentions_character_lines():
+    text = prompts.OUTLINE_PROMPT.format(
+        text_type='Roman',
+        title='Titel',
+        content='Inhalt',
+        word_count=100,
+    )
+    assert 'Jede Zeile beginnt mit #' in text

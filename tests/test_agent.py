@@ -344,7 +344,12 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
 def test_parse_outline(tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
     writer = agent.WriterAgent('T', 10, [], iterations=0, config=cfg)
-    outline = '1. Intro (3)\n    * detail\n2. Body (5)\n    * more detail'
+    outline = (
+        '1. Intro (3)\n    * detail\n'
+        '2. Body (5)\n    * more detail\n'
+        '# Alice: neugierige Heldin\n'
+        '# Bob: weiser Mentor'
+    )
     assert writer._parse_outline(outline) == [('Intro', 3), ('Body', 5)]
 
 
