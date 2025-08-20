@@ -142,6 +142,7 @@ class WriterAgent:
         self._save_iteration_text(outline, 0)
         sections = self._parse_outline(outline)
 
+        last_saved = ""
         for idx, (title, words) in enumerate(sections, start=1):
             current_text = " ".join(text)
             section_prompt = prompts.SECTION_PROMPT.format(
@@ -159,9 +160,12 @@ class WriterAgent:
             elapsed = time.perf_counter() - start
             tokens = len(addition.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
-            text.append(addition)
-            current_text = " ".join(text)
-            self._save_text(current_text)
+            if not text or addition.strip() != text[-1].strip():
+                text.append(addition)
+                current_text = " ".join(text)
+                if current_text != last_saved:
+                    self._save_text(current_text)
+                    last_saved = current_text
             print(
                 f"section {idx}/{len(sections)}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
                 flush=True,
@@ -171,7 +175,9 @@ class WriterAgent:
         words_list = final_text.split()
         if len(words_list) > self.word_count:
             final_text = " ".join(words_list[: self.word_count])
-        self._save_text(final_text)
+        if final_text != last_saved:
+            self._save_text(final_text)
+            last_saved = final_text
         self._save_iteration_text(final_text, 1)
 
         for iteration in range(1, self.iterations + 1):
@@ -192,8 +198,12 @@ class WriterAgent:
             elapsed = time.perf_counter() - start
             tokens = len(revised.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
+            if revised.strip() == final_text.strip():
+                continue
             final_text = revised
-            self._save_text(final_text)
+            if final_text != last_saved:
+                self._save_text(final_text)
+                last_saved = final_text
             self._save_iteration_text(final_text, iteration + 1)
             bar_len = 20
             filled = int(bar_len * iteration / self.iterations)
@@ -364,6 +374,10 @@ class WriterAgent:
         """
         path = self.config.output_dir / self.config.output_file
         self.config.output_dir.mkdir(exist_ok=True)
+        if path.exists():
+            existing = path.read_text(encoding="utf8").rstrip("\n")
+            if existing == text:
+                return
         with path.open("w", encoding="utf8") as fh:
             fh.write(text + "\n")
             fh.flush()

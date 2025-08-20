@@ -381,3 +381,76 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
     assert iter0 == '1. Part (5)'
     assert iter1 == 'draft'
     assert iter2 == 'edited'
+
+
+def test_run_auto_skips_duplicate_sections_and_revisions(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=1,
+        config=cfg,
+        content='about cats',
+    )
+
+    responses = iter([
+        '1. Part (5)\n2. Second (5)',
+        'dup',
+        'dup',
+        'dup',
+    ])
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        return next(responses)
+
+    saved: list[str] = []
+    iterations_saved: list[tuple[int, str]] = []
+
+    def fake_save_text(text: str) -> None:
+        saved.append(text)
+
+    def fake_save_iteration_text(text: str, iteration: int) -> None:
+        iterations_saved.append((iteration, text))
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    monkeypatch.setattr(writer, '_save_text', fake_save_text)
+    monkeypatch.setattr(writer, '_save_iteration_text', fake_save_iteration_text)
+
+    writer.run_auto()
+
+    assert saved == ['dup']
+    assert iterations_saved == [(0, '1. Part (5)\n2. Second (5)'), (1, 'dup')]
+
+
+def test_save_text_only_writes_on_change(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent('T', 10, [], iterations=0, config=cfg)
+    path = cfg.output_dir / cfg.output_file
+
+    calls: list[int] = []
+    original_open = pathlib.Path.open
+
+    def counting_open(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get('mode', 'r')
+        if self == path and 'w' in mode:
+            calls.append(1)
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, 'open', counting_open)
+
+    writer._save_text('one')
+    writer._save_text('one')
+    writer._save_text('two')
+
+    assert len(calls) == 2
