@@ -48,6 +48,7 @@ class WriterAgent:
         self.config = config or DEFAULT_CONFIG
         self.content = content
         self.text_type = text_type
+        self.iteration = 0
 
         self.config.ensure_dirs()
 
@@ -90,6 +91,7 @@ class WriterAgent:
             # iterations.
             prompt = self._craft_prompt(step.task)
             for iteration in range(1, self.iterations + 1):
+                self.iteration = iteration
                 current_text = " ".join(text)
                 start = time.perf_counter()
                 addition = self._generate(prompt, current_text, iteration)
@@ -127,6 +129,7 @@ class WriterAgent:
 
         text: List[str] = []
         self.config.adjust_for_word_count(self.word_count)
+        self.iteration = 0
         idea_prompt = prompts.IDEA_IMPROVEMENT_PROMPT.format(content=self.content)
         self.content = self._call_llm(
             idea_prompt,
@@ -155,6 +158,7 @@ class WriterAgent:
 
         last_saved = ""
         for idx, (title, words) in enumerate(sections, start=1):
+            self.iteration = idx
             current_text = " ".join(text)
             section_prompt = prompts.SECTION_PROMPT.format(
                 outline=outline,
@@ -192,6 +196,7 @@ class WriterAgent:
             last_saved = final_text
         self._save_iteration_text(final_text, 1)
 
+        self.iteration = 0
         check_prompt = prompts.TEXT_TYPE_CHECK_PROMPT.format(
             text_type=self.text_type,
             current_text=final_text,
@@ -201,7 +206,7 @@ class WriterAgent:
             fallback="",
             system_prompt=prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT,
         )
-        self.logger.info("text type check: %s", check_result)
+        self.logger.info("iteration %s: text type check: %s", self.iteration, check_result)
         print(f"text type check: {check_result}", flush=True)
 
         fix_prompt = prompts.TEXT_TYPE_FIX_PROMPT.format(
@@ -221,6 +226,7 @@ class WriterAgent:
             self._save_iteration_text(final_text, 1)
 
         for iteration in range(1, self.iterations + 1):
+            self.iteration = iteration
             revision_prompt = prompts.REVISION_PROMPT.format(
                 title=self.topic,
                 text_type=self.text_type,
@@ -315,12 +321,14 @@ class WriterAgent:
             combined_system = f"{combined_system}\n\n{system_prompt}".strip()
 
         full_prompt = f"{combined_system}\n\n{prompt}".strip()
+        iteration = self.iteration
         # Log structured JSON to allow easier parsing and to keep entries on a single line
         self.llm_logger.info(
             json.dumps(
                 {
                     "time": datetime.now(timezone.utc).isoformat(),
                     "event": "prompt",
+                    "iteration": iteration,
                     "text": full_prompt,
                 },
                 ensure_ascii=False,
@@ -352,7 +360,9 @@ class WriterAgent:
                     payload = json.loads(resp.read().decode("utf8"))
                 result = payload.get("response", "").strip() or fallback
             except urllib.error.URLError as exc:
-                self.logger.error("ollama request failed: %s", exc)
+                self.logger.error(
+                    "iteration %s: ollama request failed: %s", iteration, exc
+                )
                 result = fallback
 
         elif self.config.llm_provider == "openai":
@@ -378,7 +388,9 @@ class WriterAgent:
                     payload = json.loads(resp.read().decode("utf8"))
                 result = payload["choices"][0]["message"]["content"].strip()
             except urllib.error.URLError as exc:
-                self.logger.error("openai request failed: %s", exc)
+                self.logger.error(
+                    "iteration %s: openai request failed: %s", iteration, exc
+                )
                 result = fallback
 
         self.llm_logger.info(
@@ -386,6 +398,7 @@ class WriterAgent:
                 {
                     "time": datetime.now(timezone.utc).isoformat(),
                     "event": "response",
+                    "iteration": iteration,
                     "text": result,
                 },
                 ensure_ascii=False,
