@@ -59,6 +59,7 @@ OUTLINE_PROMPT = (
     "Erstelle eine gegliederte Outline für einen {text_type} mit dem Titel: {title}\n"
     "Der Text behandelt folgenden Inhalt: {content}\n"
     "Die Gesamtlänge beträgt etwa {word_count} Wörter.\n"
+    "Alle Unterpunkte müssen mit * beginnen.\n"
     "Gib eine nummerierte Liste der Abschnitte zurück und vermerke in Klammern den ungefähren Wortumfang jedes Abschnitts.\n"
     "Füge am Ende eine Liste aller Figuren hinzu, die vorkommen sollen. "
     "Jede Zeile beginnt mit # und enthält eine kurze Charakterisierung."
