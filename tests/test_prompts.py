@@ -46,6 +46,16 @@ def test_outline_prompt_mentions_character_lines():
     assert 'Jede Zeile beginnt mit #' in text
 
 
+def test_outline_prompt_enforces_subpoint_asterisks():
+    text = prompts.OUTLINE_PROMPT.format(
+        text_type='Roman',
+        title='Titel',
+        content='Inhalt',
+        word_count=100,
+    )
+    assert 'Unterpunkte müssen mit * beginnen' in text
+
+
 def test_text_type_fix_prompt_mentions_issues():
     text = prompts.TEXT_TYPE_FIX_PROMPT.format(
         issues='Fehler',
