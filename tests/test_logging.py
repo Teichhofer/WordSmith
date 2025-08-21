@@ -22,3 +22,15 @@ def test_logs_use_utf8(tmp_path):
         assert expected in text
     # Ensure llm log is valid JSON
     json.loads(llm_data.decode("utf-8").splitlines()[0])
+
+
+def test_logging_records_iteration(tmp_path):
+    cfg = Config(log_dir=tmp_path / "logs", output_dir=tmp_path / "out")
+    step = agent.Step(task="test")
+    writer = agent.WriterAgent("topic", 5, [step], iterations=1, config=cfg)
+    writer.run()
+    run_log = (cfg.log_dir / cfg.log_file).read_text("utf-8")
+    assert "iteration 1/1" in run_log
+    llm_lines = (cfg.log_dir / cfg.llm_log_file).read_text("utf-8").splitlines()
+    iterations = {json.loads(line)["iteration"] for line in llm_lines}
+    assert 1 in iterations
