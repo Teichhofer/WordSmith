@@ -9,6 +9,8 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
+from collections import Counter
 from typing import Iterable, List, Tuple
 
 from .config import Config, DEFAULT_CONFIG
@@ -195,6 +197,9 @@ class WriterAgent:
         if final_text != last_saved:
             self._save_text(final_text)
             last_saved = final_text
+
+        # Save the complete draft before running automatic fix steps so that
+        # iteration 1 always reflects the initially generated text.
         self._save_iteration_text(final_text, 1)
 
         self.iteration = 0
@@ -220,11 +225,15 @@ class WriterAgent:
             system_prompt=prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT,
         )
         if fixed_text.strip() != final_text.strip():
-            final_text = fixed_text
-            if final_text != last_saved:
-                self._save_text(final_text)
-                last_saved = final_text
-            self._save_iteration_text(final_text, 1)
+            similarity = SequenceMatcher(None, final_text, fixed_text).ratio()
+            final_words_list = final_text.split()
+            fixed_words_list = fixed_text.split()
+            common = sum((Counter(final_words_list) & Counter(fixed_words_list)).values())
+            if common >= len(final_words_list) * 0.8 and similarity >= 0.9:
+                final_text = fixed_text
+                if final_text != last_saved:
+                    self._save_text(final_text)
+                    last_saved = final_text
 
         for iteration in range(1, self.iterations + 1):
             self.iteration = iteration

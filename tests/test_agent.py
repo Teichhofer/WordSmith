@@ -449,6 +449,84 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
     assert iter2 == 'edited'
 
 
+def test_run_auto_keeps_full_text_if_fix_is_incomplete(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=0,
+        config=cfg,
+        content='about cats',
+    )
+
+    responses = iter([
+        'better idea',
+        '1. Intro (5)\n2. Body (5)',
+        '1. Intro (5)\n2. Body (5)',
+        'intro text',
+        'body text',
+        'issues',
+        'intro text intro text',
+    ])
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        return next(responses)
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+
+    writer.run_auto()
+    iter1 = (
+        tmp_path / 'output' / cfg.auto_iteration_file_template.format(1)
+    ).read_text(encoding='utf-8').strip()
+    assert iter1 == 'intro text body text'
+
+
+def test_run_auto_saves_draft_before_fix(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        20,
+        [],
+        iterations=0,
+        config=cfg,
+        content='about cats',
+    )
+
+    responses = iter([
+        'better idea',
+        '1. Part (10)',
+        '1. Part (10)',
+        'one two three four five six seven eight nine ten',
+        'issues',
+        'one two three four five six seven eight nine eleven',
+    ])
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        return next(responses)
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+
+    writer.run_auto()
+    iter1 = (
+        tmp_path / 'output' / cfg.auto_iteration_file_template.format(1)
+    ).read_text(encoding='utf-8').strip()
+    final = (tmp_path / 'output' / cfg.output_file).read_text(encoding='utf-8').strip()
+
+    assert iter1 == 'one two three four five six seven eight nine ten'
+    assert final == 'one two three four five six seven eight nine eleven'
+
+
 def test_run_auto_skips_duplicate_sections_and_revisions(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
