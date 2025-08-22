@@ -350,6 +350,47 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
     assert any(str(writer.word_count) in p[0] for p in prompts_seen)
 
 
+def test_run_auto_cleans_outline_header(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'out',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=0,
+        config=cfg,
+        content='about cats',
+        text_type='Essay',
+    )
+
+    responses = iter([
+        'better idea',
+        'Outline:\n1. Part (10)',
+        'Outline:\n1. Part (10)',
+        'section text',
+        'check',
+        'section text',
+    ])
+
+    prompts_seen: list[str] = []
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        prompts_seen.append(prompt)
+        return next(responses)
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    monkeypatch.setattr(writer, '_save_text', lambda text: None)
+
+    writer.run_auto()
+
+    section_prompt = prompts_seen[3]
+    assert section_prompt.count('Outline:') == 1
+
+
 def test_parse_outline(tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
     writer = agent.WriterAgent('T', 10, [], iterations=0, config=cfg)
