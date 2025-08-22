@@ -259,6 +259,41 @@ def test_cli_auto_mode(monkeypatch, tmp_path, capsys):
     assert cfg_used.model == 'test-model'
 
 
+def test_cli_auto_mode_ollama_custom_ip(monkeypatch, tmp_path, capsys):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+    monkeypatch.setattr(agent, 'DEFAULT_CONFIG', cfg)
+    monkeypatch.setattr(cli, '_fetch_ollama_models', lambda url: ['m1'])
+
+    captured = {}
+    original_writer = agent.WriterAgent
+
+    def capturing_writer(
+        topic, word_count, steps, iterations, config, content="", text_type="Text"
+    ):
+        captured['config'] = config
+        return original_writer(
+            topic, word_count, steps, iterations, config, content=content, text_type=text_type
+        )
+
+    monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
+
+    inputs = iter(['y', 'T', 'C', 'Essay', '5', '1', '', '10.1.1.1', ''])
+    monkeypatch.setattr('builtins.input', lambda _: next(inputs))
+
+    cli.main()
+
+    out = capsys.readouterr().out
+    assert 'Final text:' in out
+    cfg_used = captured['config']
+    assert cfg_used.llm_provider == 'ollama'
+    assert cfg_used.ollama_url == 'http://10.1.1.1:11434/api/generate'
+    assert cfg_used.ollama_list_url == 'http://10.1.1.1:11434/api/tags'
+
+
 def test_cli_auto_mode_openai_endpoint(monkeypatch, tmp_path, capsys):
     cfg = Config(
         log_dir=tmp_path / 'logs',
