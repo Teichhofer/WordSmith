@@ -4,6 +4,7 @@ from dataclasses import replace
 import json
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 from typing import List
 
 import wordsmith.agent as agent
@@ -49,25 +50,19 @@ def _run_cli() -> None:
         word_count = _prompt_int("Word count [100]: ", default=100)
         iterations = _prompt_int("Number of iterations [1]: ", default=1)
 
+        default_provider = "ollama"
         provider = (
             input(
-                f"LLM provider (stub/ollama/openai) [{agent.DEFAULT_CONFIG.llm_provider}]: "
+                f"LLM provider (stub/ollama/openai) [{default_provider}]: "
             ).strip()
-            or agent.DEFAULT_CONFIG.llm_provider
+            or default_provider
         )
         if provider == "ollama":
-            ollama_url = (
-                input(
-                    f"Ollama API URL [{agent.DEFAULT_CONFIG.ollama_url}]: "
-                ).strip()
-                or agent.DEFAULT_CONFIG.ollama_url
-            )
-            list_url = (
-                input(
-                    f"Ollama list URL [{agent.DEFAULT_CONFIG.ollama_list_url}]: "
-                ).strip()
-                or agent.DEFAULT_CONFIG.ollama_list_url
-            )
+            default_ip = urlparse(agent.DEFAULT_CONFIG.ollama_url).hostname or ""
+            host_ip = input(f"Ollama host IP [{default_ip}]: ").strip() or default_ip
+            base_url = f"http://{host_ip}:11434"
+            ollama_url = f"{base_url}/api/generate"
+            list_url = f"{base_url}/api/tags"
             models = _fetch_ollama_models(list_url)
             if not models:
                 print("No models available from Ollama.")
