@@ -181,7 +181,7 @@ class WriterAgent:
             tok_per_sec = tokens / (elapsed or 1e-8)
             if not text or addition.strip() != text[-1].strip():
                 text.append(addition)
-                current_text = " ".join(text)
+                current_text = "\n\n".join(text)
                 if current_text != last_saved:
                     self._save_text(current_text)
                     last_saved = current_text
@@ -190,7 +190,7 @@ class WriterAgent:
                 flush=True,
             )
 
-        final_text = " ".join(text)
+        final_text = "\n\n".join(text)
         words_list = final_text.split()
         if len(words_list) > self.word_count:
             final_text = " ".join(words_list[: self.word_count])
