@@ -315,7 +315,7 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
     assert 'Überarbeite den folgenden' in calls[7][0]
     assert calls[7][1] == prompts.REVISION_SYSTEM_PROMPT
     assert saved[0] == 'intro text'
-    assert saved[1] == 'intro text end text'
+    assert saved[1] == 'intro text\n\nend text'
     assert saved[-1] == 'edited text'
 
 
@@ -484,7 +484,7 @@ def test_run_auto_keeps_full_text_if_fix_is_incomplete(monkeypatch, tmp_path):
     iter1 = (
         tmp_path / 'output' / cfg.auto_iteration_file_template.format(1)
     ).read_text(encoding='utf-8').strip()
-    assert iter1 == 'intro text body text'
+    assert iter1 == 'intro text\n\nbody text'
 
 
 def test_run_auto_saves_draft_before_fix(monkeypatch, tmp_path):
