@@ -153,6 +153,7 @@ class WriterAgent:
             fallback=outline,
             system_prompt=prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT,
         )
+        outline = self._clean_outline(outline)
         self._save_iteration_text(outline, 0)
         sections = self._parse_outline(outline)
 
@@ -267,6 +268,7 @@ class WriterAgent:
     def _parse_outline(self, outline: str) -> List[Tuple[str, int]]:
         """Parse an outline into (title, word_count) tuples."""
 
+        outline = self._clean_outline(outline)
         sections: List[Tuple[str, int]] = []
         for line in outline.splitlines():
             line = line.strip()
@@ -281,6 +283,15 @@ class WriterAgent:
                 words = int(match.group(2)) if match.group(2) else 0
                 sections.append((title, words))
         return sections
+
+    # ------------------------------------------------------------------
+    def _clean_outline(self, outline: str) -> str:
+        """Remove leading "Outline:" lines and surrounding whitespace."""
+
+        lines = outline.splitlines()
+        while lines and lines[0].strip().lower().startswith("outline"):
+            lines = lines[1:]
+        return "\n".join(lines).strip()
 
     # ------------------------------------------------------------------
     def _craft_prompt(self, task: str) -> str:
