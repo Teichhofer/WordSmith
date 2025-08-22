@@ -198,10 +198,6 @@ class WriterAgent:
             self._save_text(final_text)
             last_saved = final_text
 
-        # Save the complete draft before running automatic fix steps so that
-        # iteration 1 always reflects the initially generated text.
-        self._save_iteration_text(final_text, 1)
-
         self.iteration = 0
         check_prompt = prompts.TEXT_TYPE_CHECK_PROMPT.format(
             text_type=self.text_type,
@@ -235,8 +231,13 @@ class WriterAgent:
                     self._save_text(final_text)
                     last_saved = final_text
 
+        # Save the draft after automatic fix steps so that iteration 1
+        # reflects the starting text for revisions.
+        self._save_iteration_text(final_text, 1)
+
         for iteration in range(1, self.iterations + 1):
             self.iteration = iteration
+            final_text = self._load_iteration_text(iteration)
             revision_prompt = prompts.REVISION_PROMPT.format(
                 title=self.topic,
                 text_type=self.text_type,
@@ -255,6 +256,7 @@ class WriterAgent:
             tokens = len(revised.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
             if revised.strip() == final_text.strip():
+                self._save_iteration_text(final_text, iteration + 1)
                 continue
             final_text = revised
             if final_text != last_saved:
@@ -437,6 +439,16 @@ class WriterAgent:
             fh.write(text + "\n")
             fh.flush()
             os.fsync(fh.fileno())
+
+    # ------------------------------------------------------------------
+    def _load_iteration_text(self, iteration: int) -> str:
+        """Return text of a previously saved iteration."""
+
+        filename = self.config.auto_iteration_file_template.format(iteration)
+        path = self.config.output_dir / filename
+        if path.exists():
+            return path.read_text(encoding="utf8").rstrip("\n")
+        return ""
 
     # ------------------------------------------------------------------
     def _save_text(self, text: str) -> None:
