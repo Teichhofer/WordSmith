@@ -156,6 +156,7 @@ class WriterAgent:
             system_prompt=prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT,
         )
         outline = self._clean_outline(outline)
+        self._save_outline(outline)
         self._save_iteration_text(outline, 0)
         sections = self._parse_outline(outline)
         total_specified = sum(w for _, w in sections if w)
@@ -464,6 +465,17 @@ class WriterAgent:
             if prev_path.exists():
                 return prev_path.read_text(encoding="utf8").rstrip("\n")
         return ""
+
+    # ------------------------------------------------------------------
+    def _save_outline(self, outline: str) -> None:
+        """Persist the generated outline to a dedicated file."""
+
+        path = self.config.output_dir / self.config.outline_file
+        self.config.output_dir.mkdir(exist_ok=True)
+        with path.open("w", encoding="utf8") as fh:
+            fh.write(outline + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
 
     # ------------------------------------------------------------------
     def _save_text(self, text: str) -> None:
