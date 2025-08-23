@@ -92,16 +92,15 @@ class WriterAgent:
             # Ask the LLM for an optimal prompt for this step before running any
             # iterations.
             prompt = self._craft_prompt(step.task)
-            previous = ""
             for iteration in range(1, self.iterations + 1):
                 self.iteration = iteration
+                current_text = " ".join(text)
                 start = time.perf_counter()
-                addition = self._generate(prompt, previous, iteration)
+                addition = self._generate(prompt, current_text, iteration)
                 elapsed = time.perf_counter() - start
                 tokens = len(addition.split())
                 tok_per_sec = tokens / (elapsed or 1e-8)
                 text.append(addition)
-                previous = addition
                 current_text = " ".join(text)
                 self._save_text(current_text)
                 self.logger.info(
