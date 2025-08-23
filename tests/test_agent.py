@@ -319,6 +319,50 @@ def test_run_auto_generates_outline_and_sections(monkeypatch, tmp_path):
     assert saved[-1] == 'edited text'
 
 
+def test_run_auto_saves_outline(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+        outline_file='outline.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=1,
+        config=cfg,
+        content='about cats',
+        text_type='Essay',
+    )
+
+    responses = iter(
+        [
+            'idea',
+            '1. Intro (5)\n2. End (5)',
+            '1. Intro (5)\n2. End (5) improved',
+            'intro text',
+            'end text',
+            'check',
+            'fixed text',
+            'edited text',
+        ]
+    )
+
+    monkeypatch.setattr(writer, '_call_llm', lambda *args, **kwargs: next(responses))
+    monkeypatch.setattr(writer, '_save_text', lambda text: None)
+
+    writer.run_auto()
+
+    outline_path = cfg.output_dir / cfg.outline_file
+    assert outline_path.exists()
+    assert (
+        outline_path.read_text(encoding='utf8')
+        == '1. Intro (5)\n2. End (5) improved\n'
+    )
+
+
 def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
