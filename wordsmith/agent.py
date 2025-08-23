@@ -256,12 +256,14 @@ class WriterAgent:
             tokens = len(revised.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
             if revised.strip() == final_text.strip():
+                self._save_iteration_text(final_text, iteration)
                 self._save_iteration_text(final_text, iteration + 1)
                 continue
             final_text = revised
             if final_text != last_saved:
                 self._save_text(final_text)
                 last_saved = final_text
+            self._save_iteration_text(final_text, iteration)
             self._save_iteration_text(final_text, iteration + 1)
             bar_len = 20
             filled = int(bar_len * iteration / self.iterations)
@@ -448,6 +450,11 @@ class WriterAgent:
         path = self.config.output_dir / filename
         if path.exists():
             return path.read_text(encoding="utf8").rstrip("\n")
+        for prev in range(iteration - 1, -1, -1):
+            prev_name = self.config.auto_iteration_file_template.format(prev)
+            prev_path = self.config.output_dir / prev_name
+            if prev_path.exists():
+                return prev_path.read_text(encoding="utf8").rstrip("\n")
         return ""
 
     # ------------------------------------------------------------------
