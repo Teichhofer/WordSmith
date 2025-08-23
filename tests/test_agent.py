@@ -403,6 +403,44 @@ def test_parse_outline(tmp_path):
     assert writer._parse_outline(outline) == [('Intro', 3), ('Body', 5)]
 
 
+def test_parse_outline_handles_text_before_numbers(tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('T', 10, [], iterations=0, config=cfg)
+    outline = (
+        '1. Intro (ca. 30 Wörter)\n'
+        '2. Schluss (etwa 20)\n'
+    )
+    assert writer._parse_outline(outline) == [('Intro', 30), ('Schluss', 20)]
+
+
+def test_run_auto_distributes_missing_word_counts(monkeypatch, tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('T', 10, [], iterations=0, config=cfg, content='c')
+
+    responses = iter([
+        'idea',
+        '1. Intro\n2. Body',
+        '1. Intro\n2. Body',
+        'section intro',
+        'section body',
+        'Ja',
+        'fixed',
+    ])
+
+    prompts_seen: list[str] = []
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        prompts_seen.append(prompt)
+        return next(responses)
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+
+    writer.run_auto()
+
+    section_prompts = prompts_seen[3:5]
+    assert all('mindesten 5 Wörtern' in p for p in section_prompts)
+
+
 def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
