@@ -158,6 +158,14 @@ class WriterAgent:
         outline = self._clean_outline(outline)
         self._save_iteration_text(outline, 0)
         sections = self._parse_outline(outline)
+        total_specified = sum(w for _, w in sections if w)
+        unspecified = [i for i, (_, w) in enumerate(sections) if not w]
+        if unspecified:
+            remaining = max(self.word_count - total_specified, 0)
+            default_share = max(1, remaining // len(unspecified))
+            sections = [
+                (title, w if w else default_share) for title, w in sections
+            ]
 
         last_saved = ""
         for idx, (title, words) in enumerate(sections, start=1):
@@ -167,7 +175,7 @@ class WriterAgent:
                 outline=outline,
                 current_text=current_text,
                 title=title,
-                word_count=words or 0,
+                word_count=words,
                 text_type=self.text_type,
             )
             start = time.perf_counter()
@@ -290,7 +298,7 @@ class WriterAgent:
             if not re.match(r"\d+\.", line):
                 continue
             line = line.split(".", 1)[1].strip()
-            match = re.search(r"^(.*?)(?:\((\d+)[^)]*\))?$", line)
+            match = re.search(r"^(.*?)(?:\([^0-9]*(\d+)[^)]*\))?$", line)
             if match:
                 title = match.group(1).strip()
                 words = int(match.group(2)) if match.group(2) else 0
