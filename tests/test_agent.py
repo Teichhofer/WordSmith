@@ -27,6 +27,33 @@ def test_writer_agent_runs(tmp_path):
     assert (tmp_path / 'logs' / 'run.log').exists()
 
 
+def test_generate_uses_full_context(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+    )
+
+    prompts_seen = []
+    responses = iter(["crafted", "first", "second", "third"])
+
+    def fake_call(self, prompt, *, fallback, system_prompt=None):
+        prompts_seen.append(prompt)
+        return next(responses)
+
+    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
+
+    writer = agent.WriterAgent('topic', 50, [agent.Step('step')], iterations=3, config=cfg)
+    writer.run()
+
+    gen_prompts = prompts_seen[1:]
+    expected_first = prompts.STEP_PROMPT.format(prompt='crafted', current_text='')
+    expected_second = prompts.STEP_PROMPT.format(prompt='crafted', current_text='first')
+    expected_third = prompts.STEP_PROMPT.format(prompt='crafted', current_text='first second')
+    assert gen_prompts[0] == expected_first
+    assert gen_prompts[1] == expected_second
+    assert gen_prompts[2] == expected_third
+
+
 def test_call_llm_with_ollama(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
@@ -224,7 +251,7 @@ def test_run_reports_progress(monkeypatch, tmp_path, capsys):
     assert 'tok/s' in out
 
 
-def test_run_passes_only_previous_text_as_context(monkeypatch, tmp_path):
+def test_run_passes_full_text_as_context(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
         output_dir=tmp_path / 'output',
@@ -254,7 +281,7 @@ def test_run_passes_only_previous_text_as_context(monkeypatch, tmp_path):
         prompt='Write about cats.', current_text='first part'
     )
     expected_third = prompts.STEP_PROMPT.format(
-        prompt='Write about cats.', current_text='second part'
+        prompt='Write about cats.', current_text='first part second part'
     )
 
     assert prompts_seen[0] == expected_meta
