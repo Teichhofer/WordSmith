@@ -224,6 +224,45 @@ def test_run_reports_progress(monkeypatch, tmp_path, capsys):
     assert 'tok/s' in out
 
 
+def test_run_passes_only_previous_text_as_context(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    steps = [agent.Step('intro')]
+    writer = agent.WriterAgent('cats', 50, steps, iterations=3, config=cfg)
+
+    prompts_seen: list[str] = []
+    responses = iter(
+        ['Write about cats.', 'first part', 'second part', 'third part']
+    )
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        prompts_seen.append(prompt)
+        return next(responses)
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    writer.run()
+
+    expected_meta = prompts.PROMPT_CRAFTING_PROMPT.format(task='intro', topic='cats')
+    expected_first = prompts.STEP_PROMPT.format(
+        prompt='Write about cats.', current_text=''
+    )
+    expected_second = prompts.STEP_PROMPT.format(
+        prompt='Write about cats.', current_text='first part'
+    )
+    expected_third = prompts.STEP_PROMPT.format(
+        prompt='Write about cats.', current_text='second part'
+    )
+
+    assert prompts_seen[0] == expected_meta
+    assert prompts_seen[1] == expected_first
+    assert prompts_seen[2] == expected_second
+    assert prompts_seen[3] == expected_third
+
+
 def test_craft_prompt_uses_system_prompt(monkeypatch, tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
     writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
