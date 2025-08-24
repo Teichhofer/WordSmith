@@ -593,7 +593,7 @@ def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
         tmp_path / 'output' / cfg.auto_iteration_file_template.format(2)
     ).read_text(encoding='utf-8').strip()
     assert iter0 == '1. Part (5) improved'
-    assert iter1 == 'edited'
+    assert iter1 == 'draft'
     assert iter2 == 'edited'
 
 
@@ -852,10 +852,54 @@ def test_run_auto_creates_iteration_file_for_each_revision(monkeypatch, tmp_path
         encoding='utf-8'
     ).strip()
 
-    assert iter1 == 'rev1'
+    assert iter1 == 'draft'
     assert iter2 == 'rev1'
     assert iter3 == 'rev1'
     assert len(revision_prompts) == 2 and 'rev1' in revision_prompts[1]
+
+
+def test_run_auto_updates_first_iteration_with_each_section(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        10,
+        [],
+        iterations=0,
+        config=cfg,
+        content='about cats',
+    )
+
+    responses = iter([
+        'better idea',
+        '1. Part (5)\n2. Second (5)',
+        '1. Part (5)\n2. Second (5)',
+        'first',
+        'second',
+        'check',
+        'first\n\nsecond',
+    ])
+
+    def fake_call_llm(prompt, fallback, *, system_prompt=None):
+        return next(responses)
+
+    iteration_calls: list[tuple[int, str]] = []
+
+    def fake_save_iteration_text(text: str, iteration: int) -> None:
+        iteration_calls.append((iteration, text))
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    monkeypatch.setattr(writer, '_save_iteration_text', fake_save_iteration_text)
+
+    writer.run_auto()
+
+    iter1_texts = [text for it, text in iteration_calls if it == 1]
+    assert iter1_texts[0] == 'first'
+    assert iter1_texts[-1] == 'first\n\nsecond'
 
 
 def test_run_auto_refines_outline(monkeypatch, tmp_path):

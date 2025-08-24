@@ -192,6 +192,9 @@ class WriterAgent:
                 current_text = "\n\n".join(text)
                 if current_text != last_saved:
                     self._save_text(current_text)
+                    # Continuously update the draft for iteration 1 so that
+                    # all sections generated from the outline are preserved.
+                    self._save_iteration_text(current_text, 1)
                     last_saved = current_text
             print(
                 f"section {idx}/{len(sections)}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
@@ -263,7 +266,6 @@ class WriterAgent:
             tokens = len(revised.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
             if revised.strip() == final_text.strip():
-                self._save_iteration_text(final_text, iteration)
                 self._save_iteration_text(final_text, iteration + 1)
                 continue
             final_text = revised
@@ -271,7 +273,6 @@ class WriterAgent:
             if truncated != last_saved:
                 self._save_text(truncated)
                 last_saved = truncated
-            self._save_iteration_text(final_text, iteration)
             self._save_iteration_text(final_text, iteration + 1)
             bar_len = 20
             filled = int(bar_len * iteration / self.iterations)
@@ -449,7 +450,13 @@ class WriterAgent:
 
     # ------------------------------------------------------------------
     def _save_iteration_text(self, text: str, iteration: int) -> None:
-        """Persist ``text`` of the current iteration to a separate file."""
+        """Persist ``text`` of the given iteration to a separate file.
+
+        The numbering scheme reserves ``iteration_00.txt`` for the outline and
+        ``iteration_01.txt`` for the initial draft before any revisions. Each
+        subsequent revision is written to the next numbered file so that the
+        original draft remains available for comparison.
+        """
 
         filename = self.config.auto_iteration_file_template.format(iteration)
         path = self.config.output_dir / filename
