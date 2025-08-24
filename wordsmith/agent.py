@@ -98,6 +98,8 @@ class WriterAgent:
                 start = time.perf_counter()
                 addition = self._generate(prompt, current_text, iteration)
                 elapsed = time.perf_counter() - start
+                if not addition.strip():
+                    continue
                 tokens = len(addition.split())
                 tok_per_sec = tokens / (elapsed or 1e-8)
                 text.append(addition)
@@ -171,10 +173,8 @@ class WriterAgent:
         last_saved = ""
         for idx, (title, words) in enumerate(sections, start=1):
             self.iteration = idx
-            current_text = " ".join(text)
             section_prompt = prompts.SECTION_PROMPT.format(
                 outline=outline,
-                current_text=current_text,
                 title=title,
                 word_count=words,
                 text_type=self.text_type,
@@ -188,7 +188,9 @@ class WriterAgent:
             elapsed = time.perf_counter() - start
             tokens = len(addition.split())
             tok_per_sec = tokens / (elapsed or 1e-8)
-            if not text or addition.strip() != text[-1].strip():
+            if addition.strip() and (
+                not text or addition.strip() != text[-1].strip()
+            ):
                 text.append(addition)
                 current_text = "\n\n".join(text)
                 if current_text != last_saved:
