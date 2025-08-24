@@ -76,17 +76,36 @@ OUTLINE_IMPROVEMENT_PROMPT = (
 )
 
 SECTION_SYSTEM_PROMPT = (
-    "Du schreibst einzelne Abschnitte, orientierst dich exakt an Outline und bisherigem Text "
-    "und bleibst konsistent im Stil."
+    "Du schreibst spannende Texte auf Deutsch. Du hältst dich streng an Outline "
+    "und die bereits erzählte Kontinuität. Perspektive und Tempus bleiben"
+    "über alle Abschnitte konsistent. Du zeigst durch Handlung, Dialog und Sinneseindrücke "
+    "statt zu referieren. Keine Meta-Kommentare, keine Überschriften, keine Arbeitsnotizen, "
+    "kein 'Cut.'. Vermeide Dopplungen und Floskeln. Wenn Outline und bisheriger Text kollidieren, "
+    "hat die etablierte Kontinuität Vorrang; weiche Abweichungen werden diegetisch vorbereitet."
 )
+
 SECTION_PROMPT = (
     "Outline:\n{outline}\n\n"
     "Bisheriger Text:\n{current_text}\n\n"
     "Textart: {text_type}\n"
-    "Schreibe den Abschnitt '{title}' mit mindesten {word_count} Wörtern. "
-    "Achte darauf, dass der Abschnitt die Anforderungen und Konventionen der Textart {text_type} erfüllt. "
-    "Schreibe nur diesen Abschnitt."
+    "Titel des Abschnitts: {title}\n"
+    "Mindestlänge: {word_count} Wörter (±10%).\n"
+    "VORGABEN FÜR DIESEN ABSCHNITT\n"
+    "1) Liefere eine vollständige Szene mit Ziel–Konflikt–Wendung–Outcome. Jede Szene muss neue Information "
+    "oder Handlung hinzufügen; Rückblenden/Recaps höchstens 1 kurzer Satz.\n"
+    "2) Show, don’t tell: mind. 2 Sinneseindrücke, 1 beobachtbare Handlung und 1 spezifisches Detail "
+    "(z. B. Log-Zeile, Gerätename, Zeitstempel). Dialog ist erwünscht, aber knapp.\n"
+    "3) Keine Perspektiv- oder Tempuswechsel. Figuren- und Faktentreue wahren (Namen, Orte, Motivationen).\n"
+    "4) Stil: klare, aktive Verben; variierte Satzlängen; keine Füllfloskeln "
+    "('es gab nur einen Weg', 'immer noch', 'es war eine … gewesen'). Keine rhetorischen Fragen.\n"
+    "5) Keine wörtliche Wiederholung bereits verwendeter Sätze. Wiederkehrende Motive dürfen nur variiert "
+    "und mit echter Steigerung eingesetzt werden.\n"
+    "6) Abschluss: mit einem konkreten, äußeren Beat (Entdeckung/Entscheidung/Bewegung), nicht mit Grübeln.\n"
+    "7) Orthografie: modernes Hochdeutsch (z. B. 'gefüttert', 'neueste'); Abkürzungen wie LLM ohne Klammererklärung, "
+    "außer die Figur erklärt sie diegetisch.\n\n"
+    "Schreibe jetzt ausschließlich den Abschnitt '{title}'."
 )
+
 
 REVISION_SYSTEM_PROMPT = (
     "Du überarbeitest Texte präzise, verbesserst Stil, Kohärenz und Grammatik und orientierst dich an einer "
