@@ -120,10 +120,7 @@ class WriterAgent:
                 )
 
         final_text = " ".join(text)
-        # Truncate to desired word count.
-        words = final_text.split()
-        if len(words) > self.word_count:
-            final_text = " ".join(words[: self.word_count])
+        final_text = self._truncate_text(final_text)
         self._save_text(final_text)
         return final_text
 
@@ -202,12 +199,10 @@ class WriterAgent:
             )
 
         final_text = "\n\n".join(text)
-        words_list = final_text.split()
-        if len(words_list) > self.word_count:
-            final_text = " ".join(words_list[: self.word_count])
-        if final_text != last_saved:
-            self._save_text(final_text)
-            last_saved = final_text
+        truncated = self._truncate_text(final_text)
+        if truncated != last_saved:
+            self._save_text(truncated)
+            last_saved = truncated
 
         self.iteration = 0
         check_prompt = prompts.TEXT_TYPE_CHECK_PROMPT.format(
@@ -238,9 +233,10 @@ class WriterAgent:
             common = sum((Counter(final_words_list) & Counter(fixed_words_list)).values())
             if common >= len(final_words_list) * 0.8 and similarity >= 0.9:
                 final_text = fixed_text
-                if final_text != last_saved:
-                    self._save_text(final_text)
-                    last_saved = final_text
+                truncated = self._truncate_text(final_text)
+                if truncated != last_saved:
+                    self._save_text(truncated)
+                    last_saved = truncated
 
         # Save the draft after automatic fix steps so that iteration 1
         # reflects the starting text for revisions.
@@ -271,9 +267,10 @@ class WriterAgent:
                 self._save_iteration_text(final_text, iteration + 1)
                 continue
             final_text = revised
-            if final_text != last_saved:
-                self._save_text(final_text)
-                last_saved = final_text
+            truncated = self._truncate_text(final_text)
+            if truncated != last_saved:
+                self._save_text(truncated)
+                last_saved = truncated
             self._save_iteration_text(final_text, iteration)
             self._save_iteration_text(final_text, iteration + 1)
             bar_len = 20
@@ -286,7 +283,7 @@ class WriterAgent:
             )
             self.logger.info("iteration %s/%s: %s", iteration, self.iterations, "edited")
 
-        return final_text
+        return self._truncate_text(final_text)
 
     # ------------------------------------------------------------------
     def _parse_outline(self, outline: str) -> List[Tuple[str, int]]:
@@ -440,6 +437,15 @@ class WriterAgent:
             )
         )
         return result
+
+    # ------------------------------------------------------------------
+    def _truncate_text(self, text: str) -> str:
+        """Return ``text`` truncated to the configured word count."""
+
+        words = text.split()
+        if len(words) > self.word_count:
+            return " ".join(words[: self.word_count])
+        return text
 
     # ------------------------------------------------------------------
     def _save_iteration_text(self, text: str, iteration: int) -> None:
