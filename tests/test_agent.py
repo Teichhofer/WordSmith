@@ -548,7 +548,7 @@ def test_run_auto_distributes_missing_word_counts(monkeypatch, tmp_path):
     writer.run_auto()
 
     section_prompts = prompts_seen[3:5]
-    assert all('mindesten 5 Wörtern' in p for p in section_prompts)
+    assert all('mindestens 5 Wörtern' in p for p in section_prompts)
 
 
 def test_run_auto_writes_iteration_files(monkeypatch, tmp_path):
@@ -933,6 +933,49 @@ def test_run_auto_uses_text_type_fix(monkeypatch, tmp_path):
     assert calls[3][1] == prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
     assert calls[4][1] == prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT
     assert 'Nein: Fehler' in calls[4][0]
+
+
+def test_run_auto_writes_sections_without_previous_text(monkeypatch, tmp_path):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+        output_file='story.txt',
+    )
+
+    writer = agent.WriterAgent(
+        'Title',
+        20,
+        [],
+        iterations=0,
+        config=cfg,
+        content='about cats',
+    )
+
+    seen_prompts: list[str] = []
+    responses = iter([
+        'better idea',
+        '1. One (5)\n2. Two (5)',
+        '1. One (5)\n2. Two (5)',
+        'One text.',
+        'Two text.',
+        'Ja',
+        'One text.\n\nTwo text.',
+    ])
+
+    def fake_call_llm(self, prompt, *, fallback, system_prompt=None):
+        seen_prompts.append(prompt)
+        return next(responses)
+
+    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call_llm)
+
+    writer.run_auto()
+
+    output = (cfg.output_dir / cfg.output_file).read_text(encoding='utf8').strip()
+    assert output == 'One text.\n\nTwo text.'
+    assert output.count('One text.') == 1
+    assert output.count('Two text.') == 1
+    assert 'Bisheriger Text' not in seen_prompts[3]
+    assert 'Bisheriger Text' not in seen_prompts[4]
 
 
 def test_save_text_only_writes_on_change(monkeypatch, tmp_path):
