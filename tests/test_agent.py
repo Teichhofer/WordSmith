@@ -1004,3 +1004,37 @@ def test_save_text_only_writes_on_change(monkeypatch, tmp_path):
     writer._save_text('two')
 
     assert len(calls) == 2
+
+
+def test_run_auto_saves_full_text_in_iteration(tmp_path, monkeypatch):
+    cfg = Config(
+        log_dir=tmp_path / 'logs',
+        output_dir=tmp_path / 'output',
+    )
+
+    responses = iter([
+        'Improved idea',
+        '1. A (2)\n2. B (2)',
+        '1. A (2)\n2. B (2)',
+        'A1 A2',
+        'B1 B2',
+        '',
+        'A1 A2\n\nB1 B2',
+        'A1 A2\n\nB1 B2',
+    ])
+
+    def fake_call(self, prompt, *, fallback, system_prompt=None):
+        try:
+            return next(responses)
+        except StopIteration:
+            return fallback
+
+    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
+
+    writer = agent.WriterAgent('topic', 3, [], iterations=1, config=cfg)
+    writer.run_auto()
+
+    iter_path = cfg.output_dir / 'iteration_01.txt'
+    current_path = cfg.output_dir / cfg.output_file
+    assert iter_path.read_text(encoding='utf8').strip() == 'A1 A2\n\nB1 B2'
+    assert current_path.read_text(encoding='utf8').strip() == 'A1 A2 B1'
