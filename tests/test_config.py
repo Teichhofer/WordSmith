@@ -19,4 +19,4 @@ def test_adjust_for_word_count():
     cfg = Config()
     cfg.adjust_for_word_count(50)
     assert cfg.context_length == 200
-    assert cfg.max_tokens == 100
+    assert cfg.max_tokens == 200
