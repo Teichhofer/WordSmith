@@ -23,7 +23,7 @@ def test_system_prompts_quality_phrases():
     assert "Rechtschreib- und Grammatikfehler" in prompts.IDEA_IMPROVEMENT_SYSTEM_PROMPT
     assert "klare Hierarchien" in prompts.OUTLINE_SYSTEM_PROMPT
     assert "Charakterisierung der Figuren" in prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT
-    assert "konsistent im Stil" in prompts.SECTION_SYSTEM_PROMPT
+    assert "spannende Prosatexte auf Deutsch" in prompts.SECTION_SYSTEM_PROMPT
     assert "Stil, Kohärenz und Grammatik" in prompts.REVISION_SYSTEM_PROMPT
     assert "vermeidest Mehrdeutigkeiten" in prompts.PROMPT_CRAFTING_SYSTEM_PROMPT
     assert "Figuren, Ton und Spannung" in prompts.STEP_SYSTEM_PROMPT
@@ -33,7 +33,7 @@ def test_system_prompts_quality_phrases():
 
 def test_section_prompt_mentions_text_type():
     assert "Textart: {text_type}" in prompts.SECTION_PROMPT
-    assert "Anforderungen und Konventionen der Textart" in prompts.SECTION_PROMPT
+    assert "Beachte die Konventionen der Textart" in prompts.SECTION_PROMPT
 
 
 def test_outline_prompt_mentions_character_lines():
