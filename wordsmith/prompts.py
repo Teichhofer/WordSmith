@@ -76,18 +76,37 @@ OUTLINE_IMPROVEMENT_PROMPT = (
 )
 
 SECTION_SYSTEM_PROMPT = (
-    "Du schreibst spannende Texte auf Deutsch und hältst dich an die Outline. "
-    "Du bleibst konsistent im Stil, in Perspektive und Tempus. Keine Meta-Kommentare "
-    "oder Überschriften."
+    "Du schreibst spannende Prosatexte auf Deutsch und hältst dich strikt an die Outline. "
+    "Du bleibst konsequent in Erzählperspektive und Tempus (falls bisher nicht etabliert, wähle eines und bleibe dabei). "
+    "Kein Meta-Talk, keine Überschriften, keine Lehrbuch-Erklärungen. "
+    "Schreibe idiomatisches Deutsch ohne Code-Switching oder Fremdsprachenfragmente (z. B. 'Geldautomat' statt 'ATM'). "
+    "Dialoge werden literarisch gesetzt („…“) – keine Sprecherlabels im Drehbuchstil. "
+    "Zeigen statt erklären: Szenen, Sinneseindrücke, Handlungen; Vermeide Info-Dumps. "
+    "Technik bleibt plausibel (keine unmöglichen physischen Handlungen durch Software; Hardware/Netzwerk realistisch). "
+    "Behandle psychische Themen vorsichtig und präzise, ohne Diagnosen zu behaupten. "
+    "Spezialformate (Logs/Tickets/Code) nur falls in der Outline explizit vorgesehen; maximal ein Block pro Abschnitt, "
+    "kurz (1–4 Zeilen) und einheitlich formatiert. "
+    "Führe vor Ausgabe eine stille Selbstprüfung durch und korrigiere ggf.: "
+    "1) Perspektive/Tempus konsistent? 2) Keine widersprüchlichen Fakten/Ereignisse? "
+    "3) Keine Wiederholungen/Redundanzen? 4) Orthografie/Grammatik fehlerfrei? "
+    "5) Keine Fremdsprach-Schnipsel ('había', 'haby', 'later' etc.)? 6) Technik plausibel? "
+    "7) Dialogformat korrekt? 8) Keine Klischee-Floskeln ohne Twist? "
+    "9) Outline strikt befolgt? 10) Kein Meta/keine Überschriften."
 )
 
 SECTION_PROMPT = (
     "Outline:\n{outline}\n\n"
     "Textart: {text_type}\n"
-    "Beachte die Anforderungen und Konventionen der Textart {text_type}.\n"
+    "Beachte die Konventionen der Textart {text_type} (keine Drehbuch-Labels, außer die Outline verlangt es). "
     "Titel des Abschnitts: {title}\n"
     "Der Abschnitt muss mindestens {word_count} Wörtern (±10%) umfassen.\n"
-    "Schreibe den Abschnitt '{title}'.\n"
+    "Schreibe den Abschnitt '{title}'. "
+    "Verankere jede Szene klar (Ort/Zeit/Handlungsziel), führe neue Elemente nur bei erzählerischer Notwendigkeit ein "
+    "und sorge für sichtbare Ursache-Wirkung. "
+    "Wenn Logs/Tickets/Code laut Outline nötig sind, nutze ein knappes, plausibles Format, z. B.: "
+    "[16:47] ui: route injected '/settings/experiments' ; "
+    "[17:03] authd: lockout user=admin. "
+    "Sonst keine Code- oder Logblöcke."
 )
 
 
