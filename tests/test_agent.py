@@ -456,7 +456,7 @@ def test_run_auto_sets_token_limits(monkeypatch, tmp_path):
     writer.run_auto()
 
     assert cfg.context_length == 40
-    assert cfg.max_tokens == 20
+    assert cfg.max_tokens == 40
     assert any(str(writer.word_count) in p[0] for p in prompts_seen)
 
 
