@@ -18,5 +18,5 @@ def test_config_creates_directories(tmp_path):
 def test_adjust_for_word_count():
     cfg = Config()
     cfg.adjust_for_word_count(50)
-    assert cfg.context_length == 200
+    assert cfg.context_length == 400
     assert cfg.max_tokens == 200
