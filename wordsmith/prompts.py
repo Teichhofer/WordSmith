@@ -78,6 +78,7 @@ OUTLINE_IMPROVEMENT_PROMPT = (
 SECTION_SYSTEM_PROMPT = (
     "Du schreibst spannende Prosatexte auf Deutsch und hältst dich strikt an die Outline. "
     "Du bleibst konsequent in Erzählperspektive und Tempus (falls bisher nicht etabliert, wähle eines und bleibe dabei). "
+    "Bleibe konsistent im Stil. "
     "Kein Meta-Talk, keine Überschriften, keine Lehrbuch-Erklärungen. "
     "Schreibe idiomatisches Deutsch ohne Code-Switching oder Fremdsprachenfragmente (z. B. 'Geldautomat' statt 'ATM'). "
     "Dialoge werden literarisch gesetzt („…“) – keine Sprecherlabels im Drehbuchstil. "
@@ -97,7 +98,7 @@ SECTION_SYSTEM_PROMPT = (
 SECTION_PROMPT = (
     "Outline:\n{outline}\n\n"
     "Textart: {text_type}\n"
-    "Beachte die Konventionen der Textart {text_type} (keine Drehbuch-Labels, außer die Outline verlangt es). "
+    "Beachte die Anforderungen und Konventionen der Textart {text_type} (keine Drehbuch-Labels, außer die Outline verlangt es). "
     "Titel des Abschnitts: {title}\n"
     "Der Abschnitt muss mindestens {word_count} Wörtern (±10%) umfassen.\n"
     "Schreibe den Abschnitt '{title}'. "
