@@ -128,7 +128,6 @@ class WriterAgent:
     def run_auto(self) -> str:
         """Automatically generate a text based on an outline and edit it."""
 
-        text: List[str] = []
         self.config.adjust_for_word_count(self.word_count)
         self.iteration = 0
         idea_prompt = prompts.IDEA_IMPROVEMENT_PROMPT.format(content=self.content)
@@ -157,55 +156,14 @@ class WriterAgent:
         outline = self._clean_outline(outline)
         self._save_outline(outline)
         self._save_iteration_text(outline, 0)
-        sections = self._parse_outline(outline)
-        total_specified = sum(w for _, w in sections if w)
-        unspecified = [i for i, (_, w) in enumerate(sections) if not w]
-        if unspecified:
-            remaining = max(self.word_count - total_specified, 0)
-            default_share = max(1, remaining // len(unspecified))
-            sections = [
-                (title, w if w else default_share) for title, w in sections
-            ]
 
-        last_saved = ""
-        for idx, (title, words) in enumerate(sections, start=1):
-            self.iteration = idx
-            section_prompt = prompts.SECTION_PROMPT.format(
-                outline=outline,
-                title=title,
-                word_count=words,
-                text_type=self.text_type,
-            )
-            start = time.perf_counter()
-            addition = self._call_llm(
-                section_prompt,
-                fallback=title,
-                system_prompt=prompts.SECTION_SYSTEM_PROMPT,
-            )
-            elapsed = time.perf_counter() - start
-            tokens = len(addition.split())
-            tok_per_sec = tokens / (elapsed or 1e-8)
-            if addition.strip() and (
-                not text or addition.strip() != text[-1].strip()
-            ):
-                text.append(addition)
-                current_text = "\n\n".join(text)
-                if current_text != last_saved:
-                    self._save_text(current_text)
-                    # Continuously update the draft for iteration 1 so that
-                    # all sections generated from the outline are preserved.
-                    self._save_iteration_text(current_text, 1)
-                    last_saved = current_text
-            print(
-                f"section {idx}/{len(sections)}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
-                flush=True,
-            )
-
-        final_text = "\n\n".join(text)
+        limited_text, final_text = self._generate_sections_from_outline(outline)
         truncated = self._truncate_text(final_text)
-        if truncated != last_saved:
+        if truncated != limited_text:
             self._save_text(truncated)
             last_saved = truncated
+        else:
+            last_saved = limited_text
 
         self.iteration = 0
         check_prompt = prompts.TEXT_TYPE_CHECK_PROMPT.format(
@@ -287,6 +245,74 @@ class WriterAgent:
         return self._truncate_text(final_text)
 
     # ------------------------------------------------------------------
+    def _generate_sections_from_outline(self, outline: str) -> str:
+        """Generate text for each section of ``outline`` and return the result."""
+
+        sections = self._parse_outline(outline)
+        if not sections:
+            return "", ""
+
+        weights = [w if w > 0 else 1 for _, w in sections]
+        total_weight = sum(weights) or 1
+        allocated: List[Tuple[str, int]] = []
+        accumulated = 0
+        for (title, _), weight in zip(sections, weights):
+            words = max(1, int(weight * self.word_count / total_weight))
+            allocated.append((title, words))
+            accumulated += words
+        if allocated:
+            title, words = allocated[-1]
+            allocated[-1] = (title, words + (self.word_count - accumulated))
+
+        text_parts: List[str] = []
+        full_parts: List[str] = []
+        last_saved = ""
+        for idx, (title, words) in enumerate(allocated, start=1):
+            self.iteration = idx
+            section_prompt = prompts.SECTION_PROMPT.format(
+                outline=outline,
+                title=title,
+                word_count=words,
+                text_type=self.text_type,
+            )
+            start = time.perf_counter()
+            addition = self._call_llm(
+                section_prompt,
+                fallback=title,
+                system_prompt=prompts.SECTION_SYSTEM_PROMPT,
+            )
+            elapsed = time.perf_counter() - start
+            tokens = len(addition.split())
+            tok_per_sec = tokens / (elapsed or 1e-8)
+            addition_full = addition.strip()
+            addition_limited = self._truncate_words(addition_full, words)
+            if addition_limited and (
+                not text_parts or addition_limited != text_parts[-1]
+            ):
+                text_parts.append(addition_limited)
+                full_parts.append(addition_full)
+                current_text = "\n\n".join(text_parts)
+                current_full = "\n\n".join(full_parts)
+                if current_text != last_saved:
+                    self._save_text(current_text)
+                    self._save_iteration_text(current_full, 1)
+                    last_saved = current_text
+            print(
+                f"section {idx}/{len(allocated)}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
+                flush=True,
+            )
+        return "\n\n".join(text_parts), "\n\n".join(full_parts)
+
+    # ------------------------------------------------------------------
+    def _truncate_words(self, text: str, limit: int) -> str:
+        """Truncate ``text`` to at most ``limit`` words."""
+
+        words = text.split()
+        if len(words) > limit:
+            return " ".join(words[:limit])
+        return text
+
+    # ------------------------------------------------------------------
     def _parse_outline(self, outline: str) -> List[Tuple[str, int]]:
         """Parse an outline into (title, word_count) tuples."""
 
@@ -299,11 +325,13 @@ class WriterAgent:
             if not re.match(r"\d+\.", line):
                 continue
             line = line.split(".", 1)[1].strip()
-            match = re.search(r"^(.*?)(?:\([^0-9]*(\d+)[^)]*\))?$", line)
+            match = re.match(r"^(.*?)\s*\([^0-9]*?(\d+)[^)]*\)", line)
             if match:
                 title = match.group(1).strip()
-                words = int(match.group(2)) if match.group(2) else 0
-                sections.append((title, words))
+                words = int(match.group(2))
+            else:
+                title, words = line, 0
+            sections.append((title, words))
         return sections
 
     # ------------------------------------------------------------------
