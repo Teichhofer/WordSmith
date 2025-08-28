@@ -112,7 +112,8 @@ class WriterAgent:
                 start = time.perf_counter()
                 addition = self._generate(prompt, current_text, iteration)
                 elapsed = time.perf_counter() - start
-                if not addition.strip():
+                addition = self._remove_duplicate_sections(addition, text)
+                if not addition:
                     continue
                 tokens = len(addition.split())
                 tok_per_sec = tokens / (elapsed or 1e-8)
@@ -498,6 +499,30 @@ class WriterAgent:
             fallback=fallback,
             system_prompt=prompts.STEP_SYSTEM_PROMPT,
         )
+
+    # ------------------------------------------------------------------
+    def _remove_duplicate_sections(
+        self, new_text: str, previous_sections: List[str]
+    ) -> str:
+        """Remove already generated sections from ``new_text``.
+
+        Some language models repeat previously produced content. This helper
+        strips a duplicated prefix and suppresses exact repetitions so that the
+        final story remains free of redundant paragraphs.
+        """
+
+        cleaned = new_text.strip()
+        if not cleaned:
+            return ""
+
+        existing = " ".join(previous_sections).strip()
+        if existing and cleaned.startswith(existing):
+            cleaned = cleaned[len(existing) :].lstrip()
+
+        if any(cleaned == part.strip() for part in previous_sections):
+            return ""
+
+        return cleaned
 
     # ------------------------------------------------------------------
     def _call_llm(
