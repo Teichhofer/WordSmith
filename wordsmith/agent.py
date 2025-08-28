@@ -315,6 +315,7 @@ class WriterAgent:
                     system_prompt=prompts.SECTION_SYSTEM_PROMPT,
                 ).strip()
                 elapsed += time.perf_counter() - start_cont
+                extra = self._remove_overlap(addition_full, extra)
                 if not extra:
                     break
                 addition_full = f"{addition_full} {extra}".strip()
@@ -361,11 +362,26 @@ class WriterAgent:
                     fallback="",
                     system_prompt=prompts.SECTION_SYSTEM_PROMPT,
                 ).strip()
+                extra = self._remove_overlap(full_parts[-1], extra)
                 if not extra:
                     break
                 full_parts[-1] = f"{full_parts[-1]} {extra}".strip()
                 current_full = "\n\n".join(full_parts)
         return self._truncate_text(current_full), current_full
+
+    # ------------------------------------------------------------------
+    def _remove_overlap(self, existing: str, new: str) -> str:
+        """Remove any overlapping prefix from ``new`` that repeats ``existing``."""
+
+        if not existing or not new:
+            return new
+        if new.startswith(existing):
+            return new[len(existing):].lstrip()
+        max_overlap = min(len(existing), len(new))
+        for i in range(max_overlap, 0, -1):
+            if existing.endswith(new[:i]):
+                return new[i:].lstrip()
+        return new
 
     # ------------------------------------------------------------------
     def _truncate_words(self, text: str, limit: int) -> str:
