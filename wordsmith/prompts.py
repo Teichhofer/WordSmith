@@ -95,6 +95,14 @@ SECTION_PROMPT = (
     "Zielwortzahl: {budget}."
 )
 
+SECTION_CONTINUE_PROMPT = (
+    "Der Abschnitt {section_number} „{section_title}“ (Rolle: {role}) mit Ziel `{deliverable}` ist noch zu kurz. "
+    "Führe ihn fort und erweitere ihn um etwa {budget} Wörter, ohne den bisherigen Text zu wiederholen.\n"
+    "Briefing: {briefing_json}\n"
+    "Bisheriger Abschnitt: {existing_text}\n"
+    "Bisheriger Kontext (Kurz-Recap): {previous_section_recap}"
+)
+
 REVISION_SYSTEM_PROMPT = (
     "Du überarbeitest Texte präzise, verbesserst Stil, Kohärenz und Grammatik und orientierst dich an einer vorgegebenen Outline."
 )

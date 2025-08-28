@@ -168,6 +168,25 @@ def test_call_llm_logs_prompt_and_response(tmp_path):
     assert any(e["event"] == "response" and e["text"] == 'hello' for e in entries)
 
 
+def test_generate_sections_from_outline_extends_short_sections(monkeypatch, tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('Topic', 5, [], iterations=0, config=cfg)
+    outline = '1. Intro | Rolle: Hook | Wortbudget: 5 | Liefergegenstand: Start'
+
+    prompts_seen = []
+    responses = iter(['zu kurz', 'jetzt kommen genug worte'])
+
+    def fake_call(self, prompt, *, fallback, system_prompt=None):
+        prompts_seen.append(prompt)
+        return next(responses)
+
+    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
+
+    limited, full = writer._generate_sections_from_outline(outline, '{}')
+    assert len(full.split()) >= 5
+    assert len(prompts_seen) == 2
+
+
 def test_run_auto_creates_briefing_and_metadata(monkeypatch, tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
     writer = agent.WriterAgent(
@@ -197,8 +216,8 @@ def test_run_auto_creates_briefing_and_metadata(monkeypatch, tmp_path):
         'improved idea',
         outline,
         outline,
-        'Intro text',
-        'End text',
+        'Intro ' + ' '.join(['wort'] * 9),
+        'Ende ' + ' '.join(['wort'] * 9),
         'Ja',
         'fixed text',
         'revised text',
