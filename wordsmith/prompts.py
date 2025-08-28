@@ -38,7 +38,7 @@ INITIAL_AUTO_SYSTEM_PROMPT = (
 
 BRIEFING_PROMPT = (
     "Verdichte folgende Angaben zu einem Arbeitsbriefing als kompaktes JSON mit Schlüsseln: "
-    "goal, audience, tone, register, variant, constraints, key_terms, messages, seo_keywords (optional), no_gos.\n"
+    "goal, audience, tone, register, variant, constraints, key_terms, messages, seo_keywords (optional).\n"
     "**Eingaben:**\n"
     "title: {title}\n"
     "text_type: {text_type}\n"

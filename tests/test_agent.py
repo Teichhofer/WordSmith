@@ -220,3 +220,18 @@ def test_run_auto_creates_briefing_and_metadata(monkeypatch, tmp_path):
     meta = json.loads(meta_path.read_text())
     assert meta['title'] == 'Title'
     assert meta['final_word_count'] == len(final_text.split())
+
+
+def test_run_auto_briefing_has_no_no_gos(monkeypatch, tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('Topic', 10, [], iterations=1, config=cfg)
+
+    def fake_call(self, prompt, *, fallback, system_prompt=None):
+        return fallback
+
+    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
+
+    writer.run_auto()
+
+    briefing = json.loads((cfg.output_dir / 'briefing.json').read_text())
+    assert 'no_gos' not in briefing

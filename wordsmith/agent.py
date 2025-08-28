@@ -167,7 +167,6 @@ class WriterAgent:
                 "key_terms": [],
                 "messages": [],
                 "seo_keywords": [k.strip() for k in self.seo_keywords.split(",") if k.strip()],
-                "no_gos": [],
             }
         )
         briefing_json = self._call_llm(briefing_prompt, fallback=fallback_briefing)

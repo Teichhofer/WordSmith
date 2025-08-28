@@ -46,7 +46,7 @@ Ein Durchlauf gilt als erfolgreich, wenn der finale Text:
 
 - **PROMPT `BRIEFING_PROMPT`**  
   _Eingaben:_ `title, content, text_type, audience, tone, register, variant, constraints, seo_keywords`  
-  _Ausgabe:_ kompaktes JSON (Ziel, Kernaussagen, No-Gos, definierte Begriffe, Stilvorgaben, SEO-Begriffe).  
+  _Ausgabe:_ kompaktes JSON (Ziel, Kernaussagen, definierte Begriffe, Stilvorgaben, SEO-Begriffe).
 - Dieses JSON wird in `output/briefing.json` gespeichert und in allen Folge-Prompts eingebettet.
 
 ---
@@ -178,7 +178,7 @@ Nach der letzten Iteration: finaler Text zurückgeben (Länge ±3 %).
 ## Prompt-Vorlagen (Platzhalter in `{…}`)
 
 ### `BRIEFING_PROMPT`
-> Verdichte folgende Angaben zu einem Arbeitsbriefing als kompaktes JSON mit Schlüsseln: goal, audience, tone, register, variant, constraints, key_terms, messages, seo_keywords (optional), no_gos.  
+> Verdichte folgende Angaben zu einem Arbeitsbriefing als kompaktes JSON mit Schlüsseln: goal, audience, tone, register, variant, constraints, key_terms, messages, seo_keywords (optional).
 > **Eingaben:**  
 > title: {title}  
 > text_type: {text_type}  
