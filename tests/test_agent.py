@@ -273,3 +273,41 @@ def test_run_auto_briefing_has_no_no_gos(monkeypatch, tmp_path):
 
     briefing = json.loads((cfg.output_dir / 'briefing.json').read_text())
     assert 'no_gos' not in briefing
+
+
+def test_run_auto_reports_token_speed(monkeypatch, tmp_path, capsys):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('Topic', 10, [], iterations=2, config=cfg)
+
+    # Skip section generation to focus on revision progress
+    monkeypatch.setattr(
+        agent.WriterAgent,
+        '_generate_sections_from_outline',
+        lambda self, outline, briefing_json: ('draft', 'draft'),
+    )
+
+    responses = iter([
+        '{}',  # briefing
+        '',  # idea improvement
+        'outline',  # outline
+        'outline',  # improved outline
+        '',  # type check
+        'draft',  # type fix
+        'one two',  # revision 1
+        'one two three',  # revision 2
+    ])
+
+    def fake_call(self, prompt, *, fallback, system_prompt=None):
+        return next(responses)
+
+    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
+
+    times = iter([0, 1, 2, 3])
+    monkeypatch.setattr(agent.time, 'perf_counter', lambda: next(times))
+
+    writer.run_auto()
+
+    out = capsys.readouterr().out
+    segments = [seg for seg in out.split('\r') if 'tok/s' in seg]
+    assert any('2 tokens (2.00 tok/s)' in seg for seg in segments)
+    assert any('3 tokens (3.00 tok/s)' in seg for seg in segments)
