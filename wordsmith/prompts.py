@@ -79,6 +79,16 @@ SECTION_CONTINUE_PROMPT = (
     "Bisheriger Kontext (Kurz-Recap): {previous_section_recap}"
 )
 
+STORY_DEEPENING_SYSTEM_PROMPT = (
+    "Du überarbeitest Texte und vertiefst die Geschichte, indem du Details ergänzt und eine stimmige Dramaturgie sicherstellst."
+)
+
+STORY_DEEPENING_PROMPT = (
+    "Der Text ist insgesamt noch zu kurz. Überarbeite den gesamten Text, vertiefe die Geschichte und füge etwa {remaining} zusätzliche Wörter ein, ohne nur den Schluss aufzublähen.\n"
+    "Briefing: {briefing_json}\n"
+    "Aktueller Text:\n{current_text}\n"
+)
+
 REVISION_SYSTEM_PROMPT = (
     "Du überarbeitest Texte präzise, verbesserst Stil, Kohärenz und Grammatik und orientierst dich an einer vorgegebenen Outline."
 )

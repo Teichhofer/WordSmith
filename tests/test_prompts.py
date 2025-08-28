@@ -10,6 +10,7 @@ def test_prompts_have_system_prompts():
     assert prompts.REVISION_SYSTEM_PROMPT.strip()
     assert prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT.strip()
     assert prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT.strip()
+    assert prompts.STORY_DEEPENING_SYSTEM_PROMPT.strip()
 
 
 def test_system_prompts_quality_phrases():
@@ -21,6 +22,7 @@ def test_system_prompts_quality_phrases():
     assert "Stil, Kohärenz und Grammatik" in prompts.REVISION_SYSTEM_PROMPT
     assert "Merkmalen der angegebenen Textart" in prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT
     assert "Textchecks" in prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT
+    assert "vertiefst die Geschichte" in prompts.STORY_DEEPENING_SYSTEM_PROMPT
 
 
 def test_outline_prompt_mentions_briefing():
