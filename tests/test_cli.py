@@ -17,13 +17,9 @@ def test_cli_main(monkeypatch, tmp_path, capsys):
     captured_cfg = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(
-        topic, word_count, steps, iterations, config, content="", text_type="Text"
-    ):
+    def capturing_writer(topic, word_count, steps, iterations, config, **kwargs):
         captured_cfg['config'] = config
-        return original_writer(
-            topic, word_count, steps, iterations, config, content=content, text_type=text_type
-        )
+        return original_writer(topic, word_count, steps, iterations, config, **kwargs)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
@@ -104,13 +100,9 @@ def test_cli_ollama_model_selection(monkeypatch, tmp_path, capsys):
     captured_cfg = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(
-        topic, word_count, steps, iterations, config, content="", text_type="Text"
-    ):
+    def capturing_writer(topic, word_count, steps, iterations, config, **kwargs):
         captured_cfg['config'] = config
-        return original_writer(
-            topic, word_count, steps, iterations, config, content=content, text_type=text_type
-        )
+        return original_writer(topic, word_count, steps, iterations, config, **kwargs)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
@@ -182,19 +174,15 @@ def test_cli_defaults(monkeypatch, tmp_path, capsys):
     captured_args = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(
-        topic, word_count, steps, iterations, config, content="", text_type="Text"
-    ):
+    def capturing_writer(topic, word_count, steps, iterations, config, **kwargs):
         captured_args['topic'] = topic
         captured_args['word_count'] = word_count
         captured_args['steps'] = steps
         captured_args['iterations'] = iterations
         captured_args['config'] = config
-        captured_args['content'] = content
-        captured_args['text_type'] = text_type
-        return original_writer(
-            topic, word_count, steps, iterations, config, content=content, text_type=text_type
-        )
+        captured_args['content'] = kwargs.get('content')
+        captured_args['text_type'] = kwargs.get('text_type', 'Text')
+        return original_writer(topic, word_count, steps, iterations, config, **kwargs)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
@@ -228,22 +216,35 @@ def test_cli_auto_mode(monkeypatch, tmp_path, capsys):
     captured = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(
-        topic, word_count, steps, iterations, config, content="", text_type="Text"
-    ):
+    def capturing_writer(topic, word_count, steps, iterations, config, **kwargs):
         captured['topic'] = topic
-        captured['content'] = content
+        captured['content'] = kwargs.get('content')
         captured['iterations'] = iterations
         captured['steps'] = steps
         captured['config'] = config
-        captured['text_type'] = text_type
-        return original_writer(
-            topic, word_count, steps, iterations, config, content=content, text_type=text_type
-        )
+        captured['text_type'] = kwargs.get('text_type')
+        captured['audience'] = kwargs.get('audience')
+        return original_writer(topic, word_count, steps, iterations, config, **kwargs)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
-    inputs = iter(['y', 'My Title', 'A cat story', 'Essay', '5', '2', 'stub', 'test-model'])
+    inputs = iter([
+        'y',
+        'My Title',
+        'A cat story',
+        'Essay',
+        'Adults',
+        'formal',
+        'Sie',
+        'DE-DE',
+        '',
+        'y',
+        '',
+        '5',
+        '2',
+        'stub',
+        'test-model',
+    ])
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
 
     cli.main()
@@ -254,6 +255,7 @@ def test_cli_auto_mode(monkeypatch, tmp_path, capsys):
     assert captured['content'] == 'A cat story'
     assert captured['iterations'] == 2
     assert captured['text_type'] == 'Essay'
+    assert captured['audience'] == 'Adults'
     cfg_used = captured['config']
     assert cfg_used.llm_provider == 'stub'
     assert cfg_used.model == 'test-model'
@@ -271,17 +273,30 @@ def test_cli_auto_mode_ollama_custom_ip(monkeypatch, tmp_path, capsys):
     captured = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(
-        topic, word_count, steps, iterations, config, content="", text_type="Text"
-    ):
+    def capturing_writer(topic, word_count, steps, iterations, config, **kwargs):
         captured['config'] = config
-        return original_writer(
-            topic, word_count, steps, iterations, config, content=content, text_type=text_type
-        )
+        return original_writer(topic, word_count, steps, iterations, config, **kwargs)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
-    inputs = iter(['y', 'T', 'C', 'Essay', '5', '1', '', '10.1.1.1', ''])
+    inputs = iter([
+        'y',
+        'T',
+        'C',
+        'Essay',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '5',
+        '1',
+        '',
+        '10.1.1.1',
+        '',
+    ])
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
 
     cli.main()
@@ -305,18 +320,31 @@ def test_cli_auto_mode_openai_endpoint(monkeypatch, tmp_path, capsys):
     captured = {}
     original_writer = agent.WriterAgent
 
-    def capturing_writer(
-        topic, word_count, steps, iterations, config, content="", text_type="Text"
-    ):
+    def capturing_writer(topic, word_count, steps, iterations, config, **kwargs):
         captured['config'] = config
-        return original_writer(
-            topic, word_count, steps, iterations, config, content=content, text_type=text_type
-        )
+        return original_writer(topic, word_count, steps, iterations, config, **kwargs)
 
     monkeypatch.setattr(agent, 'WriterAgent', capturing_writer)
 
     inputs = iter(
-        ['y', 'T', 'C', 'Report', '5', '1', 'openai', 'gpt', 'http://custom']
+        [
+            'y',
+            'T',
+            'C',
+            'Report',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '5',
+            '1',
+            'openai',
+            'gpt',
+            'http://custom',
+        ]
     )
     monkeypatch.setattr('builtins.input', lambda _: next(inputs))
 

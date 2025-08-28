@@ -1,17 +1,20 @@
 """Prompt templates used by WriterAgent."""
 
+# Global system prompt used for all LLM calls in automatic mode
 SYSTEM_PROMPT = (
-    "Du bist eine erfahrene, kreative Autorin und Lektorin. "
-    "Du verfasst gut strukturierte und ansprechende {text_type} in klarem Deutsch. "
-    "Nutze eine präzise, lebendige Sprache, achte auf logische Übergänge und einen natürlichen Stil. "
+    "Du bist ein präziser deutschsprachiger Fachtexter. "
+    "Du erfindest keine Fakten. Bei fehlenden Daten nutzt du Platzhalter in eckigen Klammern. "
+    "Deine Texte sind klar strukturiert, aktiv formuliert, redundanzarm und adressatengerecht. "
     "Vermeide Wiederholungen und Füllwörter und achte besonders auf die inhaltliche Qualität des Textes. "
-    "Dein Thema lautet: {topic}."
+    "Dein Thema lautet: {topic}. Du verfasst einen {text_type}."
 )
 
+# Prompts for interactive/legacy features remain largely unchanged
 META_SYSTEM_PROMPT = (
     "Du bist ein kreativer, strukturierter Schreibcoach, der Autorinnen hilft, den nächsten "
     "sinnvollen Schritt zu planen und ihre Texte zu verfeinern."
 )
+
 META_PROMPT = (
     "Du arbeitest an einem {text_type} mit dem Titel: {title}\n"
     "Er behandelt folgenden Inhalt: {content}\n"
@@ -26,141 +29,125 @@ META_PROMPT = (
     "so dass daraus eine kreative und literarisch hochwertige Erweiterung der Geschichte entstehen kann."
 )
 
-
 INITIAL_AUTO_SYSTEM_PROMPT = (
     "Du bist eine erfahrene Autorin, die aus kurzen Vorgaben einen hochwertigen ersten Rohtext entwickelt."
 )
-INITIAL_AUTO_PROMPT = (
-    "Schreibe diesen Text als erfahrene Autorin mit Jahrzehnten an Erfahrung.\n"
-    "Titel: {title}\n"
-    "Textart: {text_type}\n"
-    "Inhalt: {content}\n"
-    "Er soll etwa {word_count} Wörter umfassen."
-    "Achte auf einen klaren, ansprechenden Stil und logische Übergänge. "
-    "Beachte die Konventionen der Textart {text_type}.\n"
+
+# ---------------------------------------------------------------------------
+# Prompts for the revised automatic mode
+
+BRIEFING_PROMPT = (
+    "Verdichte folgende Angaben zu einem Arbeitsbriefing als kompaktes JSON mit Schlüsseln: "
+    "goal, audience, tone, register, variant, constraints, key_terms, messages, seo_keywords (optional), no_gos.\n"
+    "**Eingaben:**\n"
+    "title: {title}\n"
+    "text_type: {text_type}\n"
+    "audience: {audience}\n"
+    "tone: {tone}\n"
+    "register: {register}\n"
+    "variant: {variant}\n"
+    "constraints: {constraints}\n"
+    "seo_keywords: {seo_keywords}\n"
+    "notes: {content}\n"
 )
 
 IDEA_IMPROVEMENT_SYSTEM_PROMPT = (
-    "Du überarbeitest Ideen, korrigierst Rechtschreib- und Grammatikfehler und formulierst sie klarer. "
-    "Wenn sinnvoll, ergänzt du ein oder zwei originelle Aspekte."
+    "Du überarbeitest Ideen, korrigierst Rechtschreib- und Grammatikfehler und formulierst sie klarer."
 )
+
 IDEA_IMPROVEMENT_PROMPT = (
-    "Überarbeite die folgende Idee.\n"
-    "Korrigiere Rechtschreib- und Grammatikfehler, formuliere sie prägnanter und ergänze, "
-    "falls passend, ein oder zwei originelle Aspekte.\n\n"
-    "Idee:\n{content}\n"
+    "Überarbeite diesen Rohinhalt ohne neue Fakten.\n"
+    "1) Straffe Sprache, 2) markiere Unklarheiten `[KLÄREN: …]`, 3) gib Kernaussagen als Bullets + 1-Satz-Summary.\n"
+    "**Rohinhalt:** {content}"
 )
 
 OUTLINE_SYSTEM_PROMPT = (
     "Du gliederst Themen in übersichtliche, gut strukturierte Outlines und achtest auf klare Hierarchien "
     "sowie eine sinnvolle Reihenfolge."
 )
+
 OUTLINE_PROMPT = (
-    "Erstelle eine gegliederte Outline für einen {text_type} mit dem Titel: {title}\n"
-    "Der Text behandelt folgenden Inhalt: {content}\n"
-    "Die Gesamtlänge beträgt etwa {word_count} Wörter.\n"
-    "Alle Unterpunkte müssen mit * beginnen.\n"
-    "Gib eine nummerierte Liste der Abschnitte zurück und vermerke in Klammern den ungefähren Wortumfang jedes Abschnitts.\n"
-    "Füge am Ende eine Liste aller Figuren hinzu, die vorkommen sollen. "
-    "Jede Zeile beginnt mit # und enthält eine kurze Charakterisierung."
+    "Erzeuge eine hierarchische Gliederung für `{text_type}` zu `{title}` basierend auf dem Briefing:\n"
+    "{briefing_json}\n"
+    "Für jeden Abschnitt: Nummer, Titel, Rollenfunktion, Wortbudget, Liefergegenstand.\n"
+    "Gesamtwortzahl: {word_count}. Keine Fakten erfinden."
 )
 
 OUTLINE_IMPROVEMENT_SYSTEM_PROMPT = (
     "Du überarbeitest Outlines, vertiefst die Charakterisierung der Figuren und sorgst für eine klare, konsistente Struktur."
 )
+
 OUTLINE_IMPROVEMENT_PROMPT = (
-    "Überarbeite die folgende Outline.\n"
-    "Schärfe besonders die Charakterisierungen der Figuren und ergänze, wo sinnvoll, weitere Details.\n"
-    "Erhalte die nummerierte Gliederung sowie die abschließende Figurenliste.\n\n"
-    "Outline:\n{outline}\n"
+    "Prüfe und verbessere die Outline: entferne Überschneidungen, füge fehlende Brücken, balanciere Budgets (Summe = {word_count}). "
+    "Behalte Faktenneutralität.\n\nOutline:\n{outline}\n"
 )
 
 SECTION_SYSTEM_PROMPT = (
-    "Du schreibst spannende Prosatexte auf Deutsch und hältst dich strikt an die Outline. "
-    "Du bleibst konsequent in Erzählperspektive und Tempus (falls bisher nicht etabliert, wähle eines und bleibe dabei). "
-    "Bleibe konsistent im Stil. "
-    "Kein Meta-Talk, keine Überschriften, keine Lehrbuch-Erklärungen. "
-    "Schreibe idiomatisches Deutsch ohne Code-Switching oder Fremdsprachenfragmente (z. B. 'Geldautomat' statt 'ATM'). "
-    "Dialoge werden literarisch gesetzt („…“) – keine Sprecherlabels im Drehbuchstil. "
-    "Zeigen statt erklären: Szenen, Sinneseindrücke, Handlungen; Vermeide Info-Dumps. "
-    "Technik bleibt plausibel (keine unmöglichen physischen Handlungen durch Software; Hardware/Netzwerk realistisch). "
-    "Behandle psychische Themen vorsichtig und präzise, ohne Diagnosen zu behaupten. "
-    "Spezialformate (Logs/Tickets/Code) nur falls in der Outline explizit vorgesehen; maximal ein Block pro Abschnitt, "
-    "kurz (1–4 Zeilen) und einheitlich formatiert. "
-    "Führe vor Ausgabe eine stille Selbstprüfung durch und korrigiere ggf.: "
-    "1) Perspektive/Tempus konsistent? 2) Keine widersprüchlichen Fakten/Ereignisse? "
-    "3) Keine Wiederholungen/Redundanzen? 4) Orthografie/Grammatik fehlerfrei? "
-    "5) Keine Fremdsprach-Schnipsel ('había', 'haby', 'later' etc.)? 6) Technik plausibel? "
-    "7) Dialogformat korrekt? 8) Keine Klischee-Floskeln ohne Twist? "
-    "9) Outline strikt befolgt? 10) Kein Meta/keine Überschriften."
+    "Du schreibst spannende Prosatexte auf Deutsch und hältst dich strikt an die Outline. Du bleibst konsequent im Stil."
 )
 
 SECTION_PROMPT = (
-    "Outline:\n{outline}\n\n"
-    "Textart: {text_type}\n"
-    "Beachte die Anforderungen und Konventionen der Textart {text_type} (keine Drehbuch-Labels, außer die Outline verlangt es). "
-    "Titel des Abschnitts: {title}\n"
-    "Der Abschnitt muss mindestens {word_count} Wörtern (±10%) umfassen.\n"
-    "Schreibe den Abschnitt '{title}'. "
-    "Verankere jede Szene klar (Ort/Zeit/Handlungsziel), führe neue Elemente nur bei erzählerischer Notwendigkeit ein "
-    "und sorge für sichtbare Ursache-Wirkung. "
-    "Wenn Logs/Tickets/Code laut Outline nötig sind, nutze ein knappes, plausibles Format, z. B.: "
-    "[16:47] ui: route injected '/settings/experiments' ; "
-    "[17:03] authd: lockout user=admin. "
-    "Sonst keine Code- oder Logblöcke."
+    "Schreibe Abschnitt {section_number} „{section_title}“ (Rolle: {role}) mit Ziel `{deliverable}`.\n"
+    "Nutze Briefing und bisherige Abschnitte (Kohärenz, Terminologie).\n"
+    "Briefing: {briefing_json}\n"
+    "Bisheriger Kontext (Kurz-Recap): {previous_section_recap}\n"
+    "Regeln: aktive Verben, keine Füllphrasen, natürliche Übergänge, keine erfundenen Fakten (Platzhalter bei Lücken).\n"
+    "Zielwortzahl: {budget}."
 )
-
 
 REVISION_SYSTEM_PROMPT = (
-    "Du überarbeitest Texte präzise, verbesserst Stil, Kohärenz und Grammatik und orientierst dich an einer "
-    "vorgegebenen Outline."
-)
-REVISION_PROMPT = (
-    "Überarbeite den folgenden {text_type} basierend auf der Outline."
-    "Die Gesamtlänge soll mindestens {word_count} Wörter betragen.\n\n"
-    "Outline:\n{outline}\n\n"
-    "Aktueller Text:\n{current_text}\n\n"
-    "Überarbeiteter Text:"
+    "Du überarbeitest Texte präzise, verbesserst Stil, Kohärenz und Grammatik und orientierst dich an einer vorgegebenen Outline."
 )
 
+REVISION_PROMPT = (
+    "Überarbeite zielgerichtet nach diesen Prioritäten: Klarheit & Prägnanz, Flow & Übergänge, Terminologie-Konsistenz, "
+    "Wiederholungen tilgen, Rhythmus variieren, spezifische Verben/Nomen stärken, Schlussteil schärfen (CTA/Resolution), "
+    "Registersicherheit ({register}), Variantenspezifika ({variant}).\n\n"
+    "Aktueller Text:\n{current_text}\n\nÜberarbeiteter Text:"
+)
+
+# ---------------------------------------------------------------------------
+# Remaining prompts used by the interactive mode and helper utilities
 
 PROMPT_CRAFTING_SYSTEM_PROMPT = (
     "Du formulierst knappe, klare Prompts für andere Sprachmodelle und vermeidest Mehrdeutigkeiten."
 )
+
 PROMPT_CRAFTING_PROMPT = (
     "Formuliere einen klaren und konkreten Prompt für ein LLM, "
     "um die Aufgabe '{task}' zum Thema '{topic}' umzusetzen. "
     "Gib nur den Prompt zurück."
 )
 
-
 STEP_SYSTEM_PROMPT = (
-    "Du führst als erfahrene Autorin eine begonnene Erzählung stilgetreu fort und greifst Figuren, Ton und Spannung des bisherigen "
-    "Textes auf."
+    "Du führst als erfahrene Autorin eine begonnene Erzählung stilgetreu fort und greifst Figuren, Ton und Spannung des bisherigen Textes auf."
 )
+
 STEP_PROMPT = (
     "{prompt}\n\nAktueller Text:\n{current_text}\n\nNächster Abschnitt:"
 )
 
-
 TEXT_TYPE_CHECK_SYSTEM_PROMPT = (
     "Du prüfst als seit 20 Jahren erfahrene Lektorin Texte darauf, ob sie den Merkmalen der angegebenen Textart entsprechen."
 )
+
 TEXT_TYPE_CHECK_PROMPT = (
-    "Prüfe, ob der folgende Text die Anforderungen der Textart {text_type} erfüllt. "
-    "Antworte knapp mit Ja oder Nein und einer kurzen Begründung.\n\n"
+    "Prüfe den folgenden Text gegen die Rubrik für `{text_type}`. Liste konkrete Abweichungen und betroffene Stellen.\n\n"
     "Text:\n{current_text}\n"
 )
 
 TEXT_TYPE_FIX_SYSTEM_PROMPT = (
     "Du überarbeitest Texte anhand eines Textchecks und behebst die genannten Mängel präzise."
 )
+
 TEXT_TYPE_FIX_PROMPT = (
-    "Der Textcheck hat ergeben, dass es folgende Mängel im Text gibt:\n"
+    "Der Rubrik-Check hat ergeben, dass es folgende Abweichungen im Text gibt:\n"
     "{issues}\n"
     "Behebe sie im folgenden Text und liefere die verbesserte Version:\n"
     "{current_text}\n"
 )
 
-
+REFLECTION_PROMPT = (
+    "Nenne die 3 wirksamsten nächsten Verbesserungen (knapp, umsetzbar)."
+)
 
