@@ -2,89 +2,7 @@ import sys, pathlib, json, urllib.request, urllib.error
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 import wordsmith.agent as agent
-from wordsmith import prompts
 from wordsmith.config import Config
-
-
-def test_writer_agent_runs(tmp_path):
-    cfg = Config(
-        log_dir=tmp_path / 'logs',
-        output_dir=tmp_path / 'output',
-        output_file='story.txt',
-    )
-    steps = [agent.Step('intro'), agent.Step('body')]
-    writer = agent.WriterAgent('dogs', 5, steps, iterations=1, config=cfg)
-    result = writer.run()
-    assert len(result.split()) <= 5
-    assert (tmp_path / 'output' / 'story.txt').exists()
-    assert (tmp_path / 'logs' / 'run.log').exists()
-
-
-def test_generate_uses_full_context(monkeypatch, tmp_path):
-    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
-    prompts_seen = []
-    responses = iter(['crafted', 'first', 'second', 'third'])
-
-    def fake_call(self, prompt, *, fallback, system_prompt=None):
-        prompts_seen.append(prompt)
-        return next(responses)
-
-    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
-
-    writer = agent.WriterAgent('topic', 50, [agent.Step('step')], iterations=3, config=cfg)
-    writer.run()
-
-    gen_prompts = prompts_seen[1:]
-    expected_first = prompts.STEP_PROMPT.format(prompt='crafted', current_text='')
-    expected_second = prompts.STEP_PROMPT.format(prompt='crafted', current_text='first')
-    expected_third = prompts.STEP_PROMPT.format(prompt='crafted', current_text='first second')
-    assert gen_prompts[0] == expected_first
-    assert gen_prompts[1] == expected_second
-    assert gen_prompts[2] == expected_third
-
-
-def test_run_skips_duplicate_sections(monkeypatch, tmp_path):
-    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
-
-    responses = iter(['crafted', 'one', 'one two', 'one two'])
-
-    def fake_call(self, prompt, *, fallback, system_prompt=None):
-        return next(responses)
-
-    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
-
-    writer = agent.WriterAgent('topic', 50, [agent.Step('step')], iterations=3, config=cfg)
-    final = writer.run()
-
-    assert final == 'one two'
-    saved = (cfg.output_dir / cfg.output_file).read_text().strip()
-    assert saved == 'one two'
-
-
-def test_run_removes_multiple_duplicate_prefixes(monkeypatch, tmp_path):
-    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
-
-    responses = iter(
-        [
-            'crafted',
-            'intro',
-            'intro body',
-            'intro body intro body conclusion',
-        ]
-    )
-
-    def fake_call(self, prompt, *, fallback, system_prompt=None):
-        return next(responses)
-
-    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
-
-    writer = agent.WriterAgent('topic', 50, [agent.Step('step')], iterations=3, config=cfg)
-    final = writer.run()
-
-    assert final == 'intro body conclusion'
-    saved = (cfg.output_dir / cfg.output_file).read_text().strip()
-    assert saved == 'intro body conclusion'
-
 
 def test_call_llm_with_ollama(monkeypatch, tmp_path):
     cfg = Config(
@@ -120,7 +38,7 @@ def test_call_llm_with_ollama(monkeypatch, tmp_path):
 
     monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
 
-    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+    writer = agent.WriterAgent('cats', 5, iterations=1, config=cfg)
     result = writer._call_llm('intro about cats', fallback='fb', system_prompt='Extra')
     assert result == 'ollama text'
     assert captured['url'] == cfg.ollama_url
@@ -168,7 +86,7 @@ def test_call_llm_with_openai(monkeypatch, tmp_path):
 
     monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
 
-    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+    writer = agent.WriterAgent('cats', 5, iterations=1, config=cfg)
     result = writer._call_llm('intro about cats', fallback='fb', system_prompt='Extra')
     assert result == 'openai text'
     assert captured['url'] == cfg.openai_url
@@ -193,14 +111,14 @@ def test_call_llm_openai_http_error(monkeypatch, tmp_path):
 
     monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
 
-    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+    writer = agent.WriterAgent('cats', 5, iterations=1, config=cfg)
     result = writer._call_llm('intro about cats', fallback='Intro about cats. (iteration 1)')
     assert result == 'Intro about cats. (iteration 1)'
 
 
 def test_call_llm_logs_prompt_and_response(tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
-    writer = agent.WriterAgent('cats', 5, [agent.Step('intro')], iterations=1, config=cfg)
+    writer = agent.WriterAgent('cats', 5, iterations=1, config=cfg)
     result = writer._call_llm('say hi', fallback='hello')
     assert result == 'hello'
     log_path = tmp_path / 'logs' / cfg.llm_log_file
@@ -213,7 +131,7 @@ def test_call_llm_logs_prompt_and_response(tmp_path):
 
 def test_generate_sections_from_outline_extends_short_sections(monkeypatch, tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
-    writer = agent.WriterAgent('Topic', 5, [], iterations=0, config=cfg)
+    writer = agent.WriterAgent('Topic', 5, iterations=0, config=cfg)
     outline = '1. Intro | Rolle: Hook | Wortbudget: 5 | Liefergegenstand: Start'
 
     prompts_seen = []
@@ -232,7 +150,7 @@ def test_generate_sections_from_outline_extends_short_sections(monkeypatch, tmp_
 
 def test_generate_sections_from_outline_extends_final_section(monkeypatch, tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
-    writer = agent.WriterAgent('Topic', 5, [], iterations=0, config=cfg)
+    writer = agent.WriterAgent('Topic', 5, iterations=0, config=cfg)
     outline = '1. Intro | Rolle: Hook | Wortbudget: 5 | Liefergegenstand: Start'
 
     prompts_seen = []
@@ -254,7 +172,6 @@ def test_run_auto_creates_briefing_and_metadata(monkeypatch, tmp_path):
     writer = agent.WriterAgent(
         'Title',
         20,
-        [],
         iterations=1,
         config=cfg,
         content='notes',
@@ -305,7 +222,7 @@ def test_run_auto_creates_briefing_and_metadata(monkeypatch, tmp_path):
 
 def test_run_auto_briefing_has_no_no_gos(monkeypatch, tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
-    writer = agent.WriterAgent('Topic', 10, [], iterations=1, config=cfg)
+    writer = agent.WriterAgent('Topic', 10, iterations=1, config=cfg)
 
     def fake_call(self, prompt, *, fallback, system_prompt=None):
         return fallback
@@ -320,7 +237,7 @@ def test_run_auto_briefing_has_no_no_gos(monkeypatch, tmp_path):
 
 def test_run_auto_reports_token_speed(monkeypatch, tmp_path, capsys):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
-    writer = agent.WriterAgent('Topic', 10, [], iterations=2, config=cfg)
+    writer = agent.WriterAgent('Topic', 10, iterations=2, config=cfg)
 
     # Skip section generation to focus on revision progress
     monkeypatch.setattr(

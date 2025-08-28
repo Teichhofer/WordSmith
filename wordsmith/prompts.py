@@ -9,30 +9,6 @@ SYSTEM_PROMPT = (
     "Dein Thema lautet: {topic}. Du verfasst einen {text_type}."
 )
 
-# Prompts for interactive/legacy features remain largely unchanged
-META_SYSTEM_PROMPT = (
-    "Du bist ein kreativer, strukturierter Schreibcoach, der Autorinnen hilft, den nächsten "
-    "sinnvollen Schritt zu planen und ihre Texte zu verfeinern."
-)
-
-META_PROMPT = (
-    "Du arbeitest an einem {text_type} mit dem Titel: {title}\n"
-    "Er behandelt folgenden Inhalt: {content}\n"
-    "Die gewünschte Länge beträgt etwa {word_count} Wörter.\n"
-    "Aktueller Stand des Textes:\n{current_text}\n\n"
-    "Beschreibe den nächsten sinnvollen Schritt der Geschichte, der den Text literarisch vertiefen würde. "
-    "Achte darauf, dass Atmosphäre, Spannung und innere Konflikte verstärkt werden und die Figuren "
-    "lebendiger, widersprüchlicher und psychologisch nachvollziehbarer wirken. "
-    "Lege Wert auf subtile Andeutungen, emotionale Zwischentöne und mögliche symbolische Elemente, "
-    "die den Text dichter und vielschichtiger machen. "
-    "Formuliere ausschließlich einen präzisen Prompt für ein LLM, der genau diesen nächsten sinnvollen Schritt beschreibt, "
-    "so dass daraus eine kreative und literarisch hochwertige Erweiterung der Geschichte entstehen kann."
-)
-
-INITIAL_AUTO_SYSTEM_PROMPT = (
-    "Du bist eine erfahrene Autorin, die aus kurzen Vorgaben einen hochwertigen ersten Rohtext entwickelt."
-)
-
 # ---------------------------------------------------------------------------
 # Prompts for the revised automatic mode
 
@@ -114,27 +90,6 @@ REVISION_PROMPT = (
     "Aktueller Text:\n{current_text}\n\nÜberarbeiteter Text:"
 )
 
-# ---------------------------------------------------------------------------
-# Remaining prompts used by the interactive mode and helper utilities
-
-PROMPT_CRAFTING_SYSTEM_PROMPT = (
-    "Du formulierst knappe, klare Prompts für andere Sprachmodelle und vermeidest Mehrdeutigkeiten."
-)
-
-PROMPT_CRAFTING_PROMPT = (
-    "Formuliere einen klaren und konkreten Prompt für ein LLM, "
-    "um die Aufgabe '{task}' zum Thema '{topic}' umzusetzen. "
-    "Gib nur den Prompt zurück."
-)
-
-STEP_SYSTEM_PROMPT = (
-    "Du führst als erfahrene Autorin eine begonnene Erzählung stilgetreu fort und greifst Figuren, Ton und Spannung des bisherigen Textes auf."
-)
-
-STEP_PROMPT = (
-    "{prompt}\n\nAktueller Text:\n{current_text}\n\nNächster Abschnitt:"
-)
-
 TEXT_TYPE_CHECK_SYSTEM_PROMPT = (
     "Du prüfst als seit 20 Jahren erfahrene Lektorin Texte darauf, ob sie den Merkmalen der angegebenen Textart entsprechen."
 )
@@ -153,9 +108,5 @@ TEXT_TYPE_FIX_PROMPT = (
     "{issues}\n"
     "Behebe sie im folgenden Text und liefere die verbesserte Version:\n"
     "{current_text}\n"
-)
-
-REFLECTION_PROMPT = (
-    "Nenne die 3 wirksamsten nächsten Verbesserungen (knapp, umsetzbar)."
 )
 
