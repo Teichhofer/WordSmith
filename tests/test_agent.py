@@ -1,4 +1,4 @@
-import sys, pathlib, json, urllib.request, urllib.error
+import sys, pathlib, json, urllib.request, urllib.error, re
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 import wordsmith.agent as agent
@@ -273,3 +273,31 @@ def test_run_auto_briefing_has_no_no_gos(monkeypatch, tmp_path):
 
     briefing = json.loads((cfg.output_dir / 'briefing.json').read_text())
     assert 'no_gos' not in briefing
+
+
+def test_run_auto_shows_token_speed(monkeypatch, tmp_path, capsys):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('Topic', 5, [], iterations=1, config=cfg)
+
+    responses = iter(
+        [
+            '{"goal": ""}',
+            'idea',
+            '1. Teil | Rolle: Hook | Wortbudget: 5 | Liefergegenstand: Start',
+            '1. Teil | Rolle: Hook | Wortbudget: 5 | Liefergegenstand: Start',
+            'Abschnitt wort wort wort wort',
+            'ok',
+            'Abschnitt wort wort wort wort',
+            'revised text',
+        ]
+    )
+
+    monkeypatch.setattr(
+        agent.WriterAgent,
+        '_call_llm',
+        lambda self, prompt, *, fallback, system_prompt=None: next(responses),
+    )
+
+    writer.run_auto()
+    out = capsys.readouterr().out
+    assert re.search(r'Revising: 1/1: \d+ tokens \(.* tok/s\)', out)

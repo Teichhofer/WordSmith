@@ -247,26 +247,23 @@ class WriterAgent:
 
         self._save_iteration_text(final_text, 1)
 
-        if self.iterations:
-            print(f"Revising: 0/{self.iterations}", end="", flush=True)
         for iteration in range(1, self.iterations + 1):
             self.iteration = iteration
-            print(
-                f"\rRevising: {iteration}/{self.iterations}",
-                end="",
-                flush=True,
-            )
             final_text = self._load_iteration_text(iteration)
             revision_prompt = prompts.REVISION_PROMPT.format(
                 register=self.register,
                 variant=self.variant,
                 current_text=final_text,
             )
+            start = time.perf_counter()
             revised = self._call_llm(
                 revision_prompt,
                 fallback=final_text,
                 system_prompt=prompts.REVISION_SYSTEM_PROMPT,
             )
+            elapsed = time.perf_counter() - start
+            tokens = len(revised.split())
+            tok_per_sec = tokens / (elapsed or 1e-8)
             if revised.strip() != final_text.strip():
                 final_text = revised
                 truncated = self._truncate_text(final_text)
@@ -274,8 +271,10 @@ class WriterAgent:
                     self._save_text(truncated)
                     last_saved = truncated
             self._save_iteration_text(final_text, iteration + 1)
-        if self.iterations:
-            print()
+            print(
+                f"Revising: {iteration}/{self.iterations}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
+                flush=True,
+            )
 
         meta = {
             "title": self.topic,
