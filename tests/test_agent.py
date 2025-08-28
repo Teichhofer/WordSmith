@@ -179,6 +179,30 @@ def test_call_llm_logs_prompt_and_response(tmp_path):
         datetime.fromisoformat(e["time"])
 
 
+def test_craft_prompt_excludes_base_system(monkeypatch):
+    writer = agent.WriterAgent('topic', 5, [agent.Step('intro')], iterations=1)
+    original = writer.system_prompt
+    captured = {}
+
+    def fake_call_llm(prompt, *, fallback, system_prompt=None):
+        captured['prompt'] = prompt
+        captured['system_prompt'] = system_prompt
+        captured['current_system'] = writer.system_prompt
+        return 'crafted'
+
+    monkeypatch.setattr(writer, '_call_llm', fake_call_llm)
+    result = writer._craft_prompt('do something')
+
+    expected_prompt = prompts.PROMPT_CRAFTING_PROMPT.format(
+        task='do something', topic='topic'
+    )
+    assert captured['prompt'] == expected_prompt
+    assert captured['system_prompt'] == prompts.PROMPT_CRAFTING_SYSTEM_PROMPT
+    assert captured['current_system'] == ''
+    assert writer.system_prompt == original
+    assert result == 'crafted'
+
+
 def test_default_meta_prompt_contains_next_step_phrase():
     assert 'nächsten sinnvollen Schritt' in prompts.META_PROMPT
 

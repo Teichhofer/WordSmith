@@ -351,11 +351,16 @@ class WriterAgent:
             task=task, topic=self.topic
         )
         fallback = f"{task} über {self.topic}"
-        return self._call_llm(
-            meta_prompt,
-            fallback=fallback,
-            system_prompt=prompts.PROMPT_CRAFTING_SYSTEM_PROMPT,
-        )
+        original_system = self.system_prompt
+        try:
+            self.system_prompt = ""
+            return self._call_llm(
+                meta_prompt,
+                fallback=fallback,
+                system_prompt=prompts.PROMPT_CRAFTING_SYSTEM_PROMPT,
+            )
+        finally:
+            self.system_prompt = original_system
 
     # ------------------------------------------------------------------
     def _generate(self, prompt: str, current_text: str, iteration: int) -> str:
