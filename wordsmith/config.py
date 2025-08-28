@@ -21,7 +21,11 @@ class Config:
     log_encoding: str = "utf-8"
     llm_provider: str = "stub"
     model: str = "gpt-3.5-turbo"
-    temperature: float = 0.7
+    temperature: float = 0.2
+    top_p: float = 0.9
+    presence_penalty: float = 0.0
+    frequency_penalty: float = 0.3
+    seed: int | None = None
     context_length: int = 2048
     max_tokens: int = 256
     auto_ctx_multiplier: int = 8

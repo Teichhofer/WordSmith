@@ -42,6 +42,13 @@ class WriterAgent:
         config: Config | None = None,
         content: str = "",
         text_type: str = "Text",
+        audience: str = "Allgemeine Leserschaft mit Grundkenntnissen",
+        tone: str = "sachlich-lebendig",
+        register: str = "Sie",
+        variant: str = "DE-DE",
+        constraints: str = "",
+        sources_allowed: bool = True,
+        seo_keywords: str = "",
     ) -> None:
         self.topic = topic
         self.word_count = word_count
@@ -50,6 +57,13 @@ class WriterAgent:
         self.config = config or DEFAULT_CONFIG
         self.content = content
         self.text_type = text_type
+        self.audience = audience
+        self.tone = tone
+        self.register = register
+        self.variant = variant
+        self.constraints = constraints
+        self.sources_allowed = sources_allowed
+        self.seo_keywords = seo_keywords
         self.iteration = 0
 
         self.config.ensure_dirs()
@@ -130,24 +144,59 @@ class WriterAgent:
 
         self.config.adjust_for_word_count(self.word_count)
         self.iteration = 0
+
+        briefing_prompt = prompts.BRIEFING_PROMPT.format(
+            title=self.topic,
+            text_type=self.text_type,
+            audience=self.audience,
+            tone=self.tone,
+            register=self.register,
+            variant=self.variant,
+            constraints=self.constraints,
+            seo_keywords=self.seo_keywords,
+            content=self.content,
+        )
+        fallback_briefing = json.dumps(
+            {
+                "goal": "",
+                "audience": self.audience,
+                "tone": self.tone,
+                "register": self.register,
+                "variant": self.variant,
+                "constraints": self.constraints,
+                "key_terms": [],
+                "messages": [],
+                "seo_keywords": [k.strip() for k in self.seo_keywords.split(",") if k.strip()],
+                "no_gos": [],
+            }
+        )
+        briefing_json = self._call_llm(briefing_prompt, fallback=fallback_briefing)
+        self._save_briefing(briefing_json)
+
         idea_prompt = prompts.IDEA_IMPROVEMENT_PROMPT.format(content=self.content)
         self.content = self._call_llm(
             idea_prompt,
             fallback=self.content,
             system_prompt=prompts.IDEA_IMPROVEMENT_SYSTEM_PROMPT,
         )
+        self._save_idea(self.content)
+
         outline_prompt = prompts.OUTLINE_PROMPT.format(
             title=self.topic,
             text_type=self.text_type,
-            content=self.content,
+            briefing_json=briefing_json,
             word_count=self.word_count,
         )
         outline = self._call_llm(
             outline_prompt,
-            fallback="1. Einleitung (100)",
+            fallback="1. Einleitung | Rolle: Hook | Wortbudget: {} | Liefergegenstand: Ziel".format(
+                self.word_count
+            ),
             system_prompt=prompts.OUTLINE_SYSTEM_PROMPT,
         )
-        improve_prompt = prompts.OUTLINE_IMPROVEMENT_PROMPT.format(outline=outline)
+        improve_prompt = prompts.OUTLINE_IMPROVEMENT_PROMPT.format(
+            outline=outline, word_count=self.word_count
+        )
         outline = self._call_llm(
             improve_prompt,
             fallback=outline,
@@ -157,30 +206,28 @@ class WriterAgent:
         self._save_outline(outline)
         self._save_iteration_text(outline, 0)
 
-        limited_text, final_text = self._generate_sections_from_outline(outline)
+        limited_text, final_text = self._generate_sections_from_outline(
+            outline, briefing_json
+        )
         truncated = self._truncate_text(final_text)
         if truncated != limited_text:
             self._save_text(truncated)
             last_saved = truncated
         else:
+            self._save_text(limited_text)
             last_saved = limited_text
 
         self.iteration = 0
         check_prompt = prompts.TEXT_TYPE_CHECK_PROMPT.format(
-            text_type=self.text_type,
-            current_text=final_text,
+            text_type=self.text_type, current_text=final_text
         )
         check_result = self._call_llm(
             check_prompt,
             fallback="",
             system_prompt=prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT,
         )
-        self.logger.info("iteration %s: text type check: %s", self.iteration, check_result)
-        print(f"text type check: {check_result}", flush=True)
-
         fix_prompt = prompts.TEXT_TYPE_FIX_PROMPT.format(
-            issues=check_result,
-            current_text=final_text,
+            issues=check_result, current_text=final_text
         )
         fixed_text = self._call_llm(
             fix_prompt,
@@ -199,91 +246,91 @@ class WriterAgent:
                     self._save_text(truncated)
                     last_saved = truncated
 
-        # Save the draft after automatic fix steps so that iteration 1
-        # reflects the starting text for revisions.
         self._save_iteration_text(final_text, 1)
 
         for iteration in range(1, self.iterations + 1):
             self.iteration = iteration
             final_text = self._load_iteration_text(iteration)
             revision_prompt = prompts.REVISION_PROMPT.format(
-                title=self.topic,
-                text_type=self.text_type,
-                content=self.content,
-                word_count=self.word_count,
-                outline=outline,
+                register=self.register,
+                variant=self.variant,
                 current_text=final_text,
             )
-            start = time.perf_counter()
             revised = self._call_llm(
                 revision_prompt,
                 fallback=final_text,
                 system_prompt=prompts.REVISION_SYSTEM_PROMPT,
             )
-            elapsed = time.perf_counter() - start
-            tokens = len(revised.split())
-            tok_per_sec = tokens / (elapsed or 1e-8)
-            if revised.strip() == final_text.strip():
-                self._save_iteration_text(final_text, iteration + 1)
-                continue
-            final_text = revised
-            truncated = self._truncate_text(final_text)
-            if truncated != last_saved:
-                self._save_text(truncated)
-                last_saved = truncated
+            if revised.strip() != final_text.strip():
+                final_text = revised
+                truncated = self._truncate_text(final_text)
+                if truncated != last_saved:
+                    self._save_text(truncated)
+                    last_saved = truncated
             self._save_iteration_text(final_text, iteration + 1)
-            bar_len = 20
-            filled = int(bar_len * iteration / self.iterations)
-            bar = "#" * filled + "-" * (bar_len - filled)
-            print(
-                f"iteration {iteration}/{self.iterations} [{bar}]: "
-                f"{tokens} tokens ({tok_per_sec:.2f} tok/s)",
-                flush=True,
-            )
-            self.logger.info("iteration %s/%s: %s", iteration, self.iterations, "edited")
+
+        meta = {
+            "title": self.topic,
+            "audience": self.audience,
+            "tone": self.tone,
+            "register": self.register,
+            "variant": self.variant,
+            "keywords": [k.strip() for k in self.seo_keywords.split(",") if k.strip()],
+            "final_word_count": len(final_text.split()),
+            "rubric_passed": "nein" not in check_result.lower(),
+        }
+        self._save_metadata(meta)
 
         return self._truncate_text(final_text)
 
     # ------------------------------------------------------------------
-    def _generate_sections_from_outline(self, outline: str) -> str:
+    def _generate_sections_from_outline(
+        self, outline: str, briefing_json: str
+    ) -> Tuple[str, str]:
         """Generate text for each section of ``outline`` and return the result."""
 
         sections = self._parse_outline(outline)
         if not sections:
             return "", ""
 
-        weights = [w if w > 0 else 1 for _, w in sections]
-        total_weight = sum(weights) or 1
-        allocated: List[Tuple[str, int]] = []
+        total = sum(b for _, _, b, _ in sections) or 1
+        factor = self.word_count / total
+        allocated: List[Tuple[str, str, int, str]] = []
         accumulated = 0
-        for (title, _), weight in zip(sections, weights):
-            words = max(1, int(weight * self.word_count / total_weight))
-            allocated.append((title, words))
+        for title, role, budget, deliverable in sections:
+            words = max(1, int(round(budget * factor)))
+            allocated.append((title, role, words, deliverable))
             accumulated += words
         if allocated:
-            title, words = allocated[-1]
-            allocated[-1] = (title, words + (self.word_count - accumulated))
+            title, role, words, deliverable = allocated[-1]
+            allocated[-1] = (
+                title,
+                role,
+                words + (self.word_count - accumulated),
+                deliverable,
+            )
 
         text_parts: List[str] = []
         full_parts: List[str] = []
         last_saved = ""
-        for idx, (title, words) in enumerate(allocated, start=1):
+        for idx, (title, role, words, deliverable) in enumerate(allocated, start=1):
             self.iteration = idx
+            previous = text_parts[-1] if text_parts else ""
+            recap = " ".join(previous.split()[-20:])
             section_prompt = prompts.SECTION_PROMPT.format(
-                outline=outline,
-                title=title,
-                word_count=words,
-                text_type=self.text_type,
+                section_number=idx,
+                section_title=title,
+                role=role,
+                deliverable=deliverable,
+                budget=words,
+                briefing_json=briefing_json,
+                previous_section_recap=recap,
             )
-            start = time.perf_counter()
             addition = self._call_llm(
                 section_prompt,
                 fallback=title,
                 system_prompt=prompts.SECTION_SYSTEM_PROMPT,
             )
-            elapsed = time.perf_counter() - start
-            tokens = len(addition.split())
-            tok_per_sec = tokens / (elapsed or 1e-8)
             addition_full = addition.strip()
             addition_limited = self._truncate_words(addition_full, words)
             if addition_limited and (
@@ -297,10 +344,6 @@ class WriterAgent:
                     self._save_text(current_text)
                     self._save_iteration_text(current_full, 1)
                     last_saved = current_text
-            print(
-                f"section {idx}/{len(allocated)}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
-                flush=True,
-            )
         return "\n\n".join(text_parts), "\n\n".join(full_parts)
 
     # ------------------------------------------------------------------
@@ -313,25 +356,36 @@ class WriterAgent:
         return text
 
     # ------------------------------------------------------------------
-    def _parse_outline(self, outline: str) -> List[Tuple[str, int]]:
-        """Parse an outline into (title, word_count) tuples."""
+    def _parse_outline(self, outline: str) -> List[Tuple[str, str, int, str]]:
+        """Parse an outline into ``(title, role, word_count, deliverable)`` tuples."""
 
         outline = self._clean_outline(outline)
-        sections: List[Tuple[str, int]] = []
+        sections: List[Tuple[str, str, int, str]] = []
         for line in outline.splitlines():
             line = line.strip()
             if not line or line.startswith(('*', '-', '+', '#')):
                 continue
-            if not re.match(r"\d+\.", line):
+            if not re.match(r"\d+(?:\.\d+)*\.", line):
                 continue
-            line = line.split(".", 1)[1].strip()
-            match = re.match(r"^(.*?)\s*\([^0-9]*?(\d+)[^)]*\)", line)
-            if match:
-                title = match.group(1).strip()
-                words = int(match.group(2))
-            else:
-                title, words = line, 0
-            sections.append((title, words))
+            parts = [p.strip() for p in line.split('|')]
+            title_part = parts[0]
+            title = title_part.split('.', 1)[1].strip()
+            role = ""
+            budget = 0
+            deliverable = ""
+            for part in parts[1:]:
+                key, _, value = part.partition(':')
+                key = key.strip().lower()
+                value = value.strip()
+                if key.startswith('rolle'):
+                    role = value
+                elif key.startswith('wortbudget'):
+                    m = re.search(r"(\d+)", value)
+                    if m:
+                        budget = int(m.group(1))
+                elif key.startswith('liefer') or key.startswith('deliverable'):
+                    deliverable = value
+            sections.append((title, role, budget, deliverable))
         return sections
 
     # ------------------------------------------------------------------
@@ -406,6 +460,10 @@ class WriterAgent:
                     "stream": False,
                     "options": {
                         "temperature": self.config.temperature,
+                        "top_p": self.config.top_p,
+                        "presence_penalty": self.config.presence_penalty,
+                        "frequency_penalty": self.config.frequency_penalty,
+                        "seed": self.config.seed,
                         "num_ctx": self.config.context_length,
                         "num_predict": self.config.max_tokens,
                     },
@@ -440,6 +498,10 @@ class WriterAgent:
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": self.config.temperature,
+                    "top_p": self.config.top_p,
+                    "presence_penalty": self.config.presence_penalty,
+                    "frequency_penalty": self.config.frequency_penalty,
+                    "seed": self.config.seed,
                     "max_tokens": self.config.max_tokens,
                 }
             ).encode("utf8")
@@ -517,6 +579,40 @@ class WriterAgent:
         self.config.output_dir.mkdir(exist_ok=True)
         with path.open("w", encoding="utf8") as fh:
             fh.write(outline + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+
+    # ------------------------------------------------------------------
+    def _save_briefing(self, briefing_json: str) -> None:
+        """Persist the generated briefing JSON."""
+
+        path = self.config.output_dir / "briefing.json"
+        self.config.output_dir.mkdir(exist_ok=True)
+        with path.open("w", encoding="utf8") as fh:
+            fh.write(briefing_json.strip() + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+
+    # ------------------------------------------------------------------
+    def _save_idea(self, idea: str) -> None:
+        """Persist the improved idea text."""
+
+        path = self.config.output_dir / "idea.txt"
+        self.config.output_dir.mkdir(exist_ok=True)
+        with path.open("w", encoding="utf8") as fh:
+            fh.write(idea.strip() + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+
+    # ------------------------------------------------------------------
+    def _save_metadata(self, data: dict) -> None:
+        """Persist run metadata to a JSON file."""
+
+        path = self.config.output_dir / "metadata.json"
+        self.config.output_dir.mkdir(exist_ok=True)
+        with path.open("w", encoding="utf8") as fh:
+            json.dump(data, fh, ensure_ascii=False)
+            fh.write("\n")
             fh.flush()
             os.fsync(fh.fileno())
 

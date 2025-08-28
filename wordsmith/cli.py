@@ -47,6 +47,20 @@ def _run_cli() -> None:
         topic = input(f"Title [{default_topic}]: ").strip() or default_topic
         content = input("Desired content: ").strip()
         text_type = input("Text type: ").strip() or "Text"
+        audience = (
+            input(
+                "Audience [Allgemeine Leserschaft mit Grundkenntnissen]: "
+            ).strip()
+            or "Allgemeine Leserschaft mit Grundkenntnissen"
+        )
+        tone = input("Tone [sachlich-lebendig]: ").strip() or "sachlich-lebendig"
+        register = input("Register [Sie]: ").strip() or "Sie"
+        variant = input("Variant [DE-DE]: ").strip() or "DE-DE"
+        constraints = input("Constraints (optional): ").strip()
+        sources_allowed = (
+            input("Sources allowed? (y/N): ").strip().lower() == "y"
+        )
+        seo_keywords = input("SEO keywords (optional): ").strip()
         word_count = _prompt_int("Word count [100]: ", default=100)
         iterations = _prompt_int("Number of iterations [1]: ", default=1)
 
@@ -110,6 +124,13 @@ def _run_cli() -> None:
             config=cfg,
             content=content,
             text_type=text_type,
+            audience=audience,
+            tone=tone,
+            register=register,
+            variant=variant,
+            constraints=constraints,
+            sources_allowed=sources_allowed,
+            seo_keywords=seo_keywords,
         )
         final_text = writer.run_auto()
 

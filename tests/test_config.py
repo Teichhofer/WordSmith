@@ -9,7 +9,10 @@ def test_config_creates_directories(tmp_path):
     cfg.ensure_dirs()
     assert cfg.log_dir.exists()
     assert cfg.output_dir.exists()
-    assert cfg.temperature == 0.7
+    assert cfg.temperature == 0.2
+    assert cfg.top_p == 0.9
+    assert cfg.presence_penalty == 0.0
+    assert cfg.frequency_penalty == 0.3
     assert cfg.context_length == 2048
     assert cfg.max_tokens == 256
     assert cfg.log_encoding == 'utf-8'

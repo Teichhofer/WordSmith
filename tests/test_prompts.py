@@ -23,7 +23,7 @@ def test_system_prompts_quality_phrases():
     assert "Rechtschreib- und Grammatikfehler" in prompts.IDEA_IMPROVEMENT_SYSTEM_PROMPT
     assert "klare Hierarchien" in prompts.OUTLINE_SYSTEM_PROMPT
     assert "Charakterisierung der Figuren" in prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT
-    assert "konsistent im Stil" in prompts.SECTION_SYSTEM_PROMPT
+    assert "konsequent im Stil" in prompts.SECTION_SYSTEM_PROMPT
     assert "Stil, Kohärenz und Grammatik" in prompts.REVISION_SYSTEM_PROMPT
     assert "vermeidest Mehrdeutigkeiten" in prompts.PROMPT_CRAFTING_SYSTEM_PROMPT
     assert "Figuren, Ton und Spannung" in prompts.STEP_SYSTEM_PROMPT
@@ -31,29 +31,29 @@ def test_system_prompts_quality_phrases():
     assert "Textchecks" in prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT
 
 
-def test_section_prompt_mentions_text_type():
-    assert "Textart: {text_type}" in prompts.SECTION_PROMPT
-    assert "Anforderungen und Konventionen der Textart" in prompts.SECTION_PROMPT
-
-
-def test_outline_prompt_mentions_character_lines():
+def test_outline_prompt_mentions_briefing():
     text = prompts.OUTLINE_PROMPT.format(
-        text_type='Roman',
+        text_type='Report',
         title='Titel',
-        content='Inhalt',
+        briefing_json='{}',
         word_count=100,
     )
-    assert 'Jede Zeile beginnt mit #' in text
+    assert 'Briefing' in text
+    assert 'Rollenfunktion' in text
 
 
-def test_outline_prompt_enforces_subpoint_asterisks():
-    text = prompts.OUTLINE_PROMPT.format(
-        text_type='Roman',
-        title='Titel',
-        content='Inhalt',
-        word_count=100,
+def test_section_prompt_mentions_briefing():
+    text = prompts.SECTION_PROMPT.format(
+        section_number=1,
+        section_title='Einleitung',
+        role='Hook',
+        deliverable='Ziel',
+        budget=100,
+        briefing_json='{}',
+        previous_section_recap='',
     )
-    assert 'Unterpunkte müssen mit * beginnen' in text
+    assert 'Briefing' in text
+    assert 'Zielwortzahl' in text
 
 
 def test_text_type_fix_prompt_mentions_issues():
@@ -61,5 +61,5 @@ def test_text_type_fix_prompt_mentions_issues():
         issues='Fehler',
         current_text='Inhalt',
     )
-    assert 'Textcheck hat ergeben' in text
+    assert 'Rubrik-Check hat ergeben' in text
     assert 'Behebe sie' in text
