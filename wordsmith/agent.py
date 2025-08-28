@@ -7,37 +7,26 @@ import re
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import List, Tuple
 from difflib import SequenceMatcher
 from collections import Counter
-from typing import Iterable, List, Tuple
 
 from .config import Config, DEFAULT_CONFIG
 from . import prompts
 
 
-@dataclass
-class Step:
-    """Description of a single writing step."""
-
-    task: str
-
-
 class WriterAgent:
     """A very small placeholder writing agent.
 
-    The agent is intentionally simple – it merely appends sentences based on the
-    step's task and the given topic. The goal of the project is to provide the
-    scaffolding for an iterative writing workflow rather than sophisticated
-    natural language generation.
+    The agent focuses solely on the automatic mode, generating complete texts
+    based on a briefing and iterative revisions.
     """
 
     def __init__(
         self,
         topic: str,
         word_count: int,
-        steps: Iterable[Step],
         iterations: int,
         config: Config | None = None,
         content: str = "",
@@ -52,7 +41,6 @@ class WriterAgent:
     ) -> None:
         self.topic = topic
         self.word_count = word_count
-        self.steps: List[Step] = list(steps)
         self.iterations = iterations
         self.config = config or DEFAULT_CONFIG
         self.content = content
@@ -65,8 +53,6 @@ class WriterAgent:
         self.sources_allowed = sources_allowed
         self.seo_keywords = seo_keywords
         self.iteration = 0
-        self.step_index = 0
-        self.step_task = ""
 
         self.config.ensure_dirs()
 
@@ -98,50 +84,6 @@ class WriterAgent:
         self.llm_logger = logging.getLogger(f"{__name__}.llm")
         self.llm_logger.addHandler(llm_handler)
         self.llm_logger.propagate = False
-
-    # ------------------------------------------------------------------
-    def run(self) -> str:
-        """Execute the writing process and return the final text."""
-
-        text: List[str] = []
-        for step_index, step in enumerate(self.steps, start=1):
-            self.step_index = step_index
-            self.step_task = step.task
-            # Ask the LLM for an optimal prompt for this step before running any
-            # iterations.
-            prompt = self._craft_prompt(step.task)
-            for iteration in range(1, self.iterations + 1):
-                self.iteration = iteration
-                current_text = " ".join(text)
-                start = time.perf_counter()
-                addition = self._generate(prompt, current_text, iteration)
-                elapsed = time.perf_counter() - start
-                addition = self._remove_duplicate_sections(addition, text)
-                if not addition:
-                    continue
-                tokens = len(addition.split())
-                tok_per_sec = tokens / (elapsed or 1e-8)
-                text.append(addition)
-                current_text = " ".join(text)
-                self._save_text(current_text)
-                self.logger.info(
-                    "step %s/%s iteration %s/%s: %s",
-                    step_index,
-                    len(self.steps),
-                    iteration,
-                    self.iterations,
-                    addition,
-                )
-                print(
-                    f"step {step_index}/{len(self.steps)} iteration {iteration}/{self.iterations}: "
-                    f"{tokens} tokens ({tok_per_sec:.2f} tok/s)",
-                    flush=True,
-                )
-
-        final_text = " ".join(text)
-        final_text = self._truncate_text(final_text)
-        self._save_text(final_text)
-        return final_text
 
     # ------------------------------------------------------------------
     def run_auto(self) -> str:
@@ -477,58 +419,6 @@ class WriterAgent:
         return "\n".join(lines).strip()
 
     # ------------------------------------------------------------------
-    def _craft_prompt(self, task: str) -> str:
-        """Ask the LLM to craft an optimal prompt for the given task."""
-
-        meta_prompt = prompts.PROMPT_CRAFTING_PROMPT.format(
-            task=task, topic=self.topic
-        )
-        fallback = f"{task} über {self.topic}"
-        return self._call_llm(
-            meta_prompt,
-            fallback=fallback,
-            system_prompt=prompts.PROMPT_CRAFTING_SYSTEM_PROMPT,
-        )
-
-    # ------------------------------------------------------------------
-    def _generate(self, prompt: str, current_text: str, iteration: int) -> str:
-        """Generate text for ``prompt`` given the current text state."""
-
-        user_prompt = prompts.STEP_PROMPT.format(
-            prompt=prompt, current_text=current_text
-        )
-        fallback = f"{prompt}. (Iteration {iteration})"
-        return self._call_llm(
-            user_prompt,
-            fallback=fallback,
-            system_prompt=prompts.STEP_SYSTEM_PROMPT,
-        )
-
-    # ------------------------------------------------------------------
-    def _remove_duplicate_sections(
-        self, new_text: str, previous_sections: List[str]
-    ) -> str:
-        """Remove already generated sections from ``new_text``.
-
-        Some language models repeat previously produced content. This helper
-        strips a duplicated prefix and suppresses exact repetitions so that the
-        final story remains free of redundant paragraphs.
-        """
-
-        cleaned = new_text.strip()
-        if not cleaned:
-            return ""
-
-        existing = " ".join(previous_sections).strip()
-        while existing and cleaned.startswith(existing):
-            cleaned = cleaned[len(existing) :].lstrip()
-
-        if any(cleaned == part.strip() for part in previous_sections):
-            return ""
-
-        return cleaned
-
-    # ------------------------------------------------------------------
     def _call_llm(
         self, prompt: str, *, fallback: str, system_prompt: str | None = None
     ) -> str:
@@ -540,16 +430,12 @@ class WriterAgent:
 
         full_prompt = f"{combined_system}\n\n{prompt}".strip()
         iteration = self.iteration
-        step = getattr(self, "step_index", 0)
-        task = getattr(self, "step_task", "")
         # Log structured JSON to allow easier parsing and to keep entries on a single line
         self.llm_logger.info(
             json.dumps(
                 {
                     "time": datetime.now(timezone.utc).isoformat(),
                     "event": "prompt",
-                    "step": step,
-                    "task": task,
                     "iteration": iteration,
                     "text": full_prompt,
                 },
@@ -628,8 +514,6 @@ class WriterAgent:
                 {
                     "time": datetime.now(timezone.utc).isoformat(),
                     "event": "response",
-                    "step": step,
-                    "task": task,
                     "iteration": iteration,
                     "text": result,
                 },
