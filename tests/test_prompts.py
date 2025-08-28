@@ -63,3 +63,7 @@ def test_text_type_fix_prompt_mentions_issues():
     )
     assert 'Rubrik-Check hat ergeben' in text
     assert 'Behebe sie' in text
+
+
+def test_briefing_prompt_has_no_no_gos():
+    assert 'no_gos' not in prompts.BRIEFING_PROMPT
