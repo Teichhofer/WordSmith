@@ -372,11 +372,17 @@ class WriterAgent:
     # ------------------------------------------------------------------
     def _remove_overlap(self, existing: str, new: str) -> str:
         """Remove any overlapping prefix from ``new`` that repeats ``existing``."""
-
         if not existing or not new:
             return new
+
+        # Normalise whitespace so that differences in leading/trailing spaces or
+        # newlines do not prevent overlap detection.
+        existing = existing.rstrip()
+        new = new.lstrip()
+
         if new.startswith(existing):
             return new[len(existing):].lstrip()
+
         max_overlap = min(len(existing), len(new))
         for i in range(max_overlap, 0, -1):
             if existing.endswith(new[:i]):
