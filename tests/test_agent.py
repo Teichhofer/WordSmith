@@ -148,13 +148,13 @@ def test_generate_sections_from_outline_extends_short_sections(monkeypatch, tmp_
     assert len(prompts_seen) == 2
 
 
-def test_generate_sections_from_outline_extends_final_section(monkeypatch, tmp_path):
+def test_generate_sections_from_outline_expands_full_text(monkeypatch, tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
     writer = agent.WriterAgent('Topic', 5, iterations=0, config=cfg)
     outline = '1. Intro | Rolle: Hook | Wortbudget: 5 | Liefergegenstand: Start'
 
     prompts_seen = []
-    responses = iter(['kurz', '', 'jetzt kommen genug worte'])
+    responses = iter(['kurz', 'jetzt kommen genug worte hier'])
 
     def fake_call(self, prompt, *, fallback, system_prompt=None):
         prompts_seen.append(prompt)
@@ -164,7 +164,8 @@ def test_generate_sections_from_outline_extends_final_section(monkeypatch, tmp_p
 
     limited, full = writer._generate_sections_from_outline(outline, '{}')
     assert len(full.split()) >= 5
-    assert len(prompts_seen) == 3
+    assert len(prompts_seen) == 2
+    assert 'kurz' in prompts_seen[1]
 
 
 def test_run_auto_creates_briefing_and_metadata(monkeypatch, tmp_path):

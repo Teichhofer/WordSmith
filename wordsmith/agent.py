@@ -340,31 +340,20 @@ class WriterAgent:
             )
         print()
         current_full = "\n\n".join(full_parts)
-        if len(current_full.split()) < self.word_count and allocated:
-            title, role, _, deliverable = allocated[-1]
-            idx = len(allocated)
-            while len(current_full.split()) < self.word_count:
-                remaining = self.word_count - len(current_full.split())
-                recap = " ".join(current_full.split()[-20:])
-                continue_prompt = prompts.SECTION_CONTINUE_PROMPT.format(
-                    section_number=idx,
-                    section_title=title,
-                    role=role,
-                    deliverable=deliverable,
-                    budget=remaining,
-                    briefing_json=briefing_json,
-                    previous_section_recap=recap,
-                    existing_text=full_parts[-1],
-                )
-                extra = self._call_llm(
-                    continue_prompt,
-                    fallback="",
-                    system_prompt=prompts.SECTION_SYSTEM_PROMPT,
-                ).strip()
-                if not extra:
-                    break
-                full_parts[-1] = f"{full_parts[-1]} {extra}".strip()
-                current_full = "\n\n".join(full_parts)
+        if len(current_full.split()) < self.word_count:
+            remaining = self.word_count - len(current_full.split())
+            deepen_prompt = prompts.STORY_DEEPENING_PROMPT.format(
+                remaining=remaining,
+                briefing_json=briefing_json,
+                current_text=current_full,
+            )
+            expanded = self._call_llm(
+                deepen_prompt,
+                fallback=current_full,
+                system_prompt=prompts.STORY_DEEPENING_SYSTEM_PROMPT,
+            ).strip()
+            if expanded:
+                current_full = expanded
         return self._truncate_text(current_full), current_full
 
     # ------------------------------------------------------------------
