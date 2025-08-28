@@ -347,6 +347,28 @@ class WriterAgent:
                 system_prompt=prompts.SECTION_SYSTEM_PROMPT,
             )
             addition_full = addition.strip()
+            attempts = 0
+            while len(addition_full.split()) < words and attempts < 3:
+                remaining = words - len(addition_full.split())
+                continue_prompt = prompts.SECTION_CONTINUE_PROMPT.format(
+                    section_number=idx,
+                    section_title=title,
+                    role=role,
+                    deliverable=deliverable,
+                    budget=remaining,
+                    briefing_json=briefing_json,
+                    previous_section_recap=recap,
+                    existing_text=addition_full,
+                )
+                extra = self._call_llm(
+                    continue_prompt,
+                    fallback="",
+                    system_prompt=prompts.SECTION_SYSTEM_PROMPT,
+                ).strip()
+                if not extra:
+                    break
+                addition_full = f"{addition_full} {extra}".strip()
+                attempts += 1
             addition_limited = self._truncate_words(addition_full, words)
             if addition_limited and (
                 not text_parts or addition_limited != text_parts[-1]
