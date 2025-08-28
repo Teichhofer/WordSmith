@@ -251,21 +251,25 @@ class WriterAgent:
             print(f"Revising: 0/{self.iterations}", end="", flush=True)
         for iteration in range(1, self.iterations + 1):
             self.iteration = iteration
-            print(
-                f"\rRevising: {iteration}/{self.iterations}",
-                end="",
-                flush=True,
-            )
             final_text = self._load_iteration_text(iteration)
             revision_prompt = prompts.REVISION_PROMPT.format(
                 register=self.register,
                 variant=self.variant,
                 current_text=final_text,
             )
+            start = time.perf_counter()
             revised = self._call_llm(
                 revision_prompt,
                 fallback=final_text,
                 system_prompt=prompts.REVISION_SYSTEM_PROMPT,
+            )
+            elapsed = time.perf_counter() - start
+            tokens = len(revised.split())
+            tok_per_sec = tokens / (elapsed or 1e-8)
+            print(
+                f"\rRevising: {iteration}/{self.iterations}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
+                end="",
+                flush=True,
             )
             if revised.strip() != final_text.strip():
                 final_text = revised
@@ -325,11 +329,6 @@ class WriterAgent:
         print(f"Generating sections: 0/{total_sections}", end="", flush=True)
         for idx, (title, role, words, deliverable) in enumerate(allocated, start=1):
             self.iteration = idx
-            print(
-                f"\rGenerating sections: {idx}/{total_sections}",
-                end="",
-                flush=True,
-            )
             previous = text_parts[-1] if text_parts else ""
             recap = " ".join(previous.split()[-20:])
             section_prompt = prompts.SECTION_PROMPT.format(
@@ -341,11 +340,13 @@ class WriterAgent:
                 briefing_json=briefing_json,
                 previous_section_recap=recap,
             )
+            start = time.perf_counter()
             addition = self._call_llm(
                 section_prompt,
                 fallback=title,
                 system_prompt=prompts.SECTION_SYSTEM_PROMPT,
             )
+            elapsed = time.perf_counter() - start
             addition_full = addition.strip()
             attempts = 0
             while len(addition_full.split()) < words and attempts < 3:
@@ -360,11 +361,13 @@ class WriterAgent:
                     previous_section_recap=recap,
                     existing_text=addition_full,
                 )
+                start_cont = time.perf_counter()
                 extra = self._call_llm(
                     continue_prompt,
                     fallback="",
                     system_prompt=prompts.SECTION_SYSTEM_PROMPT,
                 ).strip()
+                elapsed += time.perf_counter() - start_cont
                 if not extra:
                     break
                 addition_full = f"{addition_full} {extra}".strip()
@@ -381,6 +384,13 @@ class WriterAgent:
                     self._save_text(current_text)
                     self._save_iteration_text(current_full, 1)
                     last_saved = current_text
+            tokens = len(addition_full.split())
+            tok_per_sec = tokens / (elapsed or 1e-8)
+            print(
+                f"\rGenerating sections: {idx}/{total_sections}: {tokens} tokens ({tok_per_sec:.2f} tok/s)",
+                end="",
+                flush=True,
+            )
         print()
         current_full = "\n\n".join(full_parts)
         if len(current_full.split()) < self.word_count and allocated:
