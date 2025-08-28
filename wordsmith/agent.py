@@ -382,7 +382,33 @@ class WriterAgent:
                     self._save_iteration_text(current_full, 1)
                     last_saved = current_text
         print()
-        return "\n\n".join(text_parts), "\n\n".join(full_parts)
+        current_full = "\n\n".join(full_parts)
+        if len(current_full.split()) < self.word_count and allocated:
+            title, role, _, deliverable = allocated[-1]
+            idx = len(allocated)
+            while len(current_full.split()) < self.word_count:
+                remaining = self.word_count - len(current_full.split())
+                recap = " ".join(current_full.split()[-20:])
+                continue_prompt = prompts.SECTION_CONTINUE_PROMPT.format(
+                    section_number=idx,
+                    section_title=title,
+                    role=role,
+                    deliverable=deliverable,
+                    budget=remaining,
+                    briefing_json=briefing_json,
+                    previous_section_recap=recap,
+                    existing_text=full_parts[-1],
+                )
+                extra = self._call_llm(
+                    continue_prompt,
+                    fallback="",
+                    system_prompt=prompts.SECTION_SYSTEM_PROMPT,
+                ).strip()
+                if not extra:
+                    break
+                full_parts[-1] = f"{full_parts[-1]} {extra}".strip()
+                current_full = "\n\n".join(full_parts)
+        return self._truncate_text(current_full), current_full
 
     # ------------------------------------------------------------------
     def _truncate_words(self, text: str, limit: int) -> str:
