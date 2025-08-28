@@ -68,7 +68,8 @@ SECTION_PROMPT = (
     "Briefing: {briefing_json}\n"
     "Bisheriger Kontext (Kurz-Recap): {previous_section_recap}\n"
     "Regeln: aktive Verben, keine Füllphrasen, natürliche Übergänge, keine erfundenen Fakten (Platzhalter bei Lücken).\n"
-    "Zielwortzahl: {budget}."
+    "Zielwortzahl: {budget}.\n"
+    "Gib ausschließlich den neu generierten Abschnittstext aus."
 )
 
 SECTION_CONTINUE_PROMPT = (

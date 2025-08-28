@@ -48,6 +48,7 @@ def test_section_prompt_mentions_briefing():
     )
     assert 'Briefing' in text
     assert 'Zielwortzahl' in text
+    assert 'neu generierten Abschnittstext' in text
 
 
 def test_text_type_fix_prompt_mentions_issues():
