@@ -167,6 +167,22 @@ def test_generate_sections_from_outline_extends_final_section(monkeypatch, tmp_p
     assert len(prompts_seen) == 3
 
 
+def test_generate_sections_from_outline_dedupes_repeated_text(monkeypatch, tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
+    writer = agent.WriterAgent('Topic', 4, iterations=0, config=cfg)
+    outline = '1. Intro | Rolle: Hook | Wortbudget: 4 | Liefergegenstand: Start'
+
+    responses = iter(['alpha beta', 'alpha beta gamma delta'])
+
+    def fake_call(self, prompt, *, fallback, system_prompt=None):
+        return next(responses)
+
+    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
+
+    limited, full = writer._generate_sections_from_outline(outline, '{}')
+    assert full.strip() == 'alpha beta gamma delta'
+
+
 def test_run_auto_creates_briefing_and_metadata(monkeypatch, tmp_path):
     cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'out')
     writer = agent.WriterAgent(
