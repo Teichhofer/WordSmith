@@ -520,7 +520,7 @@ class WriterAgent:
             return ""
 
         existing = " ".join(previous_sections).strip()
-        if existing and cleaned.startswith(existing):
+        while existing and cleaned.startswith(existing):
             cleaned = cleaned[len(existing) :].lstrip()
 
         if any(cleaned == part.strip() for part in previous_sections):
