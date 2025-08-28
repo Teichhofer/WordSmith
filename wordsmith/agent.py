@@ -65,6 +65,8 @@ class WriterAgent:
         self.sources_allowed = sources_allowed
         self.seo_keywords = seo_keywords
         self.iteration = 0
+        self.step_index = 0
+        self.step_task = ""
 
         self.config.ensure_dirs()
 
@@ -103,6 +105,8 @@ class WriterAgent:
 
         text: List[str] = []
         for step_index, step in enumerate(self.steps, start=1):
+            self.step_index = step_index
+            self.step_task = step.task
             # Ask the LLM for an optimal prompt for this step before running any
             # iterations.
             prompt = self._craft_prompt(step.task)
@@ -536,12 +540,16 @@ class WriterAgent:
 
         full_prompt = f"{combined_system}\n\n{prompt}".strip()
         iteration = self.iteration
+        step = getattr(self, "step_index", 0)
+        task = getattr(self, "step_task", "")
         # Log structured JSON to allow easier parsing and to keep entries on a single line
         self.llm_logger.info(
             json.dumps(
                 {
                     "time": datetime.now(timezone.utc).isoformat(),
                     "event": "prompt",
+                    "step": step,
+                    "task": task,
                     "iteration": iteration,
                     "text": full_prompt,
                 },
@@ -620,6 +628,8 @@ class WriterAgent:
                 {
                     "time": datetime.now(timezone.utc).isoformat(),
                     "event": "response",
+                    "step": step,
+                    "task": task,
                     "iteration": iteration,
                     "text": result,
                 },

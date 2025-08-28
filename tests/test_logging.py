@@ -32,5 +32,8 @@ def test_logging_records_iteration(tmp_path):
     run_log = (cfg.log_dir / cfg.log_file).read_text("utf-8")
     assert "iteration 1/1" in run_log
     llm_lines = (cfg.log_dir / cfg.llm_log_file).read_text("utf-8").splitlines()
-    iterations = {json.loads(line)["iteration"] for line in llm_lines}
+    parsed = [json.loads(line) for line in llm_lines]
+    iterations = {entry["iteration"] for entry in parsed}
+    steps = {entry.get("step") for entry in parsed}
     assert 1 in iterations
+    assert 1 in steps
