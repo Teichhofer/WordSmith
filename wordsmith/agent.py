@@ -248,8 +248,15 @@ class WriterAgent:
 
         self._save_iteration_text(final_text, 1)
 
+        if self.iterations:
+            print(f"Revising: 0/{self.iterations}", end="", flush=True)
         for iteration in range(1, self.iterations + 1):
             self.iteration = iteration
+            print(
+                f"\rRevising: {iteration}/{self.iterations}",
+                end="",
+                flush=True,
+            )
             final_text = self._load_iteration_text(iteration)
             revision_prompt = prompts.REVISION_PROMPT.format(
                 register=self.register,
@@ -268,6 +275,8 @@ class WriterAgent:
                     self._save_text(truncated)
                     last_saved = truncated
             self._save_iteration_text(final_text, iteration + 1)
+        if self.iterations:
+            print()
 
         meta = {
             "title": self.topic,
@@ -313,8 +322,15 @@ class WriterAgent:
         text_parts: List[str] = []
         full_parts: List[str] = []
         last_saved = ""
+        total_sections = len(allocated)
+        print(f"Generating sections: 0/{total_sections}", end="", flush=True)
         for idx, (title, role, words, deliverable) in enumerate(allocated, start=1):
             self.iteration = idx
+            print(
+                f"\rGenerating sections: {idx}/{total_sections}",
+                end="",
+                flush=True,
+            )
             previous = text_parts[-1] if text_parts else ""
             recap = " ".join(previous.split()[-20:])
             section_prompt = prompts.SECTION_PROMPT.format(
@@ -344,6 +360,7 @@ class WriterAgent:
                     self._save_text(current_text)
                     self._save_iteration_text(current_full, 1)
                     last_saved = current_text
+        print()
         return "\n\n".join(text_parts), "\n\n".join(full_parts)
 
     # ------------------------------------------------------------------
