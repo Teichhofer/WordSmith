@@ -43,6 +43,24 @@ def test_generate_uses_full_context(monkeypatch, tmp_path):
     assert gen_prompts[2] == expected_third
 
 
+def test_run_skips_duplicate_sections(monkeypatch, tmp_path):
+    cfg = Config(log_dir=tmp_path / 'logs', output_dir=tmp_path / 'output')
+
+    responses = iter(['crafted', 'one', 'one two', 'one two'])
+
+    def fake_call(self, prompt, *, fallback, system_prompt=None):
+        return next(responses)
+
+    monkeypatch.setattr(agent.WriterAgent, '_call_llm', fake_call)
+
+    writer = agent.WriterAgent('topic', 50, [agent.Step('step')], iterations=3, config=cfg)
+    final = writer.run()
+
+    assert final == 'one two'
+    saved = (cfg.output_dir / cfg.output_file).read_text().strip()
+    assert saved == 'one two'
+
+
 def test_call_llm_with_ollama(monkeypatch, tmp_path):
     cfg = Config(
         log_dir=tmp_path / 'logs',
