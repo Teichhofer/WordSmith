@@ -1,11 +1,15 @@
 # WordSmith
 
-This repository has been reset and currently contains only a dummy command-line interface placeholder.
+WordSmith operates solely in automatic mode. The CLI runs without any
+additional configuration and other modes have been removed from the
+documentation.
 
-## Usage
+## Automatic Mode
 
-Run the CLI placeholder:
+Execute the CLI in its automatic mode:
 
 ```bash
 python cli.py
 ```
+
+This command starts WordSmith using the built-in defaults.
