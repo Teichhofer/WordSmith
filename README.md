@@ -28,3 +28,5 @@ python cli.py
 ```
 
 This command executes the entire pipeline using the built‑in defaults.
+
+For a comprehensive German-language guide to producing high-quality deterministic text in automatic mode, see [docs/automatikmodus.md](docs/automatikmodus.md).
