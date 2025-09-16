@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from . import prompts
+
 
 DEFAULT_LLM_PROVIDER: str = "ollama"
 OLLAMA_TIMEOUT_SECONDS: int = 3600
@@ -50,12 +52,7 @@ class Config:
     llm: LLMParameters = field(default_factory=LLMParameters)
     context_length: int = 4096
     token_limit: int = 1024
-    system_prompt: str = (
-        "Du bist ein präziser deutschsprachiger Fachtexter. Du erfindest "
-        "keine Fakten. Bei fehlenden Daten nutzt du Platzhalter in eckigen "
-        "Klammern. Deine Texte sind klar strukturiert, aktiv formuliert, "
-        "redundanzarm und adressatengerecht."
-    )
+    system_prompt: str = field(default_factory=lambda: prompts.SYSTEM_PROMPT)
     word_count: int = 0
 
     def __post_init__(self) -> None:
