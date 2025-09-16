@@ -160,6 +160,69 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path, capsys):
     assert metadata["compliance_checks"] == compliance_report["checks"]
 
 
+def test_iterations_short_option_runs_pipeline(tmp_path):
+    output_dir = tmp_path / "output"
+    logs_dir = tmp_path / "logs"
+    args = [
+        "automatikmodus",
+        "--title",
+        "Alias-Test",
+        "--content",
+        "Kurzer Hinweis.",
+        "--text-type",
+        "Blogartikel",
+        "--word-count",
+        "360",
+        "-n",
+        "3",
+        "--llm-provider",
+        "provider-x",
+        "--output-dir",
+        str(output_dir),
+        "--logs-dir",
+        str(logs_dir),
+    ]
+
+    exit_code = main(args)
+
+    assert exit_code == 0
+    assert (output_dir / "iteration_04.txt").exists()
+    assert (output_dir / "reflection_04.txt").exists()
+
+    run_entries = [
+        json.loads(line)
+        for line in (logs_dir / "run.log").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    completion_entry = next(entry for entry in run_entries if entry["step"] == "complete")
+    assert completion_entry["data"]["iterations"] == 3
+    revision_steps = {
+        entry["step"] for entry in run_entries if entry["step"].startswith("revision_")
+    }
+    assert revision_steps == {"revision_01", "revision_02", "revision_03"}
+
+
+def test_iterations_argument_rejects_negative_value():
+    args = [
+        "automatikmodus",
+        "--title",
+        "Negativ",
+        "--content",
+        "Inhalt",
+        "--text-type",
+        "Blog",
+        "--word-count",
+        "200",
+        "--iterations",
+        "-1",
+    ]
+
+    with pytest.raises(SystemExit) as exc:
+        main(args)
+
+    assert exc.value.code == 2
+
+
 def test_invalid_sources_allowed_value_raises_help():
     args = [
         "automatikmodus",
