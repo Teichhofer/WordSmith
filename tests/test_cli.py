@@ -107,13 +107,38 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path, capsys):
     assert "compliance" in briefing
     assert briefing["compliance"]["sources_mode"] == "zugelassen"
 
-    run_log = (logs_dir / "run.log").read_text(encoding="utf-8")
-    assert "Briefing normalisiert" in run_log
-    assert "Revision 02" in run_log
-    assert "Compliance-Checks abgeschlossen" in run_log
+    run_entries = [
+        json.loads(line)
+        for line in (logs_dir / "run.log").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert any(entry["step"] == "briefing" for entry in run_entries)
+    briefing_entry = next(entry for entry in run_entries if entry["step"] == "briefing")
+    assert "briefing.json" in briefing_entry.get("artifacts", [])
 
-    llm_log = (logs_dir / "llm.log").read_text(encoding="utf-8")
-    assert "prompts" in llm_log
+    metadata_entry = next(entry for entry in run_entries if entry["step"] == "metadata")
+    assert metadata_entry["data"]["rubric_passed"] is True
+    assert "metadata.json" in metadata_entry.get("artifacts", [])
+
+    revision_steps = {
+        entry["step"] for entry in run_entries if entry["step"].startswith("revision_")
+    }
+    assert revision_steps == {"revision_01", "revision_02"}
+
+    completion_entry = next(entry for entry in run_entries if entry["step"] == "complete")
+    assert completion_entry["status"] == "succeeded"
+    assert completion_entry["data"]["iterations"] == 2
+
+    llm_entries = [
+        json.loads(line)
+        for line in (logs_dir / "llm.log").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert llm_entries
+    llm_entry = llm_entries[0]
+    assert llm_entry["stage"] == "pipeline"
+    assert llm_entry["prompts"]["outline"] == prompts.OUTLINE_PROMPT.strip()
+    assert llm_entry["events"][0]["step"] == "start"
 
     compliance_report = json.loads(
         (output_dir / "compliance.json").read_text(encoding="utf-8")

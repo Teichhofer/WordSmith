@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass, field
 from difflib import SequenceMatcher
 from itertools import cycle
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import Any, Iterable, List, Sequence
 
 
 _COMPLIANCE_PLACEHOLDERS: tuple[str, ...] = (
@@ -87,6 +87,7 @@ class WriterAgent:
     _sources_sentence_used: bool = field(init=False, default=False)
     _keywords_used: set[str] = field(init=False, default_factory=set)
     _compliance_audit: List[dict] = field(init=False, default_factory=list)
+    _run_events: List[dict[str, Any]] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -111,17 +112,53 @@ class WriterAgent:
         self._keywords_used.clear()
         self._idea_bullets = []
         self._compliance_audit.clear()
+        self._run_events.clear()
+
+        self._record_run_event(
+            "start",
+            "Automatikmodus gestartet",
+            status="started",
+            data={
+                "topic": self.topic,
+                "word_count": self.word_count,
+                "iterations": self.iterations,
+            },
+        )
 
         briefing = self._normalize_briefing()
         self._write_json(self.output_dir / "briefing.json", briefing)
+        self._record_run_event(
+            "briefing",
+            "Briefing normalisiert",
+            artifacts=[self.output_dir / "briefing.json"],
+            data={
+                "messages": len(briefing.get("messages", [])),
+                "key_terms": len(briefing.get("key_terms", [])),
+            },
+        )
 
         idea = self._improve_idea(briefing)
         self._write_text(self.output_dir / "idea.txt", idea)
+        self._record_run_event(
+            "idea",
+            "Idee überarbeitet",
+            artifacts=[self.output_dir / "idea.txt"],
+            data={"bullets": len(self._idea_bullets)},
+        )
 
         outline_sections = self._create_outline(briefing)
         outline_text = self._format_outline(outline_sections)
         self._write_text(self.output_dir / "outline.txt", outline_text)
         self._write_text(self.output_dir / "iteration_00.txt", outline_text)
+        self._record_run_event(
+            "outline",
+            "Outline erstellt",
+            artifacts=[
+                self.output_dir / "outline.txt",
+                self.output_dir / "iteration_00.txt",
+            ],
+            data={"sections": len(outline_sections)},
+        )
 
         draft = self._generate_sections(outline_sections, briefing)
         draft = self._enforce_length(draft)
@@ -150,6 +187,22 @@ class WriterAgent:
         else:
             rubric_passed = True
 
+        self.steps.append("draft")
+        self._record_run_event(
+            "draft",
+            "Initialer Entwurf erstellt",
+            artifacts=[
+                self.output_dir / "current_text.txt",
+                self.output_dir / "iteration_01.txt",
+            ],
+            data={"rubric_passed": rubric_passed},
+        )
+        self._record_run_event(
+            "text_type_review",
+            "Texttypprüfung abgeschlossen",
+            data={"rubric_passed": rubric_passed},
+        )
+
         for iteration in range(1, self.iterations + 1):
             base_draft, _ = self._extract_compliance_note(draft)
             revised = self._revise_draft(draft, iteration, briefing)
@@ -172,9 +225,50 @@ class WriterAgent:
                     self.output_dir / f"reflection_{iteration + 1:02d}.txt",
                     reflection,
                 )
+            self.steps.append(f"revision_{iteration:02d}")
+            self._record_run_event(
+                f"revision_{iteration:02d}",
+                f"Revision {iteration:02d} abgeschlossen",
+                artifacts=[
+                    self.output_dir / f"iteration_{iteration + 1:02d}.txt",
+                    self.output_dir / "current_text.txt",
+                ],
+                data={"iteration": iteration},
+            )
+            if reflection:
+                self._record_run_event(
+                    f"reflection_{iteration + 1:02d}",
+                    f"Reflexion {iteration + 1:02d} gespeichert",
+                    artifacts=[
+                        self.output_dir / f"reflection_{iteration + 1:02d}.txt"
+                    ],
+                    data={"iteration": iteration + 1},
+                )
 
+        final_word_count = self._count_words(draft)
         self._write_metadata(draft, rubric_passed)
+        self._record_run_event(
+            "metadata",
+            "Metadaten gespeichert",
+            artifacts=[self.output_dir / "metadata.json"],
+            data={
+                "final_word_count": final_word_count,
+                "rubric_passed": rubric_passed,
+            },
+        )
         self._write_compliance_report()
+        self._record_run_event(
+            "compliance_report",
+            "Compliance-Report gespeichert",
+            artifacts=[self.output_dir / "compliance.json"],
+            data={"checks": len(self._compliance_audit)},
+        )
+        self._record_run_event(
+            "complete",
+            "Automatikmodus erfolgreich abgeschlossen",
+            status="succeeded",
+            data={"iterations": self.iterations, "steps": list(self.steps)},
+        )
         self._write_logs(briefing, outline_sections, rubric_passed)
         return draft
 
@@ -954,28 +1048,15 @@ class WriterAgent:
         rubric_passed: bool,
     ) -> None:
         run_log = self.logs_dir / "run.log"
-        log_lines = [
-            "Automatikmodus gestartet",
-            f"Thema: {self.topic}",
-            f"Zielwortzahl: {self.word_count}",
-            "Briefing normalisiert",
-            "Idee überarbeitet",
-            "Outline generiert und bereinigt",
-            "Abschnitte ausformuliert",
-            "Compliance-Checks abgeschlossen",
-            (
-                "Texttypprüfung bestanden"
-                if rubric_passed
-                else "Texttypprüfung mit Nachbesserungen abgeschlossen"
-            ),
-        ]
-        for iteration in range(1, self.iterations + 1):
-            log_lines.append(f"Revision {iteration:02d} abgeschlossen")
-        log_lines.append("Automatikmodus erfolgreich abgeschlossen")
-        run_log.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
+        run_entries = [dict(entry) for entry in self._run_events]
+        for index, entry in enumerate(run_entries):
+            entry.setdefault("sequence", index)
+        run_lines = [json.dumps(entry, ensure_ascii=False) for entry in run_entries]
+        run_log.write_text("\n".join(run_lines) + "\n", encoding="utf-8")
 
         llm_log = self.logs_dir / "llm.log"
         llm_entry = {
+            "stage": "pipeline",
             "provider": self.config.llm_provider,
             "parameters": asdict(self.config.llm),
             "system_prompt": prompts.SYSTEM_PROMPT,
@@ -985,6 +1066,7 @@ class WriterAgent:
             "text_type": self.text_type,
             "messages": briefing["messages"],
             "outline": [asdict(section) for section in outline_sections],
+            "rubric_passed": rubric_passed,
             "prompts": {
                 "briefing": prompts.BRIEFING_PROMPT.strip(),
                 "idea": prompts.IDEA_IMPROVEMENT_PROMPT.strip(),
@@ -996,8 +1078,35 @@ class WriterAgent:
                 "revision": prompts.REVISION_PROMPT.strip(),
                 "reflection": prompts.REFLECTION_PROMPT.strip(),
             },
+            "events": run_entries,
         }
         llm_log.write_text(
-            json.dumps(llm_entry, ensure_ascii=False, indent=2) + "\n",
+            json.dumps(llm_entry, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+
+    def _record_run_event(
+        self,
+        step: str,
+        message: str,
+        *,
+        status: str = "completed",
+        artifacts: Sequence[Path | str] | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        event: dict[str, Any] = {"step": step, "status": status, "message": message}
+        if artifacts:
+            event["artifacts"] = [self._format_artifact_path(Path(artifact)) for artifact in artifacts]
+        if data:
+            event["data"] = data
+        event["sequence"] = len(self._run_events)
+        self._run_events.append(event)
+
+    def _format_artifact_path(self, path: Path) -> str:
+        try:
+            return str(path.relative_to(self.output_dir))
+        except ValueError:
+            try:
+                return str(path.relative_to(self.logs_dir))
+            except ValueError:
+                return str(path)
