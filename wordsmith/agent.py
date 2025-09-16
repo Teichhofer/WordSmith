@@ -9,11 +9,28 @@ rather than open-ended text generation.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from difflib import SequenceMatcher
 from itertools import cycle
 from pathlib import Path
 from typing import Iterable, List, Sequence
+
+
+_COMPLIANCE_PLACEHOLDERS: tuple[str, ...] = (
+    "[KLÄREN",
+    "[KENNZAHL]",
+    "[QUELLE]",
+    "[DATUM]",
+    "[ZAHL]",
+)
+
+_SENSITIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?<!\[ENTFERNT: )\b(?P<term>vertraulich(?:keit|e[nr]?|en)?)\b", re.IGNORECASE),
+    re.compile(r"(?<!\[ENTFERNT: )\b(?P<term>geheim(?:nis|e[nr]?|en)?)\b", re.IGNORECASE),
+    re.compile(r"(?<!\[ENTFERNT: )\b(?P<term>sensibel(?:e[nr]?|n)?)\b", re.IGNORECASE),
+    re.compile(r"(?<!\[ENTFERNT: )\b(?P<term>personenbezogene?n? daten)\b", re.IGNORECASE),
+)
 
 
 @dataclass
@@ -69,6 +86,7 @@ class WriterAgent:
     _placeholder_inserted: bool = field(init=False, default=False)
     _sources_sentence_used: bool = field(init=False, default=False)
     _keywords_used: set[str] = field(init=False, default_factory=set)
+    _compliance_audit: List[dict] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -92,6 +110,7 @@ class WriterAgent:
         self._sources_sentence_used = False
         self._keywords_used.clear()
         self._idea_bullets = []
+        self._compliance_audit.clear()
 
         briefing = self._normalize_briefing()
         self._write_json(self.output_dir / "briefing.json", briefing)
@@ -106,15 +125,25 @@ class WriterAgent:
 
         draft = self._generate_sections(outline_sections, briefing)
         draft = self._enforce_length(draft)
+        draft = self._run_compliance(
+            "draft", draft, ensure_sources=True, annotation_label="pipeline"
+        )
         self._write_text(self.output_dir / "current_text.txt", draft)
         self._write_text(self.output_dir / "iteration_01.txt", draft)
 
         rubric_passed, issues = self._check_text_type(draft, briefing)
         if issues:
-            fixed = self._apply_text_type_fix(draft, issues, briefing)
-            if not self._similar_enough(draft, fixed):
-                fixed = self._blend_with_original(draft, fixed)
-            draft = self._enforce_length(fixed)
+            draft_body, _ = self._extract_compliance_note(draft)
+            fixed = self._apply_text_type_fix(draft_body, issues, briefing)
+            if not self._similar_enough(draft_body, fixed):
+                fixed = self._blend_with_original(draft_body, fixed)
+            fixed = self._enforce_length(fixed)
+            draft = self._run_compliance(
+                "draft_fix",
+                fixed,
+                ensure_sources=True,
+                annotation_label="pipeline",
+            )
             self._write_text(self.output_dir / "current_text.txt", draft)
             self._write_text(self.output_dir / "iteration_01.txt", draft)
             rubric_passed, _ = self._check_text_type(draft, briefing)
@@ -122,10 +151,19 @@ class WriterAgent:
             rubric_passed = True
 
         for iteration in range(1, self.iterations + 1):
+            base_draft, _ = self._extract_compliance_note(draft)
             revised = self._revise_draft(draft, iteration, briefing)
-            if not self._similar_enough(draft, revised, min_jaccard=0.75, min_ratio=0.88):
-                revised = self._blend_with_original(draft, revised)
-            draft = self._enforce_length(revised)
+            if not self._similar_enough(
+                base_draft, revised, min_jaccard=0.75, min_ratio=0.88
+            ):
+                revised = self._blend_with_original(base_draft, revised)
+            revised = self._enforce_length(revised)
+            draft = self._run_compliance(
+                f"revision_{iteration:02d}",
+                revised,
+                ensure_sources=True,
+                annotation_label="pipeline",
+            )
             self._write_text(self.output_dir / f"iteration_{iteration + 1:02d}.txt", draft)
             self._write_text(self.output_dir / "current_text.txt", draft)
             reflection = self._reflection_notes(iteration)
@@ -136,6 +174,7 @@ class WriterAgent:
                 )
 
         self._write_metadata(draft, rubric_passed)
+        self._write_compliance_report()
         self._write_logs(briefing, outline_sections, rubric_passed)
         return draft
 
@@ -166,6 +205,14 @@ class WriterAgent:
         if self.seo_keywords:
             briefing["seo_keywords"] = list(self.seo_keywords)
 
+        briefing["compliance"] = self._build_briefing_compliance()
+        self._record_compliance(
+            "briefing",
+            placeholders=True,
+            sensitive_hits=0,
+            sources_detail=briefing["compliance"]["sources_mode"],
+            note_present=False,
+        )
         self.steps.append("briefing")
         return briefing
 
@@ -199,6 +246,7 @@ class WriterAgent:
                 summary,
             ]
         )
+        idea_text = self._run_compliance("idea", idea_text, annotation_label="idea")
         self.steps.append("idea")
         return idea_text
 
@@ -350,7 +398,10 @@ class WriterAgent:
         return adjusted
 
     def _format_outline(self, sections: Sequence[OutlineSection]) -> str:
-        return "\n".join(section.format_line() for section in sections)
+        outline_text = "\n".join(section.format_line() for section in sections)
+        return self._run_compliance(
+            "outline", outline_text, annotation_label="outline"
+        )
 
     def _generate_sections(self, sections: Sequence[OutlineSection], briefing: dict) -> str:
         paragraphs: List[str] = []
@@ -366,6 +417,154 @@ class WriterAgent:
             paragraphs.append(section_text)
             previous_summary = summary
         return "\n\n".join(paragraphs)
+
+    # ------------------------------------------------------------------
+    # Compliance helpers
+    # ------------------------------------------------------------------
+    def _build_briefing_compliance(self) -> dict:
+        sources_mode = "zugelassen" if self.sources_allowed else "gesperrt"
+        return {
+            "policy": "Keine erfundenen Fakten.",
+            "placeholders": [
+                "[KLÄREN: ...]",
+                "[KENNZAHL]",
+                "[QUELLE]",
+                "[DATUM]",
+                "[ZAHL]",
+            ],
+            "sources_mode": sources_mode,
+            "sensitive_handling": "Sensible Inhalte als [ENTFERNT: sensibler inhalt] kennzeichnen.",
+        }
+
+    def _extract_compliance_note(self, text: str) -> tuple[str, str]:
+        stripped = text.strip()
+        if "[COMPLIANCE-" not in stripped:
+            return stripped, ""
+        body, _, note = stripped.rpartition("\n\n")
+        if note.startswith("[COMPLIANCE-"):
+            return body, note
+        return stripped, ""
+
+    def _contains_placeholder(self, text: str) -> bool:
+        return any(marker in text for marker in _COMPLIANCE_PLACEHOLDERS)
+
+    def _add_placeholder(self, text: str, stage: str) -> str:
+        placeholder = "[KLÄREN: Daten werden nachgereicht.]"
+        if not text:
+            return placeholder
+        if stage == "idea" and "\n" in text:
+            return text.rstrip() + f"\n- {placeholder}"
+        if "\n" in text:
+            return text.rstrip() + "\n\n" + placeholder
+        return text.rstrip() + " " + placeholder
+
+    def _build_compliance_note(self, label: str) -> str:
+        sources_state = "erlaubt" if self.sources_allowed else "gesperrt"
+        return (
+            f"[COMPLIANCE-{label.upper()}] Keine erfundenen Fakten; offene Angaben bleiben "
+            "durch Platzhalter wie [KLÄREN: ...] und [KENNZAHL] markiert; "
+            "sensible Inhalte werden als [ENTFERNT: sensibler inhalt] gekennzeichnet; "
+            f"Quellenmodus: {sources_state}."
+        )
+
+    def _mask_sensitive_content(self, text: str) -> tuple[str, int]:
+        replacements = 0
+
+        def _replace(match: re.Match[str]) -> str:
+            nonlocal replacements
+            term = match.group("term")
+            replacements += 1
+            return f"[ENTFERNT: {term.lower()}]"
+
+        updated = text
+        for pattern in _SENSITIVE_PATTERNS:
+            updated = pattern.sub(_replace, updated)
+        return updated, replacements
+
+    def _ensure_sources_policy(self, text: str) -> tuple[str, str]:
+        if self.sources_allowed:
+            cleaned = re.sub(
+                r"\s*Quellen:\s*(?:-?\s*\[Quelle:[^\]]+\][^\n]*)?(?:\n-?\s*\[Quelle:[^\]]+\][^\n]*)*",
+                "",
+                text,
+                flags=re.IGNORECASE,
+            )
+            cleaned = cleaned.strip()
+            if cleaned:
+                cleaned += "\n\n"
+            cleaned += "Quellen:\n- [Quelle: Freigabe steht aus]"
+            return cleaned, "Quellenliste formatiert"
+
+        placeholder = "[KLÄREN: Quellenfreigabe ausstehend]"
+        lines = text.splitlines()
+        filtered_lines = [
+            line
+            for line in lines
+            if not line.strip().startswith("Quellen:")
+            and not line.strip().startswith("- [Quelle:")
+        ]
+        cleaned = "\n".join(filtered_lines).strip()
+        if placeholder not in cleaned:
+            cleaned = (cleaned.rstrip() + "\n\n" + placeholder) if cleaned else placeholder
+            detail = "Quellen blockiert"
+        else:
+            detail = "Quellenblock bestätigt"
+        return cleaned, detail
+
+    def _run_compliance(
+        self,
+        stage: str,
+        text: str,
+        *,
+        ensure_sources: bool = False,
+        annotation_label: str | None = None,
+    ) -> str:
+        body, _ = self._extract_compliance_note(text)
+        updated, sensitive_hits = self._mask_sensitive_content(body)
+        if not self._contains_placeholder(updated):
+            updated = self._add_placeholder(updated, stage)
+        sources_detail = "nicht erforderlich"
+        if ensure_sources:
+            updated, sources_detail = self._ensure_sources_policy(updated)
+        note = self._build_compliance_note(annotation_label or stage)
+        if note not in updated:
+            updated = updated.rstrip() + "\n\n" + note
+        placeholders_present = self._contains_placeholder(updated)
+        self._record_compliance(
+            stage,
+            placeholders=placeholders_present,
+            sensitive_hits=sensitive_hits,
+            sources_detail=sources_detail,
+            note_present=True,
+        )
+        return updated
+
+    def _record_compliance(
+        self,
+        stage: str,
+        *,
+        placeholders: bool,
+        sensitive_hits: int,
+        sources_detail: str,
+        note_present: bool,
+    ) -> None:
+        self._compliance_audit.append(
+            {
+                "stage": stage,
+                "placeholders_present": placeholders,
+                "sensitive_replacements": sensitive_hits,
+                "sources": sources_detail,
+                "compliance_note": note_present,
+            }
+        )
+
+    def _write_compliance_report(self) -> None:
+        report = {
+            "topic": self.topic,
+            "sources_allowed": self.sources_allowed,
+            "checks": self._compliance_audit,
+        }
+        self._write_json(self.output_dir / "compliance.json", report)
 
     def _compose_section(
         self,
@@ -534,23 +733,67 @@ class WriterAgent:
         return len([token for token in text.split() if token.strip()])
 
     def _enforce_length(self, text: str) -> str:
-        words = text.split()
-        if not words:
-            return text
+        body, note = self._extract_compliance_note(text)
+        base_text = (body if body else text).strip()
+        sentinel = "<<NEWLINE>>"
+
+        def to_tokens(value: str) -> List[str]:
+            return [token for token in value.replace("\n", f" {sentinel} ").split() if token]
+
+        def from_tokens(tokens: List[str]) -> str:
+            lines: List[str] = []
+            current: List[str] = []
+            for token in tokens:
+                if token == sentinel:
+                    lines.append(" ".join(current).strip())
+                    current = []
+                else:
+                    current.append(token)
+            lines.append(" ".join(current).strip())
+            return "\n".join(lines).strip()
+
+        tokens = to_tokens(base_text)
+        word_tokens = [token for token in tokens if token != sentinel]
+        if not word_tokens:
+            result = base_text
+            if note and result:
+                return result + "\n\n" + note
+            if note:
+                return note
+            return base_text
         min_words = int(self.word_count * 0.97)
         max_words = int(self.word_count * 1.03)
-        if len(words) > max_words:
-            text = " ".join(words[:max_words])
-        elif len(words) < min_words:
+        if len(word_tokens) > max_words:
+            trimmed: List[str] = []
+            kept = 0
+            for token in tokens:
+                if token == sentinel:
+                    trimmed.append(token)
+                    continue
+                if kept >= max_words:
+                    break
+                trimmed.append(token)
+                kept += 1
+            tokens = trimmed
+        elif len(word_tokens) < min_words:
+            adjusted_text = base_text
             filler_terms = self._take_terms(3)
             if filler_terms:
-                addition = (
-                    f"Zusätzliche Details zu {', '.join(filler_terms)} verdeutlichen den Nutzen."
-                )
+                addition = f"Zusätzliche Details zu {', '.join(filler_terms)} verdeutlichen den Nutzen."
             else:
                 addition = f"Zusätzliche Details verdeutlichen den Nutzen von {self.topic}."
-            text = text.strip() + " " + addition
-        return self._ensure_variant(text.strip())
+            while len(word_tokens) < min_words:
+                adjusted_text = (adjusted_text + " " + addition).strip()
+                tokens = to_tokens(adjusted_text)
+                word_tokens = [token for token in tokens if token != sentinel]
+        adjusted = from_tokens(tokens)
+        adjusted = self._ensure_variant(adjusted.strip())
+        if note:
+            combined = adjusted.strip()
+            if combined:
+                return combined + "\n\n" + note
+            return note
+        return adjusted
 
     # ------------------------------------------------------------------
     # Quality checks and revisions
@@ -649,7 +892,8 @@ class WriterAgent:
         return text.replace(" Sie ", " du ")
 
     def _revise_draft(self, text: str, iteration: int, briefing: dict) -> str:
-        sentences = self._split_sentences(text)
+        body, _ = self._extract_compliance_note(text)
+        sentences = self._split_sentences(body)
         unique_sentences: List[str] = []
         seen = set()
         for sentence in sentences:
@@ -699,6 +943,7 @@ class WriterAgent:
             "sources_allowed": self.sources_allowed,
             "llm_provider": self.config.llm_provider,
             "system_prompt": prompts.SYSTEM_PROMPT,
+            "compliance_checks": self._compliance_audit,
         }
         self._write_json(self.output_dir / "metadata.json", metadata)
 
@@ -717,6 +962,7 @@ class WriterAgent:
             "Idee überarbeitet",
             "Outline generiert und bereinigt",
             "Abschnitte ausformuliert",
+            "Compliance-Checks abgeschlossen",
             (
                 "Texttypprüfung bestanden"
                 if rubric_passed
