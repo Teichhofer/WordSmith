@@ -15,6 +15,12 @@ DEFAULT_AUDIENCE = "Allgemeine Leserschaft mit Grundkenntnissen"
 DEFAULT_TONE = "sachlich-lebendig"
 DEFAULT_REGISTER = "Sie"
 DEFAULT_VARIANT = "DE-DE"
+DEFAULT_CONSTRAINTS = "Keine zusätzlichen Vorgaben"
+DEFAULT_SOURCES_ALLOWED = False
+DEFAULT_SEO_KEYWORDS: tuple[str, ...] = ()
+
+VALID_REGISTERS = {"du": "Du", "sie": "Sie"}
+VALID_VARIANTS = {"DE-DE", "DE-AT", "DE-CH"}
 
 
 def _parse_bool(value: str) -> bool:
@@ -33,7 +39,59 @@ def _parse_bool(value: str) -> bool:
 def _parse_keywords(value: str) -> List[str]:
     if not value:
         return []
-    return [keyword.strip() for keyword in value.split(",") if keyword.strip()]
+    keywords: List[str] = []
+    seen = set()
+    for keyword in value.split(","):
+        cleaned = keyword.strip()
+        if not cleaned:
+            continue
+        lowered = cleaned.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        keywords.append(cleaned)
+    return keywords
+
+
+def _parse_audience(value: str) -> str:
+    value = value.strip()
+    return value or DEFAULT_AUDIENCE
+
+
+def _parse_tone(value: str) -> str:
+    value = value.strip()
+    return value or DEFAULT_TONE
+
+
+def _parse_register(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return DEFAULT_REGISTER
+    normalised = value.lower()
+    if normalised not in VALID_REGISTERS:
+        valid_values = ", ".join(sorted(VALID_REGISTERS.values()))
+        raise argparse.ArgumentTypeError(
+            f"Ungültiges Register '{value}'. Erlaubt sind: {valid_values}."
+        )
+    return VALID_REGISTERS[normalised]
+
+
+def _parse_variant(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return DEFAULT_VARIANT
+    normalised = value.upper()
+    if normalised not in VALID_VARIANTS:
+        valid_values = ", ".join(sorted(VALID_VARIANTS))
+        raise argparse.ArgumentTypeError(
+            f"Ungültige Sprachvariante '{value}'. Erlaubt sind: {valid_values}."
+        )
+    return normalised
+
+
+def _parse_constraints(value: str) -> str:
+    value = value.strip()
+    return value or DEFAULT_CONSTRAINTS
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -80,40 +138,45 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     automatik_parser.add_argument(
         "--audience",
+        type=_parse_audience,
         default=DEFAULT_AUDIENCE,
         help="Adressierte Zielgruppe (Default: allgemeine Leserschaft).",
     )
     automatik_parser.add_argument(
         "--tone",
+        type=_parse_tone,
         default=DEFAULT_TONE,
         help="Gewünschter Tonfall, z. B. sachlich, lebendig.",
     )
     automatik_parser.add_argument(
         "--register",
+        type=_parse_register,
         default=DEFAULT_REGISTER,
         help="Sprachregister bzw. Anrede (Du/Sie).",
     )
     automatik_parser.add_argument(
         "--variant",
+        type=_parse_variant,
         default=DEFAULT_VARIANT,
         help="Sprachvariante, z. B. DE-DE, DE-AT oder DE-CH.",
     )
     automatik_parser.add_argument(
         "--constraints",
-        default="",
+        type=_parse_constraints,
+        default=DEFAULT_CONSTRAINTS,
         help="Zusätzliche Muss-/Kann-Vorgaben für den Text.",
     )
     automatik_parser.add_argument(
         "--sources-allowed",
         type=_parse_bool,
-        default=False,
+        default=DEFAULT_SOURCES_ALLOWED,
         dest="sources_allowed",
         help="Ob Quellenangaben erlaubt sind (ja/nein).",
     )
     automatik_parser.add_argument(
         "--seo-keywords",
         type=_parse_keywords,
-        default=[],
+        default=DEFAULT_SEO_KEYWORDS,
         dest="seo_keywords",
         help="Kommagetrennte Liste relevanter SEO-Schlüsselwörter.",
     )
