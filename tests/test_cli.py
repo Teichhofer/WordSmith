@@ -66,24 +66,45 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path, capsys):
     assert exit_code == 0
     assert "Strategische Roadmap" in captured.out
 
-    current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
-    assert "Strategische Roadmap" in current_text
-    assert "Systemprompt" in current_text
+    idea_text = (output_dir / "idea.txt").read_text(encoding="utf-8")
+    assert "Überarbeitete Idee" in idea_text
+    assert "-" in idea_text
 
-    iteration_file = output_dir / "iteration_02.txt"
-    assert iteration_file.exists()
+    outline_text = (output_dir / "outline.txt").read_text(encoding="utf-8")
+    assert "Budget" in outline_text
+    assert "Rolle" in outline_text
+
+    current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
+    assert "## 1." in current_text
+    assert "Strategische Roadmap" in current_text
+    assert "[KENNZAHL]" in current_text
+    assert "Nutze die Impulse" in current_text
+
+    assert (output_dir / "iteration_00.txt").exists()
+    assert (output_dir / "iteration_01.txt").exists()
+    assert (output_dir / "iteration_02.txt").exists()
+    assert (output_dir / "iteration_03.txt").exists()
+
+    assert (output_dir / "reflection_02.txt").exists()
+    assert (output_dir / "reflection_03.txt").exists()
 
     metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
     assert metadata["title"] == "Strategische Roadmap"
     assert metadata["sources_allowed"] is True
     assert metadata["system_prompt"] == prompts.SYSTEM_PROMPT
+    assert metadata["rubric_passed"] is True
 
     briefing = json.loads((output_dir / "briefing.json").read_text(encoding="utf-8"))
     assert "seo_keywords" in briefing
     assert "roadmap" in briefing["seo_keywords"]
+    assert briefing["key_terms"]
 
-    assert (logs_dir / "run.log").exists()
-    assert (logs_dir / "llm.log").exists()
+    run_log = (logs_dir / "run.log").read_text(encoding="utf-8")
+    assert "Briefing normalisiert" in run_log
+    assert "Revision 02" in run_log
+
+    llm_log = (logs_dir / "llm.log").read_text(encoding="utf-8")
+    assert "prompts" in llm_log
 
 
 def test_invalid_sources_allowed_value_raises_help():
