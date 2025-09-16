@@ -1,3 +1,4 @@
+import io
 import json
 import sys
 from pathlib import Path
@@ -16,6 +17,7 @@ from cli import (
 )
 from wordsmith import prompts
 from wordsmith.config import DEFAULT_LLM_PROVIDER
+from wordsmith.ollama import OllamaModel
 
 
 def test_automatikmodus_requires_arguments():
@@ -99,6 +101,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path, capsys):
     assert metadata["sources_allowed"] is True
     assert metadata["system_prompt"] == prompts.SYSTEM_PROMPT
     assert metadata["rubric_passed"] is True
+    assert metadata["llm_model"] is None
     assert metadata["compliance_checks"]
 
     briefing = json.loads((output_dir / "briefing.json").read_text(encoding="utf-8"))
@@ -140,6 +143,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path, capsys):
     assert llm_entry["stage"] == "pipeline"
     assert llm_entry["prompts"]["outline"] == prompts.OUTLINE_PROMPT.strip()
     assert llm_entry["events"][0]["step"] == "start"
+    assert llm_entry.get("model") is None
 
     compliance_report = json.loads(
         (output_dir / "compliance.json").read_text(encoding="utf-8")
@@ -216,9 +220,14 @@ def test_invalid_variant_value_causes_error():
     assert exc.value.code == 2
 
 
-def test_defaults_applied_for_missing_extended_arguments(tmp_path):
+def test_defaults_applied_for_missing_extended_arguments(tmp_path, monkeypatch):
     output_dir = tmp_path / "output"
     logs_dir = tmp_path / "logs"
+    monkeypatch.setattr(
+        "wordsmith.ollama.OllamaClient.list_models",
+        lambda self: [OllamaModel(name="mistral"), OllamaModel(name="llama2")],
+    )
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
     args = [
         "automatikmodus",
         "--title",
@@ -261,6 +270,7 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path):
     assert metadata["variant"] == DEFAULT_VARIANT
     assert metadata["keywords"] == []
     assert metadata["llm_provider"] == DEFAULT_LLM_PROVIDER
+    assert metadata["llm_model"] == "mistral"
     assert metadata["compliance_checks"]
 
     current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
@@ -281,3 +291,74 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path):
     ]
     defaults_event = next(entry for entry in run_entries if entry["step"] == "input_defaults")
     assert "audience" in defaults_event["data"]["defaults"]
+
+
+def test_ollama_model_argument_is_used(tmp_path, monkeypatch, capsys):
+    output_dir = tmp_path / "output"
+    logs_dir = tmp_path / "logs"
+
+    monkeypatch.setattr(
+        "wordsmith.ollama.OllamaClient.list_models",
+        lambda self: [OllamaModel(name="mistral"), OllamaModel(name="llama2")],
+    )
+
+    args = [
+        "automatikmodus",
+        "--title",
+        "Ollama-Test",
+        "--content",
+        "Kurzer Hinweis.",
+        "--text-type",
+        "Blogartikel",
+        "--word-count",
+        "300",
+        "--llm-provider",
+        "ollama",
+        "--ollama-model",
+        "llama2",
+        "--output-dir",
+        str(output_dir),
+        "--logs-dir",
+        str(logs_dir),
+    ]
+
+    exit_code = main(args)
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Verwende Ollama-Modell: llama2" in captured.out
+
+    metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["llm_provider"] == "ollama"
+    assert metadata["llm_model"] == "llama2"
+
+
+def test_unknown_ollama_model_returns_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "wordsmith.ollama.OllamaClient.list_models",
+        lambda self: [OllamaModel(name="mistral")],
+    )
+
+    args = [
+        "automatikmodus",
+        "--title",
+        "Fehler",
+        "--content",
+        "Notizen",
+        "--text-type",
+        "Blog",
+        "--word-count",
+        "200",
+        "--llm-provider",
+        "ollama",
+        "--ollama-model",
+        "nicht-vorhanden",
+        "--output-dir",
+        str(tmp_path / "output"),
+        "--logs-dir",
+        str(tmp_path / "logs"),
+    ]
+
+    exit_code = main(args)
+
+    assert exit_code == 2

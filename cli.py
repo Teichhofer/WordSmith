@@ -10,6 +10,7 @@ from typing import List, Optional, Sequence
 from wordsmith import prompts
 from wordsmith.agent import WriterAgent, WriterAgentError
 from wordsmith.config import DEFAULT_LLM_PROVIDER, ConfigError, load_config
+from wordsmith.ollama import OllamaClient, OllamaError
 from wordsmith.defaults import (
     DEFAULT_AUDIENCE,
     DEFAULT_CONSTRAINTS,
@@ -201,8 +202,86 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Log-Verzeichnis (überschreibt Konfiguration).",
     )
+    automatik_parser.add_argument(
+        "--ollama-model",
+        dest="ollama_model",
+        default=None,
+        help="Name des Ollama-Modells, das für den Lauf genutzt werden soll.",
+    )
+    automatik_parser.add_argument(
+        "--ollama-base-url",
+        dest="ollama_base_url",
+        default="http://localhost:11434",
+        help="Basis-URL der lokalen Ollama-API (Default: http://localhost:11434).",
+    )
     automatik_parser.set_defaults(func=_run_automatikmodus)
     return parser
+
+
+def _interactive_model_choice(models: Sequence[str]) -> str:
+    if not models:
+        raise ValueError("Es wurden keine Modelle gefunden.")
+
+    interactive = all(
+        hasattr(stream, "isatty") and stream.isatty()
+        for stream in (sys.stdin, sys.stdout)
+    )
+    if not interactive:
+        return models[0]
+
+    print("Verfügbare Ollama-Modelle:")
+    for index, name in enumerate(models, start=1):
+        print(f"  [{index}] {name}")
+
+    while True:
+        try:
+            choice = input("Modell auswählen [1]: ").strip()
+        except EOFError:
+            choice = ""
+
+        if not choice:
+            return models[0]
+
+        if choice.isdigit():
+            index = int(choice)
+            if 1 <= index <= len(models):
+                return models[index - 1]
+
+        print("Ungültige Auswahl. Bitte eine Zahl eingeben.", file=sys.stderr)
+
+
+def _configure_ollama(args: argparse.Namespace, config: "Config") -> Optional[int]:
+    client = OllamaClient(base_url=str(args.ollama_base_url))
+    try:
+        models = client.list_models()
+    except OllamaError as exc:
+        print(f"Ollama-Modelle konnten nicht geladen werden: {exc}", file=sys.stderr)
+        return 3
+
+    if not models:
+        print("Keine Ollama-Modelle gefunden. Bitte zunächst Modelle installieren.", file=sys.stderr)
+        return 3
+
+    model_names = [model.name for model in models]
+
+    if args.ollama_model:
+        if args.ollama_model not in model_names:
+            available = ", ".join(model_names)
+            print(
+                (
+                    f"Ollama-Modell '{args.ollama_model}' nicht gefunden. "
+                    f"Verfügbare Modelle: {available}."
+                ),
+                file=sys.stderr,
+            )
+            return 2
+        selected = args.ollama_model
+    else:
+        selected = _interactive_model_choice(model_names)
+
+    config.llm_model = selected
+    print(f"Verwende Ollama-Modell: {selected}")
+    return None
 
 
 def _run_automatikmodus(args: argparse.Namespace) -> int:
@@ -217,6 +296,14 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
     if args.logs_dir is not None:
         config.logs_dir = Path(args.logs_dir)
     config.llm_provider = args.llm_provider
+    config.llm_model = None
+
+    if config.llm_provider.lower() == "ollama":
+        result = _configure_ollama(args, config)
+        if result is not None:
+            return result
+    elif args.ollama_model:
+        config.llm_model = args.ollama_model
 
     try:
         config.adjust_for_word_count(args.word_count)
