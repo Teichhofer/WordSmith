@@ -15,6 +15,7 @@ from cli import (
     DEFAULT_VARIANT,
     main,
 )
+from wordsmith import llm
 from wordsmith import prompts
 from wordsmith.config import DEFAULT_LLM_PROVIDER
 from wordsmith.ollama import OllamaModel
@@ -227,6 +228,10 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path, monkeypatch):
         "wordsmith.ollama.OllamaClient.list_models",
         lambda self: [OllamaModel(name="mistral"), OllamaModel(name="llama2")],
     )
+    def _fail_generate(**_: object) -> None:
+        raise llm.LLMGenerationError("nicht verfügbar")
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", _fail_generate)
     monkeypatch.setattr("sys.stdin", io.StringIO(""))
     args = [
         "automatikmodus",
@@ -302,6 +307,11 @@ def test_ollama_model_argument_is_used(tmp_path, monkeypatch, capsys):
         lambda self: [OllamaModel(name="mistral"), OllamaModel(name="llama2")],
     )
 
+    def _fail_generate(**_: object) -> None:
+        raise llm.LLMGenerationError("nicht verfügbar")
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", _fail_generate)
+
     args = [
         "automatikmodus",
         "--title",
@@ -331,6 +341,75 @@ def test_ollama_model_argument_is_used(tmp_path, monkeypatch, capsys):
     metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
     assert metadata["llm_provider"] == "ollama"
     assert metadata["llm_model"] == "llama2"
+
+
+def test_cli_uses_llm_text_when_generation_succeeds(tmp_path, monkeypatch, capsys):
+    output_dir = tmp_path / "output"
+    logs_dir = tmp_path / "logs"
+
+    monkeypatch.setattr(
+        "wordsmith.ollama.OllamaClient.list_models",
+        lambda self: [OllamaModel(name="llama2")],
+    )
+
+    llm_calls: list[dict] = []
+    llm_text = (
+        "## 1. Einstieg (Hook)\n"
+        "Der Beitrag rahmt das Thema und markiert offene Kennzahlen als [KLÄREN: Kennzahl].\n"
+        "## 2. Vertiefung (Argument)\n"
+        "Er erläutert die Roadmap, adressiert Prioritäten und zeigt nächste Schritte für das Team.\n"
+        "## 3. Abschluss und CTA (CTA)\n"
+        "Nutzen Sie die Impulse, um die Strategie im Alltag Ihres Teams zu verankern.\n"
+    )
+
+    def _success_generate(**kwargs):
+        llm_calls.append(kwargs)
+        return llm.LLMResult(text=llm_text)
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", _success_generate)
+
+    args = [
+        "automatikmodus",
+        "--title",
+        "LLM-Test",
+        "--content",
+        "Wir wollen echte LLM-Texte nutzen.",
+        "--text-type",
+        "Blogartikel",
+        "--word-count",
+        "360",
+        "--llm-provider",
+        "ollama",
+        "--ollama-model",
+        "llama2",
+        "--output-dir",
+        str(output_dir),
+        "--logs-dir",
+        str(logs_dir),
+    ]
+
+    exit_code = main(args)
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "## 1. Einstieg" in captured.out
+    assert llm_calls and llm_calls[0]["model"] == "llama2"
+
+    final_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
+    assert "[COMPLIANCE-PIPELINE]" in final_text
+    assert "## 1. Einstieg" in final_text
+    assert "Nutzen Sie die Impulse" in final_text
+
+    metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["llm_model"] == "llama2"
+
+    llm_entries = [
+        json.loads(line)
+        for line in (logs_dir / "llm.log").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert llm_entries
+    assert llm_entries[0]["llm_generation"]["status"] == "success"
 
 
 def test_unknown_ollama_model_returns_error(monkeypatch, tmp_path):

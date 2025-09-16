@@ -72,6 +72,33 @@ Nenne die 3 wirksamsten nächsten Verbesserungen (knapp, umsetzbar).
 """
 
 
+FINAL_DRAFT_PROMPT: str = """\
+Schreibe den finalen {text_type} zum Thema "{title}" mit etwa {word_count} Wörtern (±3 %).
+Arbeite strikt mit den folgenden Informationen und Regeln.
+
+Briefing:
+{briefing_json}
+
+Gliederung:
+{outline}
+
+Kernaussagen aus der Idee:
+{idea_bullets}
+
+Regeln:
+- Tonfall: {tone}
+- Register: {register}
+- Sprachvariante: {variant_hint}
+- Quellenmodus: {sources_mode}
+- Zusätzliche Constraints: {constraints}
+- SEO-Keywords: {seo_keywords}
+- Keine neuen Fakten erfinden; nutze Platzhalter wie [KLÄREN:], [KENNZAHL], [QUELLE], [DATUM].
+- Nutze Zwischenüberschriften gemäß Gliederung und schließe mit einem CTA in der passenden Ansprache.
+
+Gib ausschließlich den ausgearbeiteten Text in Markdown zurück.
+"""
+
+
 def set_system_prompt(prompt: str) -> None:
     """Update the globally shared system prompt."""
 

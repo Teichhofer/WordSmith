@@ -251,7 +251,8 @@ def _interactive_model_choice(models: Sequence[str]) -> str:
 
 
 def _configure_ollama(args: argparse.Namespace, config: "Config") -> Optional[int]:
-    client = OllamaClient(base_url=str(args.ollama_base_url))
+    config.ollama_base_url = str(args.ollama_base_url)
+    client = OllamaClient(base_url=config.ollama_base_url)
     try:
         models = client.list_models()
     except OllamaError as exc:
@@ -297,6 +298,7 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
         config.logs_dir = Path(args.logs_dir)
     config.llm_provider = args.llm_provider
     config.llm_model = None
+    config.ollama_base_url = None
 
     if config.llm_provider.lower() == "ollama":
         result = _configure_ollama(args, config)
@@ -304,6 +306,7 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
             return result
     elif args.ollama_model:
         config.llm_model = args.ollama_model
+        config.ollama_base_url = str(args.ollama_base_url)
 
     try:
         config.adjust_for_word_count(args.word_count)

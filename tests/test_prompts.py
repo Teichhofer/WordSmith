@@ -73,3 +73,27 @@ def test_prompt_templates_match_specification() -> None:
     assert prompts.REFLECTION_PROMPT == (
         "Nenne die 3 wirksamsten nächsten Verbesserungen (knapp, umsetzbar).\n"
     )
+
+    assert prompts.FINAL_DRAFT_PROMPT == (
+        "Schreibe den finalen {text_type} zum Thema \"{title}\" mit etwa {word_count} "
+        "Wörtern (±3 %).\n"
+        "Arbeite strikt mit den folgenden Informationen und Regeln.\n\n"
+        "Briefing:\n"
+        "{briefing_json}\n\n"
+        "Gliederung:\n"
+        "{outline}\n\n"
+        "Kernaussagen aus der Idee:\n"
+        "{idea_bullets}\n\n"
+        "Regeln:\n"
+        "- Tonfall: {tone}\n"
+        "- Register: {register}\n"
+        "- Sprachvariante: {variant_hint}\n"
+        "- Quellenmodus: {sources_mode}\n"
+        "- Zusätzliche Constraints: {constraints}\n"
+        "- SEO-Keywords: {seo_keywords}\n"
+        "- Keine neuen Fakten erfinden; nutze Platzhalter wie [KLÄREN:], [KENNZAHL], "
+        "[QUELLE], [DATUM].\n"
+        "- Nutze Zwischenüberschriften gemäß Gliederung und schließe mit einem CTA in "
+        "der passenden Ansprache.\n\n"
+        "Gib ausschließlich den ausgearbeiteten Text in Markdown zurück.\n"
+    )
