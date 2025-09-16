@@ -6,7 +6,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from .config import LLMParameters
+from .config import LLMParameters, OLLAMA_TIMEOUT_SECONDS
 
 
 @dataclass
@@ -93,7 +93,9 @@ def _generate_with_ollama(
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(
+            request, timeout=OLLAMA_TIMEOUT_SECONDS
+        ) as response:
             body = response.read()
     except urllib.error.URLError as exc:  # pragma: no cover - network failure branch
         raise LLMGenerationError(

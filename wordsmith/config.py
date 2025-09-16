@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 
 DEFAULT_LLM_PROVIDER: str = "ollama"
+OLLAMA_TIMEOUT_SECONDS: int = 3600
 
 
 class ConfigError(Exception):
