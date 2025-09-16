@@ -1,4 +1,4 @@
-from wordsmith.config import Config
+from wordsmith.config import DEFAULT_LLM_PROVIDER, Config
 
 
 def test_config_initialisation_creates_directories(tmp_path):
@@ -29,3 +29,9 @@ def test_adjust_for_word_count_scales_limits_and_sets_determinism():
     assert config.llm.presence_penalty == 0.0
     assert config.llm.frequency_penalty == 0.3
     assert config.llm.seed == 42
+
+
+def test_config_uses_ollama_as_default_llm_provider():
+    config = Config()
+
+    assert config.llm_provider == DEFAULT_LLM_PROVIDER

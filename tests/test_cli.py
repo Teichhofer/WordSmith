@@ -15,6 +15,7 @@ from cli import (
     main,
 )
 from wordsmith import prompts
+from wordsmith.config import DEFAULT_LLM_PROVIDER
 
 
 def test_automatikmodus_requires_arguments():
@@ -259,6 +260,7 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path):
     assert metadata["register"] == DEFAULT_REGISTER
     assert metadata["variant"] == DEFAULT_VARIANT
     assert metadata["keywords"] == []
+    assert metadata["llm_provider"] == DEFAULT_LLM_PROVIDER
     assert metadata["compliance_checks"]
 
     current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
