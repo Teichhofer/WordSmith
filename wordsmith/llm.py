@@ -33,6 +33,17 @@ def _prepare_options(parameters: LLMParameters) -> Dict[str, Any]:
     return options
 
 
+def _normalise_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of the Ollama payload without bulky token data."""
+
+    cleaned = dict(payload)
+    context = cleaned.get("context")
+    if isinstance(context, list):
+        cleaned["context_token_count"] = len(context)
+        cleaned.pop("context", None)
+    return cleaned
+
+
 def generate_text(
     *,
     provider: str,
@@ -113,4 +124,4 @@ def _generate_with_ollama(
     if not isinstance(text, str) or not text.strip():
         raise LLMGenerationError("Ollama-API lieferte keinen Text zurück.")
 
-    return LLMResult(text=text.strip(), raw=payload)
+    return LLMResult(text=text.strip(), raw=_normalise_payload(payload))
