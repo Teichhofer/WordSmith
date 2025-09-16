@@ -10,17 +10,20 @@ from typing import List, Optional, Sequence
 from wordsmith import prompts
 from wordsmith.agent import WriterAgent, WriterAgentError
 from wordsmith.config import ConfigError, load_config
+from wordsmith.defaults import (
+    DEFAULT_AUDIENCE,
+    DEFAULT_CONSTRAINTS,
+    DEFAULT_REGISTER,
+    DEFAULT_SOURCES_ALLOWED,
+    DEFAULT_TONE,
+    DEFAULT_VARIANT,
+    REGISTER_ALIASES,
+    VALID_VARIANTS,
+)
 
-DEFAULT_AUDIENCE = "Allgemeine Leserschaft mit Grundkenntnissen"
-DEFAULT_TONE = "sachlich-lebendig"
-DEFAULT_REGISTER = "Sie"
-DEFAULT_VARIANT = "DE-DE"
-DEFAULT_CONSTRAINTS = "Keine zusätzlichen Vorgaben"
-DEFAULT_SOURCES_ALLOWED = False
 DEFAULT_SEO_KEYWORDS: tuple[str, ...] = ()
 
-VALID_REGISTERS = {"du": "Du", "sie": "Sie"}
-VALID_VARIANTS = {"DE-DE", "DE-AT", "DE-CH"}
+VALID_REGISTERS = dict(REGISTER_ALIASES)
 
 
 def _parse_bool(value: str) -> bool:
@@ -55,18 +58,18 @@ def _parse_keywords(value: str) -> List[str]:
 
 def _parse_audience(value: str) -> str:
     value = value.strip()
-    return value or DEFAULT_AUDIENCE
+    return value
 
 
 def _parse_tone(value: str) -> str:
     value = value.strip()
-    return value or DEFAULT_TONE
+    return value
 
 
 def _parse_register(value: str) -> str:
     value = value.strip()
     if not value:
-        return DEFAULT_REGISTER
+        return ""
     normalised = value.lower()
     if normalised not in VALID_REGISTERS:
         valid_values = ", ".join(sorted(VALID_REGISTERS.values()))
@@ -79,7 +82,7 @@ def _parse_register(value: str) -> str:
 def _parse_variant(value: str) -> str:
     value = value.strip()
     if not value:
-        return DEFAULT_VARIANT
+        return ""
     normalised = value.upper()
     if normalised not in VALID_VARIANTS:
         valid_values = ", ".join(sorted(VALID_VARIANTS))
@@ -91,7 +94,7 @@ def _parse_variant(value: str) -> str:
 
 def _parse_constraints(value: str) -> str:
     value = value.strip()
-    return value or DEFAULT_CONSTRAINTS
+    return value
 
 
 def _build_parser() -> argparse.ArgumentParser:

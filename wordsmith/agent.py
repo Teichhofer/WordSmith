@@ -53,6 +53,15 @@ class OutlineSection:
 
 from . import prompts
 from .config import Config
+from .defaults import (
+    DEFAULT_AUDIENCE,
+    DEFAULT_CONSTRAINTS,
+    DEFAULT_REGISTER,
+    DEFAULT_TONE,
+    DEFAULT_VARIANT,
+    REGISTER_ALIASES,
+    VALID_VARIANTS,
+)
 
 
 class WriterAgentError(Exception):
@@ -88,6 +97,7 @@ class WriterAgent:
     _keywords_used: set[str] = field(init=False, default_factory=set)
     _compliance_audit: List[dict] = field(init=False, default_factory=list)
     _run_events: List[dict[str, Any]] = field(init=False, default_factory=list)
+    _pending_hints: List[dict[str, Any]] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -96,9 +106,136 @@ class WriterAgent:
             raise WriterAgentError("`iterations` darf nicht negativ sein.")
         self.steps = list(self.steps or [])
         self.seo_keywords = [kw.strip() for kw in (self.seo_keywords or []) if kw.strip()]
+        self._pending_hints = []
+        self._apply_input_defaults()
         self.output_dir = Path(self.config.output_dir)
         self.logs_dir = Path(self.config.logs_dir)
         self._term_cycle = cycle([self.topic.lower()])
+
+    # ------------------------------------------------------------------
+    # Input normalisation and user hints
+    # ------------------------------------------------------------------
+    def _queue_hint(
+        self,
+        step: str,
+        message: str,
+        *,
+        status: str = "info",
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        self._pending_hints.append(
+            {
+                "step": step,
+                "message": message,
+                "status": status,
+                "data": data or {},
+            }
+        )
+
+    def _flush_pending_hints(self) -> None:
+        if not self._pending_hints:
+            return
+        for hint in self._pending_hints:
+            self._record_run_event(
+                hint["step"],
+                hint["message"],
+                status=hint.get("status", "info"),
+                data=hint.get("data"),
+            )
+        self._pending_hints.clear()
+
+    def _apply_input_defaults(self) -> None:
+        self.topic = self.topic.strip()
+        if not self.topic:
+            raise WriterAgentError(
+                "`topic` darf nicht leer sein. Bitte einen Arbeitstitel übergeben."
+            )
+
+        self.text_type = self.text_type.strip()
+        if not self.text_type:
+            raise WriterAgentError(
+                "`text_type` darf nicht leer sein. Bitte den gewünschten Texttyp definieren."
+            )
+
+        defaults_used: List[str] = []
+
+        audience = (self.audience or "").strip()
+        if not audience:
+            self.audience = DEFAULT_AUDIENCE
+            defaults_used.append("audience")
+        else:
+            self.audience = audience
+
+        tone = (self.tone or "").strip()
+        if not tone:
+            self.tone = DEFAULT_TONE
+            defaults_used.append("tone")
+        else:
+            self.tone = tone
+
+        register_value = (self.register or "").strip()
+        if not register_value:
+            self.register = DEFAULT_REGISTER
+            defaults_used.append("register")
+        else:
+            lowered = register_value.lower()
+            if lowered in REGISTER_ALIASES:
+                self.register = REGISTER_ALIASES[lowered]
+            else:
+                self._queue_hint(
+                    "input_defaults",
+                    (
+                        "Unbekanntes Register \"{value}\" erkannt. Standard 'Sie' wird genutzt."
+                    ).format(value=register_value),
+                    status="warning",
+                    data={"field": "register", "value": register_value},
+                )
+                self.register = DEFAULT_REGISTER
+                defaults_used.append("register")
+
+        variant_value = (self.variant or "").strip()
+        if not variant_value:
+            self.variant = DEFAULT_VARIANT
+            defaults_used.append("variant")
+        else:
+            upper = variant_value.upper()
+            if upper in VALID_VARIANTS:
+                self.variant = upper
+                if self.variant != variant_value:
+                    self._queue_hint(
+                        "input_defaults",
+                        (
+                            "Sprachvariante \"{original}\" wurde auf \"{normalised}\" normalisiert."
+                        ).format(original=variant_value, normalised=upper),
+                        status="info",
+                        data={"field": "variant", "value": variant_value},
+                    )
+            else:
+                self._queue_hint(
+                    "input_defaults",
+                    (
+                        "Unbekannte Sprachvariante \"{value}\" erkannt. Standard 'DE-DE' wird genutzt."
+                    ).format(value=variant_value),
+                    status="warning",
+                    data={"field": "variant", "value": variant_value},
+                )
+                self.variant = DEFAULT_VARIANT
+                defaults_used.append("variant")
+
+        constraints_value = (self.constraints or "").strip()
+        if not constraints_value:
+            self.constraints = DEFAULT_CONSTRAINTS
+            defaults_used.append("constraints")
+        else:
+            self.constraints = constraints_value
+
+        if defaults_used:
+            self._queue_hint(
+                "input_defaults",
+                "Eingaben ergänzt oder normalisiert: " + ", ".join(sorted(defaults_used)) + ".",
+                status="info",
+                data={"defaults": sorted(defaults_used)},
+            )
 
     # ------------------------------------------------------------------
     # Public API
@@ -124,6 +261,7 @@ class WriterAgent:
                 "iterations": self.iterations,
             },
         )
+        self._flush_pending_hints()
 
         briefing = self._normalize_briefing()
         self._write_json(self.output_dir / "briefing.json", briefing)
@@ -500,17 +638,126 @@ class WriterAgent:
     def _generate_sections(self, sections: Sequence[OutlineSection], briefing: dict) -> str:
         paragraphs: List[str] = []
         previous_summary = ""
-        for index, section in enumerate(sections):
+        mutable_sections = [
+            OutlineSection(section.number, section.title, section.role, section.budget, section.deliverable)
+            for section in sections
+        ]
+        batch_index = 1
+        batch_limit = max(100, int(self.config.token_limit * 0.9))
+        batch_usage = 0
+
+        for index, section in enumerate(mutable_sections):
+            recap_sentence: str | None = None
+            estimated_usage = section.budget
+            if batch_usage and batch_usage + estimated_usage > batch_limit:
+                batch_index += 1
+                recap_sentence = self._build_recap_sentence(previous_summary, batch_index)
+                self._record_run_event(
+                    "batch_generation",
+                    f"Kontextlimit erreicht – Batch {batch_index} gestartet.",
+                    status="info",
+                    data={
+                        "batch_index": batch_index,
+                        "limit": batch_limit,
+                        "trigger_section": section.number,
+                    },
+                )
+                batch_usage = 0
+
             section_text, summary = self._compose_section(
                 section,
                 index,
-                sections,
+                mutable_sections,
                 briefing,
                 previous_summary,
+                recap_sentence=recap_sentence,
             )
             paragraphs.append(section_text)
             previous_summary = summary
+
+            body = section_text.split("\n", 1)[1] if "\n" in section_text else section_text
+            actual_words = self._count_words(body)
+            batch_usage += actual_words
+
+            shortfall = section.budget - actual_words
+            threshold = max(3, int(section.budget * 0.05))
+            if shortfall >= threshold and index < len(mutable_sections) - 1:
+                redistributed = self._rebalance_future_budgets(mutable_sections, index + 1, shortfall)
+                if redistributed:
+                    self._record_run_event(
+                        "budget_rebalance",
+                        (
+                            f"Wortbudget nach Abschnitt {section.number} um {redistributed} Wörter neu verteilt."
+                        ),
+                        status="info",
+                        data={
+                            "section": section.number,
+                            "planned": section.budget,
+                            "actual": actual_words,
+                            "shortfall": shortfall,
+                            "redistributed": redistributed,
+                        },
+                    )
+
         return "\n\n".join(paragraphs)
+
+    def _rebalance_future_budgets(
+        self,
+        sections: List[OutlineSection],
+        start_index: int,
+        surplus: int,
+    ) -> int:
+        if start_index >= len(sections) or surplus <= 0:
+            return 0
+
+        remaining = sections[start_index:]
+        total_reference = sum(section.budget for section in remaining)
+        if total_reference <= 0:
+            return 0
+
+        base_shares = [
+            (surplus * section.budget) // total_reference if total_reference else 0
+            for section in remaining
+        ]
+        distributed = sum(base_shares)
+        remainder = surplus - distributed
+
+        if remainder > 0:
+            order = sorted(
+                range(len(remaining)),
+                key=lambda idx: remaining[idx].budget,
+                reverse=True,
+            )
+            for position in order:
+                if remainder <= 0:
+                    break
+                base_shares[position] += 1
+                remainder -= 1
+
+        distributed = sum(base_shares)
+        for offset, share in enumerate(base_shares):
+            if share <= 0:
+                continue
+            idx = start_index + offset
+            section = sections[idx]
+            sections[idx] = OutlineSection(
+                section.number,
+                section.title,
+                section.role,
+                section.budget + share,
+                section.deliverable,
+            )
+        return distributed
+
+    def _build_recap_sentence(self, summary: str, batch_index: int) -> str:
+        cleaned = summary.strip().rstrip(". ") if summary.strip() else (
+            "die bisherige Passage die Ausgangslage skizziert hat"
+        )
+        previous_batch = max(1, batch_index - 1)
+        return (
+            f"Zur Orientierung fasst Batch {previous_batch} zusammen: {cleaned}. "
+            "Der neue Abschnitt knüpft daran an und vertieft den Gedanken."
+        )
 
     # ------------------------------------------------------------------
     # Compliance helpers
@@ -667,6 +914,8 @@ class WriterAgent:
         sections: Sequence[OutlineSection],
         briefing: dict,
         previous_summary: str,
+        *,
+        recap_sentence: str | None = None,
     ) -> tuple[str, str]:
         heading = f"## {section.number}. {section.title} ({section.role})"
         sentences: List[str] = []
@@ -684,6 +933,9 @@ class WriterAgent:
             sentences.append(
                 f"Aufbauend auf {reference} vertieft der Abschnitt die Perspektive auf {self.topic}."
             )
+
+        if recap_sentence:
+            sentences.append(recap_sentence)
 
         if key_terms:
             focus_terms = ", ".join(key_terms)
