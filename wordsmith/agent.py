@@ -1288,6 +1288,7 @@ class WriterAgent:
             "rubric_passed": rubric_passed,
             "sources_allowed": self.sources_allowed,
             "llm_provider": self.config.llm_provider,
+            "llm_model": self.config.llm_model,
             "system_prompt": prompts.SYSTEM_PROMPT,
             "compliance_checks": self._compliance_audit,
         }
@@ -1310,6 +1311,7 @@ class WriterAgent:
         llm_entry = {
             "stage": "pipeline",
             "provider": self.config.llm_provider,
+            "model": self.config.llm_model,
             "parameters": asdict(self.config.llm),
             "system_prompt": prompts.SYSTEM_PROMPT,
             "topic": self.topic,

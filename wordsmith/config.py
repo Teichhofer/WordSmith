@@ -44,6 +44,7 @@ class Config:
     output_dir: Path = Path("output")
     logs_dir: Path = Path("logs")
     llm_provider: str = DEFAULT_LLM_PROVIDER
+    llm_model: Optional[str] = None
     llm: LLMParameters = field(default_factory=LLMParameters)
     context_length: int = 4096
     token_limit: int = 1024
@@ -96,6 +97,8 @@ def _update_config_from_dict(config: Config, data: Dict[str, Any]) -> None:
             setattr(config, key, Path(str(value)))
         elif key == "llm_provider":
             config.llm_provider = str(value)
+        elif key == "llm_model":
+            config.llm_model = str(value) if value is not None else None
         elif key == "system_prompt":
             config.system_prompt = str(value)
         elif key == "context_length":
