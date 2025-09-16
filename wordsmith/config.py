@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
+DEFAULT_LLM_PROVIDER: str = "ollama"
+
+
 class ConfigError(Exception):
     """Raised when the configuration could not be loaded or validated."""
 
@@ -40,7 +43,7 @@ class Config:
 
     output_dir: Path = Path("output")
     logs_dir: Path = Path("logs")
-    llm_provider: str = "mock-provider"
+    llm_provider: str = DEFAULT_LLM_PROVIDER
     llm: LLMParameters = field(default_factory=LLMParameters)
     context_length: int = 4096
     token_limit: int = 1024

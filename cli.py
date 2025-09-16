@@ -9,7 +9,7 @@ from typing import List, Optional, Sequence
 
 from wordsmith import prompts
 from wordsmith.agent import WriterAgent, WriterAgentError
-from wordsmith.config import ConfigError, load_config
+from wordsmith.config import DEFAULT_LLM_PROVIDER, ConfigError, load_config
 from wordsmith.defaults import (
     DEFAULT_AUDIENCE,
     DEFAULT_CONSTRAINTS,
@@ -135,7 +135,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     automatik_parser.add_argument(
         "--llm-provider",
-        default="mock-provider",
+        default=DEFAULT_LLM_PROVIDER,
         dest="llm_provider",
         help="Bezeichner des verwendeten LLM-Anbieters.",
     )
