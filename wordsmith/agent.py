@@ -51,7 +51,7 @@ class OutlineSection:
             f"Wörter) -> {self.deliverable}"
         )
 
-from . import prompts
+from . import llm, prompts
 from .config import Config
 from .defaults import (
     DEFAULT_AUDIENCE,
@@ -98,6 +98,7 @@ class WriterAgent:
     _compliance_audit: List[dict] = field(init=False, default_factory=list)
     _run_events: List[dict[str, Any]] = field(init=False, default_factory=list)
     _pending_hints: List[dict[str, Any]] = field(init=False, default_factory=list)
+    _llm_generation: dict[str, Any] | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -298,10 +299,22 @@ class WriterAgent:
             data={"sections": len(outline_sections)},
         )
 
-        draft = self._generate_sections(outline_sections, briefing)
+        self._llm_generation = None
+        draft_source = "pipeline"
+        llm_draft = self._try_llm_generation(
+            outline_sections, briefing, idea, outline_text
+        )
+        if llm_draft is not None:
+            draft = llm_draft
+            draft_source = "llm"
+        else:
+            draft = self._generate_sections(outline_sections, briefing)
         draft = self._enforce_length(draft)
         draft = self._run_compliance(
-            "draft", draft, ensure_sources=True, annotation_label="pipeline"
+            "draft",
+            draft,
+            ensure_sources=True,
+            annotation_label="llm" if draft_source == "llm" else "pipeline",
         )
         self._write_text(self.output_dir / "current_text.txt", draft)
         self._write_text(self.output_dir / "iteration_01.txt", draft)
@@ -634,6 +647,143 @@ class WriterAgent:
         return self._run_compliance(
             "outline", outline_text, annotation_label="outline"
         )
+
+    def _should_use_llm(self) -> bool:
+        provider = (self.config.llm_provider or "").strip().lower()
+        model = (self.config.llm_model or "").strip()
+        return bool(model) and provider == "ollama"
+
+    def _build_llm_prompt(
+        self,
+        briefing: dict,
+        sections: Sequence[OutlineSection],
+        *,
+        idea_text: str,
+        outline_text: str,
+    ) -> str:
+        outline_clean = outline_text.strip()
+        if not outline_clean:
+            outline_clean = "\n".join(
+                (
+                    f"{section.number}. {section.title} ({section.role}) – "
+                    f"{section.deliverable} [{section.budget} Wörter]"
+                )
+                for section in sections
+            )
+        idea_clean = idea_text.strip()
+        if not idea_clean:
+            bullets = self._idea_bullets or ["[KLÄREN: Ideenbriefing ergänzen]"]
+            idea_clean = "\n".join(f"- {item}" for item in bullets)
+
+        seo_text = ", ".join(self.seo_keywords or []) or "keine"
+        variant_hint = f"Verwende Rechtschreibung für {self.variant}" if self.variant else "Nutze Standardsprache"
+        sources_mode = "Quellen erlaubt" if self.sources_allowed else "Quellenangaben blockiert"
+        constraints = self.constraints or DEFAULT_CONSTRAINTS
+
+        return prompts.FINAL_DRAFT_PROMPT.format(
+            text_type=self.text_type,
+            title=self.topic,
+            word_count=self.word_count,
+            briefing_json=json.dumps(briefing, ensure_ascii=False, indent=2),
+            outline=outline_clean,
+            idea_bullets=idea_clean,
+            tone=self.tone,
+            register=self.register,
+            variant_hint=variant_hint,
+            sources_mode=sources_mode,
+            constraints=constraints,
+            seo_keywords=seo_text,
+        )
+
+    def _try_llm_generation(
+        self,
+        sections: Sequence[OutlineSection],
+        briefing: dict,
+        idea_text: str,
+        outline_text: str,
+    ) -> str | None:
+        if not self._should_use_llm():
+            return None
+
+        idea_body, _ = self._extract_compliance_note(idea_text)
+        outline_body, _ = self._extract_compliance_note(outline_text)
+        prompt = self._build_llm_prompt(
+            briefing,
+            sections,
+            idea_text=idea_body or idea_text,
+            outline_text=outline_body or outline_text,
+        )
+
+        try:
+            result = llm.generate_text(
+                provider=self.config.llm_provider,
+                model=self.config.llm_model,
+                prompt=prompt,
+                system_prompt=prompts.SYSTEM_PROMPT,
+                parameters=self.config.llm,
+                base_url=self.config.ollama_base_url,
+            )
+        except LLMGenerationError as exc:
+            self._llm_generation = {
+                "status": "failed",
+                "provider": self.config.llm_provider,
+                "model": self.config.llm_model,
+                "error": str(exc),
+                "prompt_preview": prompt[:200],
+            }
+            self._record_run_event(
+                "llm_generation",
+                f"LLM-Generierung fehlgeschlagen: {exc}",
+                status="warning",
+                data={
+                    "provider": self.config.llm_provider,
+                    "model": self.config.llm_model,
+                },
+            )
+            return None
+
+        text = result.text.strip()
+        if not text:
+            self._llm_generation = {
+                "status": "failed",
+                "provider": self.config.llm_provider,
+                "model": self.config.llm_model,
+                "error": "Leere Antwort erhalten.",
+                "prompt_preview": prompt[:200],
+            }
+            self._record_run_event(
+                "llm_generation",
+                "LLM-Generierung lieferte keinen Text.",
+                status="warning",
+                data={
+                    "provider": self.config.llm_provider,
+                    "model": self.config.llm_model,
+                },
+            )
+            return None
+
+        generation_record: dict[str, Any] = {
+            "status": "success",
+            "provider": self.config.llm_provider,
+            "model": self.config.llm_model,
+            "prompt": prompt,
+            "response_preview": text[:400],
+        }
+        if isinstance(result, LLMResult) and result.raw is not None:
+            generation_record["raw"] = result.raw
+        self._llm_generation = generation_record
+        self.steps.append("llm_generation")
+        self._record_run_event(
+            "llm_generation",
+            f"Entwurf mit {self.config.llm_provider} erstellt",
+            status="info",
+            data={
+                "provider": self.config.llm_provider,
+                "model": self.config.llm_model,
+                "characters": len(text),
+            },
+        )
+        return text
 
     def _generate_sections(self, sections: Sequence[OutlineSection], briefing: dict) -> str:
         paragraphs: List[str] = []
@@ -1333,6 +1483,7 @@ class WriterAgent:
                 "reflection": prompts.REFLECTION_PROMPT.strip(),
             },
             "events": run_entries,
+            "llm_generation": self._llm_generation,
         }
         llm_log.write_text(
             json.dumps(llm_entry, ensure_ascii=False) + "\n",
@@ -1364,3 +1515,4 @@ class WriterAgent:
                 return str(path.relative_to(self.logs_dir))
             except ValueError:
                 return str(path)
+from .llm import LLMGenerationError, LLMResult

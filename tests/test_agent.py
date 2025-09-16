@@ -4,6 +4,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+from wordsmith import llm
 from wordsmith.agent import WriterAgent
 from wordsmith.config import Config
 from wordsmith.defaults import (
@@ -325,3 +326,92 @@ def test_run_compliance_masks_sensitive_terms_and_adds_placeholders(tmp_path):
     assert last_entry["stage"] == "draft"
     assert last_entry["placeholders_present"] is True
     assert "Quellen" in last_entry["sources"]
+
+
+def test_agent_uses_llm_output_when_available(tmp_path, monkeypatch):
+    config = _build_config(tmp_path, 180)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama2"
+    config.ollama_base_url = "http://ollama.local"
+
+    llm_text = (
+        "## 1. Kontext schaffen (Hook)\n"
+        "Dieser Abschnitt verortet Projekt Aurora im strategischen Rahmen und betont den Nutzen für das Leitungsteam."
+        " Er markiert offene Fragen als [KLÄREN: Kennzahlen] und priorisiert Transparenz.\n"
+        "## 2. Umsetzung strukturieren (Argument)\n"
+        "Hier werden Prozesse gebündelt, Verantwortlichkeiten geklärt und der nächste Sprint mit Fokus auf Datenqualität geplant."
+        " Das stärkt die Roadmap und unterlegt sie mit messbaren Etappen.\n"
+        "## 3. Fazit und CTA (CTA)\n"
+        "Der Abschluss bündelt Lernerfahrungen, beantwortet die Kernfrage nach Wertbeitrag und aktiviert das Team."
+        " Nutzen Sie die Impulse, um Projekt Aurora im Alltag Ihres Teams zu verankern."
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_generate_text(**kwargs):
+        captured.update(kwargs)
+        return llm.LLMResult(text=llm_text)
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
+
+    agent = WriterAgent(
+        topic="Projekt Aurora",
+        word_count=180,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Transparenz schaffen und Roadmap konkretisieren.",
+        text_type="Strategiepapier",
+        audience="Leitungsteam",
+        tone="präzise",
+        register="Sie",
+        variant="DE-DE",
+        constraints="Keine vertraulichen Zahlen nennen.",
+        sources_allowed=False,
+    )
+
+    final_text = agent.run()
+
+    assert "## 1. Kontext schaffen" in final_text
+    assert "Nutzen Sie die Impulse" in final_text
+    assert "[COMPLIANCE-LLM]" in final_text
+    assert captured["provider"] == "ollama"
+    assert captured["model"] == "llama2"
+    assert agent._llm_generation and agent._llm_generation["status"] == "success"
+
+    llm_events = [event for event in agent._run_events if event["step"] == "llm_generation"]
+    assert llm_events and llm_events[0]["status"] == "info"
+
+
+def test_agent_falls_back_when_llm_generation_fails(tmp_path, monkeypatch):
+    config = _build_config(tmp_path, 200)
+    config.llm_provider = "ollama"
+    config.llm_model = "mistral"
+
+    def failing_generate_text(**kwargs):
+        raise llm.LLMGenerationError("Ausfall")
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", failing_generate_text)
+
+    agent = WriterAgent(
+        topic="Fallback-Test",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Team braucht Klarheit über nächste Schritte.",
+        text_type="Memo",
+        audience="Projektteam",
+        tone="klar",
+        register="Du",
+        variant="DE-DE",
+        constraints="", 
+        sources_allowed=True,
+    )
+
+    final_text = agent.run()
+
+    assert "[COMPLIANCE-PIPELINE]" in final_text
+    assert agent._llm_generation and agent._llm_generation["status"] == "failed"
+    llm_events = [event for event in agent._run_events if event["step"] == "llm_generation"]
+    assert llm_events and llm_events[0]["status"] == "warning"
