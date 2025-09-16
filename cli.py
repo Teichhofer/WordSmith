@@ -98,6 +98,25 @@ def _parse_constraints(value: str) -> str:
     return value
 
 
+def _parse_iterations(value: str) -> int:
+    value = value.strip()
+    if not value:
+        raise argparse.ArgumentTypeError(
+            "Anzahl der Iterationen darf nicht leer sein."
+        )
+    try:
+        iterations = int(value)
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise argparse.ArgumentTypeError(
+            "Anzahl der Iterationen muss eine Ganzzahl sein."
+        ) from exc
+    if iterations < 0:
+        raise argparse.ArgumentTypeError(
+            "Anzahl der Iterationen darf nicht negativ sein."
+        )
+    return iterations
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="wordsmith",
@@ -129,8 +148,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Zielwortzahl für den finalen Text.",
     )
     automatik_parser.add_argument(
+        "-n",
         "--iterations",
-        type=int,
+        type=_parse_iterations,
         default=1,
         help="Anzahl der Überarbeitungsdurchläufe.",
     )
