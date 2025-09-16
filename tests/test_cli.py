@@ -271,3 +271,11 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path):
     )
     assert compliance_report["sources_allowed"] is False
     assert any("block" in entry["sources"] for entry in compliance_report["checks"])
+
+    run_entries = [
+        json.loads(line)
+        for line in (logs_dir / "run.log").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    defaults_event = next(entry for entry in run_entries if entry["step"] == "input_defaults")
+    assert "audience" in defaults_event["data"]["defaults"]
