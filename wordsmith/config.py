@@ -20,7 +20,7 @@ class ConfigError(Exception):
 class LLMParameters:
     """Deterministic model parameters for reproducible text generation."""
 
-    temperature: float = 0.2
+    temperature: float = 0.8
     top_p: float = 0.9
     presence_penalty: float = 0.0
     frequency_penalty: float = 0.3
@@ -51,9 +51,9 @@ class Config:
     context_length: int = 4096
     token_limit: int = 1024
     system_prompt: str = (
-        "Du bist ein präziser deutschsprachiger Fachtexter. Du erfindest "
-        "keine Fakten. Bei fehlenden Daten nutzt du Platzhalter in eckigen "
-        "Klammern. Deine Texte sind klar strukturiert, aktiv formuliert, "
+        "Du bist ein kreativer deutschsprachiger Autor. Du erfindest "
+        "keine Fakten. Vermeide Wiederholungen und Füllwörter, auch"
+        "Deine Texte sind klar strukturiert, aktiv formuliert, "
         "redundanzarm und adressatengerecht."
     )
     word_count: int = 0
@@ -73,11 +73,11 @@ class Config:
 
         # Scale context length and token limits with a safety buffer to
         # accommodate prompts, intermediate artefacts and the final text.
-        self.context_length = max(2048, int(self.word_count * 4))
-        self.token_limit = max(512, int(self.word_count * 1.6))
+        self.context_length = max(8192, int(self.word_count * 4))
+        self.token_limit = max(8192, int(self.word_count * 1.6))
 
         # Ensure deterministic generation parameters for reproducible runs.
-        self.llm.temperature = 0.2
+        self.llm.temperature = 0.8
         self.llm.top_p = 0.9
         self.llm.presence_penalty = 0.0
         self.llm.frequency_penalty = 0.3
