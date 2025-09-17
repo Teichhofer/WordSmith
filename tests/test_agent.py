@@ -64,12 +64,9 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
         "1. Auftakt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext setzen.\n"
         "2. Strategiepfad (Rolle: Argument, Wortbudget: 140 Wörter) -> Entscheidung stützen."
     )
-    final_text = (
-        "## 1. Auftakt\n"
-        "Dieser Abschnitt beschreibt vertrauliche Aspekte und markiert Bedarf.\n"
-        "## 2. Strategiepfad\n"
-        "Der Plan hält vertraulich Daten und bietet nächste Schritte."
-    )
+    section_one = "Der Auftakt liefert vertrauliche Einblicke und schafft Klarheit."
+    section_two = "Der Strategiepfad benennt vertrauliche Kennzahlen und den Ausblick."
+    text_type_check = "Keine Abweichungen festgestellt."
     revision_text = (
         "## Überarbeitet\n"
         "Die Revision fasst vertrauliche Erkenntnisse zusammen und bleibt konkret."
@@ -80,14 +77,16 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
             llm.LLMResult(text=json.dumps(briefing_payload)),
             llm.LLMResult(text=idea_text),
             llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=final_text),
+            llm.LLMResult(text=outline_text),
+            llm.LLMResult(text=section_one),
+            llm.LLMResult(text=section_two),
+            llm.LLMResult(text=text_type_check),
             llm.LLMResult(text=revision_text),
         ]
     )
 
     def fake_generate_text(**_: object) -> llm.LLMResult:
-        result = responses.popleft()
-        return result
+        return responses.popleft()
 
     monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
 
@@ -122,6 +121,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert "Strategiepfad" in outline_output
     assert metadata["llm_model"] == "llama2"
     assert metadata["final_word_count"] == agent._count_words(final_output)
+    assert metadata["rubric_passed"] is True
     assert compliance["checks"]
     stages = {entry["stage"] for entry in compliance["checks"]}
     assert stages == {"draft", "revision_01"}
@@ -138,6 +138,7 @@ def test_agent_raises_when_llm_fails(tmp_path: Path, monkeypatch: pytest.MonkeyP
         [
             llm.LLMResult(text=json.dumps({"messages": []})),
             llm.LLMResult(text="- Punkt"),
+            llm.LLMResult(text="1. Abschnitt (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
             llm.LLMResult(text="1. Abschnitt (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
         ]
     )
@@ -168,6 +169,66 @@ def test_agent_raises_when_llm_fails(tmp_path: Path, monkeypatch: pytest.MonkeyP
     with pytest.raises(WriterAgentError, match="Finaler Entwurf konnte nicht erstellt"):
         agent.run()
     assert agent._llm_generation and agent._llm_generation["status"] == "failed"
+
+
+def test_text_type_fix_applied_when_needed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 150)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama2"
+
+    briefing_payload = {"goal": "Optimierung", "messages": ["CTA schärfen"]}
+    idea_text = "- Fokus auf Nutzen"
+    outline_text = "1. Fokus (Rolle: Hook, Wortbudget: 150 Wörter) -> Nutzen verdeutlichen."
+    section_text = "Der Abschnitt bleibt allgemein und verzichtet auf einen klaren CTA."
+    check_report = "- Abschnitt 1: Kein klarer CTA am Ende."
+    fix_response = "## 1. Fokus\nSchärferer Abschnitt mit klarem CTA zum Schluss."
+
+    responses = deque(
+        [
+            llm.LLMResult(text=json.dumps(briefing_payload)),
+            llm.LLMResult(text=idea_text),
+            llm.LLMResult(text=outline_text),
+            llm.LLMResult(text=outline_text),
+            llm.LLMResult(text=section_text),
+            llm.LLMResult(text=check_report),
+            llm.LLMResult(text=fix_response),
+        ]
+    )
+
+    def fake_generate_text(**_: object) -> llm.LLMResult:
+        return responses.popleft()
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
+
+    agent = WriterAgent(
+        topic="Optimierung",
+        word_count=150,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Wir wollen den CTA schärfen.",
+        text_type="Landingpage",
+        audience="Kund:innen",
+        tone="motiviert",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    final_output = agent.run()
+
+    fix_file = (config.output_dir / "text_type_fix.txt").read_text(encoding="utf-8").strip()
+    metadata = json.loads((config.output_dir / "metadata.json").read_text(encoding="utf-8"))
+
+    assert "CTA" in final_output
+    assert final_output.strip() == fix_response
+    assert fix_file == fix_response
+    assert "text_type_fix" in agent.steps
+    assert metadata["rubric_passed"] is True
+    assert not responses
 
 
 def test_run_compliance_masks_sensitive_terms(tmp_path: Path) -> None:

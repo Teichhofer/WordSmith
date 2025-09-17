@@ -43,12 +43,9 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         "1. Auftakt (Rolle: Hook, Wortbudget: 60 Wörter) -> Kontext schaffen.\n"
         "2. Umsetzung (Rolle: Argument, Wortbudget: 120 Wörter) -> Handlung empfehlen."
     )
-    final_text = (
-        "## 1. Auftakt\n"
-        "Der Abschnitt benennt vertrauliche Themen und schafft Klarheit.\n"
-        "## 2. Umsetzung\n"
-        "Der Abschnitt verweist auf vertrauliche Kennzahlen."
-    )
+    section_one = "Der Auftakt benennt vertrauliche Themen und schafft Klarheit."
+    section_two = "Die Umsetzung verweist auf vertrauliche Kennzahlen und Prioritäten."
+    text_type_check = "Keine Abweichungen festgestellt."
     revision_text = (
         "## Überarbeitung\n"
         "Die Revision blendet vertrauliche Hinweise aus und fokussiert Umsetzung."
@@ -59,7 +56,10 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
             llm.LLMResult(text=json.dumps(briefing_payload)),
             llm.LLMResult(text=idea_text),
             llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=final_text),
+            llm.LLMResult(text=outline_text),
+            llm.LLMResult(text=section_one),
+            llm.LLMResult(text=section_two),
+            llm.LLMResult(text=text_type_check),
             llm.LLMResult(text=revision_text),
         ]
     )
@@ -150,6 +150,7 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         [
             llm.LLMResult(text=json.dumps({"messages": []})),
             llm.LLMResult(text="- Punkt"),
+            llm.LLMResult(text="1. Eintrag (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
             llm.LLMResult(text="1. Eintrag (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
         ]
     )
@@ -272,7 +273,9 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path: Path, monkeyp
             ),
             llm.LLMResult(text="- Hinweis"),
             llm.LLMResult(text="1. Abschnitt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext."),
-            llm.LLMResult(text="## Ergebnis\nDer Text bleibt allgemein."),
+            llm.LLMResult(text="1. Abschnitt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext."),
+            llm.LLMResult(text="Der Text bleibt allgemein."),
+            llm.LLMResult(text="Keine Abweichungen festgestellt."),
         ]
     )
 
