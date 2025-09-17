@@ -5,7 +5,13 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from wordsmith.config import DEFAULT_LLM_PROVIDER, Config
+from wordsmith.config import (
+    DEFAULT_LLM_PROVIDER,
+    MIN_CONTEXT_LENGTH,
+    MIN_TOKEN_LIMIT,
+    Config,
+    load_config,
+)
 
 
 def test_config_initialisation_creates_directories(tmp_path):
@@ -42,3 +48,33 @@ def test_config_uses_ollama_as_default_llm_provider():
     config = Config()
 
     assert config.llm_provider == DEFAULT_LLM_PROVIDER
+
+
+def test_config_enforces_minimum_windows_on_initialisation(tmp_path):
+    config = Config(
+        output_dir=tmp_path / "out",
+        logs_dir=tmp_path / "logs",
+        context_length=512,
+        token_limit=256,
+    )
+
+    assert config.context_length == MIN_CONTEXT_LENGTH
+    assert config.token_limit == MIN_TOKEN_LIMIT
+
+
+def test_loading_config_enforces_minimum_windows(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        """
+        {
+            "context_length": 512,
+            "token_limit": 512
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.context_length == MIN_CONTEXT_LENGTH
+    assert config.token_limit == MIN_TOKEN_LIMIT
