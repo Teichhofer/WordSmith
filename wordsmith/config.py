@@ -11,6 +11,9 @@ from typing import Any, Dict, Optional
 DEFAULT_LLM_PROVIDER: str = "ollama"
 OLLAMA_TIMEOUT_SECONDS: int = 3600
 
+MIN_CONTEXT_LENGTH: int = 2048
+MIN_TOKEN_LIMIT: int = 1024
+
 
 class ConfigError(Exception):
     """Raised when the configuration could not be loaded or validated."""
@@ -62,6 +65,7 @@ class Config:
         self.output_dir = Path(self.output_dir)
         self.logs_dir = Path(self.logs_dir)
         self.ensure_directories()
+        self._apply_minimum_limits()
 
     def adjust_for_word_count(self, word_count: int) -> None:
         """Store the desired word count and ensure it is sensible."""
@@ -75,6 +79,7 @@ class Config:
         # accommodate prompts, intermediate artefacts and the final text.
         self.context_length = max(8192, int(self.word_count * 4))
         self.token_limit = max(8192, int(self.word_count * 1.6))
+        self._apply_minimum_limits()
 
         # Ensure deterministic generation parameters for reproducible runs.
         self.llm.temperature = 0.8
@@ -89,6 +94,12 @@ class Config:
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
+
+    def _apply_minimum_limits(self) -> None:
+        """Ensure configured context and generation windows meet minimum sizes."""
+
+        self.context_length = max(MIN_CONTEXT_LENGTH, int(self.context_length))
+        self.token_limit = max(MIN_TOKEN_LIMIT, int(self.token_limit))
 
 
 def _update_config_from_dict(config: Config, data: Dict[str, Any]) -> None:
@@ -117,6 +128,7 @@ def _update_config_from_dict(config: Config, data: Dict[str, Any]) -> None:
             raise ConfigError(f"Unbekannter Konfigurationsschlüssel: {key}")
 
     config.ensure_directories()
+    config._apply_minimum_limits()
 
 
 def load_config(path: Optional[str | Path] = None) -> Config:
