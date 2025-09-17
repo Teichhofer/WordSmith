@@ -129,6 +129,82 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert not responses
 
 
+def test_agent_parses_briefing_from_code_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 280)
+    config.llm_provider = "ollama"
+    config.llm_model = "mixtral:latest"
+
+    briefing_payload = {
+        "goal": "Blogartikel zu Produktneuheit",
+        "audience": "Bestandskund:innen",
+        "tone": "inspirierend",
+        "register": "Du",
+        "variant": "DE-DE",
+        "constraints": "Keine Preise nennen",
+        "messages": ["Hervorheben, wie einfach der Einstieg ist."],
+        "key_terms": ["Innovation"],
+    }
+    briefing_text = (
+        "Hier das Briefing vorab {Hinweis}:\n"
+        "```json\n"
+        + json.dumps(briefing_payload, indent=2)
+        + "\n```\nBitte prüfen."
+    )
+    idea_text = "- Fokus auf Einstieg\n- Vorteile betonen"
+    outline_text = (
+        "1. Einstieg (Rolle: Hook, Wortbudget: 90 Wörter) -> Interesse wecken.\n"
+        "2. Vorteile (Rolle: Argument, Wortbudget: 190 Wörter) -> Nutzen erklären."
+    )
+    section_one = "Der Einstieg adressiert bestehende Nutzer:innen und motiviert zum Weiterlesen."
+    section_two = "Im Vorteilsteil wird erläutert, wie Innovation den Alltag vereinfacht."
+    text_type_check = "Keine Abweichungen festgestellt."
+
+    responses = deque(
+        [
+            llm.LLMResult(text=briefing_text),
+            llm.LLMResult(text=idea_text),
+            llm.LLMResult(text=outline_text),
+            llm.LLMResult(text=outline_text),
+            llm.LLMResult(text=section_one),
+            llm.LLMResult(text=section_two),
+            llm.LLMResult(text=text_type_check),
+        ]
+    )
+
+    def fake_generate_text(**_: object) -> llm.LLMResult:
+        return responses.popleft()
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
+
+    agent = WriterAgent(
+        topic="Produktneuheit vorstellen",
+        word_count=280,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Neue Funktion erleichtert den Einstieg.",
+        text_type="Blogartikel",
+        audience="Bestandskund:innen",
+        tone="inspirierend",
+        register="Du",
+        variant="DE-DE",
+        constraints="Keine Preise nennen",
+        sources_allowed=False,
+        seo_keywords=["Innovation"],
+    )
+
+    final_output = agent.run()
+
+    briefing_output = json.loads((config.output_dir / "briefing.json").read_text(encoding="utf-8"))
+
+    assert "Innovation" in final_output
+    assert briefing_output["goal"] == briefing_payload["goal"]
+    assert briefing_output["messages"] == briefing_payload["messages"]
+    assert not responses
+
+
 def test_agent_raises_when_llm_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = _build_config(tmp_path, 200)
     config.llm_provider = "ollama"

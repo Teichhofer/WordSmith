@@ -38,6 +38,66 @@ _SENSITIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
+def _extract_json_object(text: str, start_index: int = 0) -> tuple[str, int] | None:
+    """Return the next balanced JSON object substring and end position.
+
+    The helper scans ``text`` starting at ``start_index`` for a ``{`` and then
+    tracks matching braces while respecting quoted strings. When a balanced
+    object is found the JSON substring and the index *after* the closing brace
+    are returned. If no balanced object exists ``None`` is returned.
+    """
+
+    index = text.find("{", start_index)
+    while index != -1:
+        depth = 0
+        in_string = False
+        escape = False
+        for position in range(index, len(text)):
+            character = text[position]
+            if in_string:
+                if escape:
+                    escape = False
+                elif character == "\\":
+                    escape = True
+                elif character == '"':
+                    in_string = False
+                continue
+
+            if character == '"':
+                in_string = True
+                continue
+            if character == "{":
+                depth += 1
+                continue
+            if character == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[index : position + 1], position + 1
+                continue
+        index = text.find("{", index + 1)
+    return None
+
+
+def _load_json_object(text: str) -> Any:
+    """Attempt to parse ``text`` as JSON, extracting embedded objects if needed."""
+
+    cleaned = text.strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as original_exc:
+        search_start = 0
+        while True:
+            extracted = _extract_json_object(cleaned, search_start)
+            if extracted is None:
+                break
+            snippet, search_start = extracted
+            try:
+                return json.loads(snippet)
+            except json.JSONDecodeError:
+                continue
+        raise ValueError("Kein JSON-Objekt gefunden.") from original_exc
+
+
 @dataclass
 class OutlineSection:
     """Container describing a single outline entry."""
@@ -393,8 +453,8 @@ class WriterAgent:
         if briefing_text is None:
             raise WriterAgentError("Briefing konnte nicht generiert werden.")
         try:
-            briefing = json.loads(briefing_text)
-        except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+            briefing = _load_json_object(briefing_text)
+        except ValueError as exc:  # pragma: no cover - defensive
             raise WriterAgentError(
                 "Briefing-Antwort konnte nicht als JSON interpretiert werden."
             ) from exc
