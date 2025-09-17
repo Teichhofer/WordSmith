@@ -311,120 +311,147 @@ class WriterAgent:
         )
         self._flush_pending_hints()
 
-        briefing = self._generate_briefing()
-        self._write_json(self.output_dir / "briefing.json", briefing)
-        self._record_run_event(
-            "briefing",
-            "Briefing mit LLM erzeugt",
-            artifacts=[self.output_dir / "briefing.json"],
-            data={
-                "messages": len(briefing.get("messages", [])),
-                "key_terms": len(briefing.get("key_terms", [])),
-            },
-        )
+        briefing: dict[str, Any] | None = None
+        outline_sections: List[OutlineSection] = []
+        run_error: Exception | None = None
 
-        idea_text = self._improve_idea_with_llm()
-        if idea_text is None:
-            raise WriterAgentError("Ideenphase konnte nicht abgeschlossen werden.")
-        self._idea_bullets = self._extract_idea_bullets(idea_text)
-        self._write_text(self.output_dir / "idea.txt", idea_text)
-        self._record_run_event(
-            "idea",
-            "Idee mit LLM überarbeitet",
-            artifacts=[self.output_dir / "idea.txt"],
-            data={"bullets": len(self._idea_bullets)},
-        )
-
-        outline_sections = self._create_outline_with_llm(briefing)
-        if not outline_sections:
-            raise WriterAgentError("Outline konnte nicht generiert werden.")
-        outline_sections = self._refine_outline_with_llm(briefing, outline_sections)
-        outline_sections = self._clean_outline_sections(outline_sections)
-        outline_text = self._format_outline_for_prompt(outline_sections)
-        self._write_text(self.output_dir / "outline.txt", outline_text)
-        self._write_text(self.output_dir / "iteration_00.txt", outline_text)
-        self._record_run_event(
-            "outline",
-            "Outline mit LLM erstellt",
-            artifacts=[
-                self.output_dir / "outline.txt",
-                self.output_dir / "iteration_00.txt",
-            ],
-            data={"sections": len(outline_sections)},
-        )
-
-        draft = self._generate_draft_from_outline(
-            briefing,
-            outline_sections,
-            idea_text,
-        )
-        if draft is None:
-            raise WriterAgentError("Finaler Entwurf konnte nicht erstellt werden.")
-        draft = self._apply_text_type_review(draft, briefing, outline_sections)
-        draft = self._run_compliance("draft", draft, ensure_sources=self.sources_allowed)
-        self._write_text(self.output_dir / "current_text.txt", draft)
-        self._write_text(self.output_dir / "iteration_01.txt", draft)
-        self.steps.append("draft")
-        self._record_run_event(
-            "draft",
-            "Initialer Entwurf abgeschlossen",
-            artifacts=[
-                self.output_dir / "current_text.txt",
-                self.output_dir / "iteration_01.txt",
-            ],
-        )
-
-        for iteration in range(1, self.iterations + 1):
-            revised = self._revise_with_llm(draft, iteration, briefing)
-            if revised is None:
-                raise WriterAgentError(
-                    f"Revision {iteration:02d} konnte nicht generiert werden."
-                )
-            revised = self._run_compliance(
-                f"revision_{iteration:02d}",
-                revised,
-                ensure_sources=self.sources_allowed,
-            )
-            draft = revised
-            self._write_text(
-                self.output_dir / f"iteration_{iteration + 1:02d}.txt",
-                draft,
-            )
-            self._write_text(self.output_dir / "current_text.txt", draft)
-            self.steps.append(f"revision_{iteration:02d}")
+        try:
+            briefing = self._generate_briefing()
+            self._write_json(self.output_dir / "briefing.json", briefing)
             self._record_run_event(
-                f"revision_{iteration:02d}",
-                f"Revision {iteration:02d} abgeschlossen",
-                artifacts=[
-                    self.output_dir / f"iteration_{iteration + 1:02d}.txt",
-                    self.output_dir / "current_text.txt",
-                ],
-                data={"iteration": iteration},
+                "briefing",
+                "Briefing mit LLM erzeugt",
+                artifacts=[self.output_dir / "briefing.json"],
+                data={
+                    "messages": len(briefing.get("messages", [])),
+                    "key_terms": len(briefing.get("key_terms", [])),
+                },
             )
 
-        final_word_count = self._count_words(draft)
-        self._write_metadata(draft)
-        self._record_run_event(
-            "metadata",
-            "Metadaten gespeichert",
-            artifacts=[self.output_dir / "metadata.json"],
-            data={"final_word_count": final_word_count},
-        )
-        self._write_compliance_report()
-        self._record_run_event(
-            "compliance_report",
-            "Compliance-Report gespeichert",
-            artifacts=[self.output_dir / "compliance.json"],
-            data={"checks": len(self._compliance_audit)},
-        )
-        self._record_run_event(
-            "complete",
-            "Automatikmodus erfolgreich abgeschlossen",
-            status="succeeded",
-            data={"iterations": self.iterations, "steps": list(self.steps)},
-        )
-        self._write_logs(briefing, outline_sections)
-        return draft
+            idea_text = self._improve_idea_with_llm()
+            if idea_text is None:
+                raise WriterAgentError("Ideenphase konnte nicht abgeschlossen werden.")
+            self._idea_bullets = self._extract_idea_bullets(idea_text)
+            self._write_text(self.output_dir / "idea.txt", idea_text)
+            self._record_run_event(
+                "idea",
+                "Idee mit LLM überarbeitet",
+                artifacts=[self.output_dir / "idea.txt"],
+                data={"bullets": len(self._idea_bullets)},
+            )
+
+            outline_sections = self._create_outline_with_llm(briefing)
+            if not outline_sections:
+                raise WriterAgentError("Outline konnte nicht generiert werden.")
+            outline_sections = self._refine_outline_with_llm(briefing, outline_sections)
+            outline_sections = self._clean_outline_sections(outline_sections)
+            outline_text = self._format_outline_for_prompt(outline_sections)
+            self._write_text(self.output_dir / "outline.txt", outline_text)
+            self._write_text(self.output_dir / "iteration_00.txt", outline_text)
+            self._record_run_event(
+                "outline",
+                "Outline mit LLM erstellt",
+                artifacts=[
+                    self.output_dir / "outline.txt",
+                    self.output_dir / "iteration_00.txt",
+                ],
+                data={"sections": len(outline_sections)},
+            )
+
+            draft = self._generate_draft_from_outline(
+                briefing,
+                outline_sections,
+                idea_text,
+            )
+            if draft is None:
+                raise WriterAgentError("Finaler Entwurf konnte nicht erstellt werden.")
+            draft = self._apply_text_type_review(draft, briefing, outline_sections)
+            draft = self._run_compliance("draft", draft, ensure_sources=self.sources_allowed)
+            self._write_text(self.output_dir / "current_text.txt", draft)
+            self._write_text(self.output_dir / "iteration_01.txt", draft)
+            self.steps.append("draft")
+            self._record_run_event(
+                "draft",
+                "Initialer Entwurf abgeschlossen",
+                artifacts=[
+                    self.output_dir / "current_text.txt",
+                    self.output_dir / "iteration_01.txt",
+                ],
+            )
+
+            for iteration in range(1, self.iterations + 1):
+                revised = self._revise_with_llm(draft, iteration, briefing)
+                if revised is None:
+                    raise WriterAgentError(
+                        f"Revision {iteration:02d} konnte nicht generiert werden."
+                    )
+                revised = self._run_compliance(
+                    f"revision_{iteration:02d}",
+                    revised,
+                    ensure_sources=self.sources_allowed,
+                )
+                draft = revised
+                self._write_text(
+                    self.output_dir / f"iteration_{iteration + 1:02d}.txt",
+                    draft,
+                )
+                self._write_text(self.output_dir / "current_text.txt", draft)
+                self.steps.append(f"revision_{iteration:02d}")
+                self._record_run_event(
+                    f"revision_{iteration:02d}",
+                    f"Revision {iteration:02d} abgeschlossen",
+                    artifacts=[
+                        self.output_dir / f"iteration_{iteration + 1:02d}.txt",
+                        self.output_dir / "current_text.txt",
+                    ],
+                    data={"iteration": iteration},
+                )
+
+            final_word_count = self._count_words(draft)
+            self._write_metadata(draft)
+            self._record_run_event(
+                "metadata",
+                "Metadaten gespeichert",
+                artifacts=[self.output_dir / "metadata.json"],
+                data={"final_word_count": final_word_count},
+            )
+            self._write_compliance_report()
+            self._record_run_event(
+                "compliance_report",
+                "Compliance-Report gespeichert",
+                artifacts=[self.output_dir / "compliance.json"],
+                data={"checks": len(self._compliance_audit)},
+            )
+            self._record_run_event(
+                "complete",
+                "Automatikmodus erfolgreich abgeschlossen",
+                status="succeeded",
+                data={"iterations": self.iterations, "steps": list(self.steps)},
+            )
+            return draft
+        except Exception as exc:
+            run_error = exc
+            message = (
+                f"Automatikmodus konnte nicht abgeschlossen werden: {exc}"
+                if isinstance(exc, WriterAgentError)
+                else f"Automatikmodus unerwartet abgebrochen: {exc}"
+            )
+            self._record_run_event(
+                "error",
+                message,
+                status="failed",
+                data={
+                    "error": str(exc),
+                    "exception_type": exc.__class__.__name__,
+                },
+            )
+            raise
+        finally:
+            try:
+                self._write_logs(briefing or {}, outline_sections)
+            except Exception:
+                if run_error is None:
+                    raise
 
     # ------------------------------------------------------------------
     # Pipeline steps
