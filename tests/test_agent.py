@@ -205,6 +205,54 @@ def test_agent_parses_briefing_from_code_block(
     assert not responses
 
 
+def test_briefing_parse_error_logs_raw_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 220)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama3"
+
+    invalid_response = "Hier das Briefing vorab: nicht JSON"
+    responses = deque([llm.LLMResult(text=invalid_response)])
+
+    def fake_generate_text(**_: object) -> llm.LLMResult:
+        return responses.popleft()
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
+
+    agent = WriterAgent(
+        topic="Briefing-Fehler",
+        word_count=220,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Bitte JSON liefern.",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    with pytest.raises(
+        WriterAgentError, match="Briefing-Antwort konnte nicht als JSON interpretiert"
+    ):
+        agent.run()
+
+    run_log = config.logs_dir / "run.log"
+    entries = [
+        json.loads(line)
+        for line in run_log.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    error_entries = [entry for entry in entries if entry["step"] == "error"]
+    assert error_entries, "error entry missing in run log"
+    assert error_entries[-1]["data"].get("raw_text") == invalid_response
+    assert not responses
+
+
 def test_agent_raises_when_llm_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = _build_config(tmp_path, 200)
     config.llm_provider = "ollama"
