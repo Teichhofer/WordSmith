@@ -462,6 +462,20 @@ class WriterAgent:
         return briefing
 
     def _improve_idea(self, briefing: dict) -> str:
+        if self._should_use_llm():
+            idea_text = self._improve_idea_with_llm()
+            if idea_text:
+                bullets = self._extract_idea_bullets(idea_text)
+                if bullets:
+                    self._idea_bullets = bullets
+                elif not self._idea_bullets:
+                    self._idea_bullets = ["[KLÄREN: Inhaltliches Briefing ergänzen]"]
+                idea_text = self._run_compliance(
+                    "idea", idea_text, annotation_label="idea"
+                )
+                self.steps.append("idea")
+                return idea_text
+
         raw_sentences = self._split_content_into_sentences(self.content)
         bullets: List[str] = []
         for sentence in raw_sentences:
@@ -496,10 +510,190 @@ class WriterAgent:
         return idea_text
 
     def _create_outline(self, briefing: dict) -> List[OutlineSection]:
+        if self._should_use_llm():
+            sections = self._create_outline_with_llm(briefing)
+            if sections:
+                self.steps.append("outline")
+                return sections
+
         sections = self._build_outline_sections()
         sections = self._improve_outline(sections)
         sections = self._clean_outline(sections)
         self.steps.append("outline")
+        return sections
+
+    def _improve_idea_with_llm(self) -> str | None:
+        content = (self.content or "").strip()
+        if not content:
+            content = "[KLÄREN: Inhaltliches Briefing ergänzen]"
+        prompt = prompts.IDEA_IMPROVEMENT_PROMPT.format(content=content)
+        return self._call_llm_stage(
+            stage="idea_llm",
+            prompt=prompt,
+            success_message="Idee mit LLM überarbeitet",
+            failure_message="LLM-Ideenverbesserung fehlgeschlagen",
+            data={"phase": "idea"},
+        )
+
+    def _extract_idea_bullets(self, text: str) -> List[str]:
+        bullets: List[str] = []
+        bullet_pattern = re.compile(r"^\s*[-*•]\s+(?P<content>.+)")
+        numbered_pattern = re.compile(r"^\s*\d+[.)\-]\s*(?P<content>.+)")
+        for line in text.splitlines():
+            match = bullet_pattern.match(line)
+            if match:
+                cleaned = match.group("content").strip()
+                if cleaned and not cleaned.lower().startswith("summary"):
+                    bullets.append(cleaned)
+        if not bullets:
+            for line in text.splitlines():
+                match = numbered_pattern.match(line)
+                if match:
+                    cleaned = match.group("content").strip()
+                    if cleaned and not cleaned.lower().startswith("summary"):
+                        bullets.append(cleaned)
+        return bullets
+
+    def _create_outline_with_llm(
+        self, briefing: dict
+    ) -> List[OutlineSection] | None:
+        prompt = prompts.OUTLINE_PROMPT.format(
+            text_type=self.text_type,
+            title=self.topic,
+            briefing_json=json.dumps(briefing, ensure_ascii=False, indent=2),
+            word_count=self.word_count,
+        )
+        outline_text = self._call_llm_stage(
+            stage="outline_llm",
+            prompt=prompt,
+            success_message="Outline mit LLM erstellt",
+            failure_message="LLM-Outline fehlgeschlagen",
+            data={"phase": "initial"},
+        )
+        if not outline_text:
+            return None
+
+        improvement_prompt = (
+            prompts.OUTLINE_IMPROVEMENT_PROMPT.format(word_count=self.word_count)
+            + "\n\nOutline:\n"
+            + outline_text.strip()
+        )
+        improved_text = self._call_llm_stage(
+            stage="outline_llm_improve",
+            prompt=improvement_prompt,
+            success_message="Outline mit LLM verfeinert",
+            failure_message="LLM-Outline-Verbesserung fehlgeschlagen",
+            data={"phase": "improvement"},
+        )
+        outline_source = improved_text or outline_text
+
+        sections = self._parse_outline_sections(outline_source)
+        if not sections:
+            self._record_run_event(
+                "outline_llm_parse",
+                "LLM-Outline konnte nicht interpretiert werden.",
+                status="warning",
+                data={"phase": "parse_failure"},
+            )
+            return None
+
+        sections = self._distribute_outline_budgets(sections)
+        sections = self._clean_outline(sections)
+        return sections
+
+    def _parse_outline_sections(self, outline_text: str) -> List[OutlineSection]:
+        lines = [line.strip() for line in outline_text.splitlines() if line.strip()]
+        sections: List[OutlineSection] = []
+        number_pattern = re.compile(
+            r"^\s*(?:[-*•]\s*)?(?P<number>\d+(?:\.\d+)*)[\)\.:\-\s]+(?P<body>.+)$"
+        )
+        for line in lines:
+            match = number_pattern.match(line)
+            if not match:
+                continue
+            number = match.group("number").strip()
+            body = match.group("body").strip()
+
+            deliverable: str | None = None
+            title_part = body
+            if "->" in body:
+                title_part, deliverable = [part.strip() for part in body.split("->", 1)]
+            else:
+                deliverable_match = re.search(
+                    r"(liefer\w*):\s*(?P<deliverable>[^,;]+)",
+                    body,
+                    flags=re.IGNORECASE,
+                )
+                if deliverable_match:
+                    deliverable = deliverable_match.group("deliverable").strip()
+                    title_part = body[: deliverable_match.start()].strip()
+
+            detail_text = ""
+            title = title_part
+            detail_match = re.search(r"\((?P<details>[^)]*)\)", title_part)
+            if detail_match:
+                detail_text = detail_match.group("details")
+                title = (title_part[: detail_match.start()] + title_part[detail_match.end():]).strip()
+            else:
+                title = title_part.strip()
+
+            role = "Abschnitt"
+            budget = 0
+            if detail_text:
+                for part in re.split(r"[;,]", detail_text):
+                    key, _, value = part.partition(":")
+                    if not _:
+                        continue
+                    key_lower = key.strip().lower()
+                    value = value.strip()
+                    if "rolle" in key_lower or "funktion" in key_lower:
+                        if value:
+                            role = value
+                    elif "wort" in key_lower:
+                        number_match = re.search(r"\d+", value)
+                        if number_match:
+                            budget = int(number_match.group())
+                    elif "liefer" in key_lower and not deliverable:
+                        if value:
+                            deliverable = value
+
+            if not title:
+                title = f"Abschnitt {number}"
+            if not deliverable:
+                deliverable = "Liefergegenstand definieren."
+
+            sections.append(
+                OutlineSection(
+                    number=number,
+                    title=title,
+                    role=role,
+                    budget=budget,
+                    deliverable=deliverable,
+                )
+            )
+
+        return sections
+
+    def _distribute_outline_budgets(
+        self, sections: List[OutlineSection]
+    ) -> List[OutlineSection]:
+        missing = [section for section in sections if section.budget <= 0]
+        if not missing:
+            return sections
+
+        allocated = sum(section.budget for section in sections if section.budget > 0)
+        remaining = self.word_count - allocated
+        if remaining <= 0:
+            default_budget = max(60, self.word_count // max(1, len(sections)))
+        else:
+            default_budget = max(60, remaining // max(1, len(missing)))
+
+        if default_budget <= 0:
+            default_budget = 60
+
+        for section in sections:
+            if section.budget <= 0:
+                section.budget = default_budget
         return sections
 
     def _build_outline_sections(self) -> List[OutlineSection]:
@@ -647,6 +841,65 @@ class WriterAgent:
         return self._run_compliance(
             "outline", outline_text, annotation_label="outline"
         )
+
+    def _call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: dict[str, Any] | None = None,
+    ) -> str | None:
+        try:
+            result = llm.generate_text(
+                provider=self.config.llm_provider,
+                model=self.config.llm_model,
+                prompt=prompt,
+                system_prompt=prompts.SYSTEM_PROMPT,
+                parameters=self.config.llm,
+                base_url=self.config.ollama_base_url,
+            )
+        except LLMGenerationError as exc:
+            event_data = {"provider": self.config.llm_provider, "model": self.config.llm_model}
+            if data:
+                event_data.update(data)
+            event_data["error"] = str(exc)
+            self._record_run_event(
+                stage,
+                f"{failure_message}: {exc}",
+                status="warning",
+                data=event_data,
+            )
+            return None
+
+        text = result.text.strip()
+        if not text:
+            event_data = {"provider": self.config.llm_provider, "model": self.config.llm_model}
+            if data:
+                event_data.update(data)
+            self._record_run_event(
+                stage,
+                f"{failure_message}: leere Antwort",
+                status="warning",
+                data=event_data,
+            )
+            return None
+
+        event_data = {
+            "provider": self.config.llm_provider,
+            "model": self.config.llm_model,
+            "characters": len(text),
+        }
+        if data:
+            event_data.update(data)
+        self._record_run_event(
+            stage,
+            success_message,
+            status="info",
+            data=event_data,
+        )
+        return text
 
     def _should_use_llm(self) -> bool:
         provider = (self.config.llm_provider or "").strip().lower()

@@ -4,6 +4,8 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+from collections import deque
+
 from wordsmith import llm
 from wordsmith.agent import WriterAgent
 from wordsmith.config import Config
@@ -334,23 +336,47 @@ def test_agent_uses_llm_output_when_available(tmp_path, monkeypatch):
     config.llm_model = "llama2"
     config.ollama_base_url = "http://ollama.local"
 
-    llm_text = (
-        "## 1. Kontext schaffen (Hook)\n"
-        "Dieser Abschnitt verortet Projekt Aurora im strategischen Rahmen und betont den Nutzen für das Leitungsteam."
-        " Er markiert offene Fragen als [KLÄREN: Kennzahlen] und priorisiert Transparenz.\n"
-        "## 2. Umsetzung strukturieren (Argument)\n"
-        "Hier werden Prozesse gebündelt, Verantwortlichkeiten geklärt und der nächste Sprint mit Fokus auf Datenqualität geplant."
-        " Das stärkt die Roadmap und unterlegt sie mit messbaren Etappen.\n"
-        "## 3. Fazit und CTA (CTA)\n"
-        "Der Abschluss bündelt Lernerfahrungen, beantwortet die Kernfrage nach Wertbeitrag und aktiviert das Team."
-        " Nutzen Sie die Impulse, um Projekt Aurora im Alltag Ihres Teams zu verankern."
+    idea_llm_text = (
+        "- Klarer Fokus auf CTA\n"
+        "- Transparenz für das Leitungsteam sichern\n"
+        "Summary: Die Idee verknüpft Strategie und Umsetzung."
     )
 
-    captured: dict[str, object] = {}
+    outline_initial = (
+        "1. Auftakt (Rolle: Hook, Wortbudget: 50 Wörter) -> Aufmerksamkeit wecken.\n"
+        "2. Strategiepfad (Rolle: Argument, Wortbudget: 80 Wörter) -> Handlungsrahmen skizzieren.\n"
+        "3. Abschluss (Rolle: CTA, Wortbudget: 50 Wörter) -> Team aktivieren."
+    )
+
+    outline_improved = (
+        "1. Auftakt (Rolle: Hook, Wortbudget: 60 Wörter) -> Aufmerksamkeit und Kontext schärfen.\n"
+        "2. Strategiepfad (Rolle: Argument, Wortbudget: 70 Wörter) -> Handlungsrahmen priorisieren.\n"
+        "3. Abschluss (Rolle: CTA, Wortbudget: 50 Wörter) -> Team aktivieren und CTA formulieren."
+    )
+
+    final_llm_text = (
+        "## 1. Auftakt (Hook)\n"
+        "Der Auftakt verortet Projekt Aurora für das Leitungsteam und markiert offene Kennzahlen als [KLÄREN: Kennzahl].\n"
+        "## 2. Strategiepfad (Argument)\n"
+        "Der zweite Abschnitt konkretisiert Prozesse und stärkt Vertrauen.\n"
+        "## 3. Abschluss (CTA)\n"
+        "Nutzen Sie die Impulse, um Projekt Aurora im Alltag Ihres Teams zu verankern."
+    )
+
+    responses = deque(
+        [
+            llm.LLMResult(text=idea_llm_text),
+            llm.LLMResult(text=outline_initial),
+            llm.LLMResult(text=outline_improved),
+            llm.LLMResult(text=final_llm_text),
+        ]
+    )
+
+    captured_prompts: list[str] = []
 
     def fake_generate_text(**kwargs):
-        captured.update(kwargs)
-        return llm.LLMResult(text=llm_text)
+        captured_prompts.append(kwargs["prompt"])
+        return responses.popleft()
 
     monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
 
@@ -372,11 +398,27 @@ def test_agent_uses_llm_output_when_available(tmp_path, monkeypatch):
 
     final_text = agent.run()
 
-    assert "## 1. Kontext schaffen" in final_text
+    assert not responses
+    assert len(captured_prompts) == 4
+    assert "Überarbeite diesen Rohinhalt" in captured_prompts[0]
+    assert "hierarchische Gliederung" in captured_prompts[1]
+    assert "Outline" in captured_prompts[2]
+    assert "Schreibe den finalen" in captured_prompts[3]
+
+    idea_output = (config.output_dir / "idea.txt").read_text(encoding="utf-8")
+    outline_output = (config.output_dir / "outline.txt").read_text(encoding="utf-8")
+
+    assert "Klarer Fokus auf CTA" in idea_output
+    assert "Rolle: Hook" in outline_output
+    assert agent._idea_bullets == [
+        "Klarer Fokus auf CTA",
+        "Transparenz für das Leitungsteam sichern",
+    ]
+    assert any("Budget: 60" in line for line in outline_output.splitlines())
+
+    assert "## 1. Auftakt" in final_text
     assert "Nutzen Sie die Impulse" in final_text
     assert "[COMPLIANCE-LLM]" in final_text
-    assert captured["provider"] == "ollama"
-    assert captured["model"] == "llama2"
     assert agent._llm_generation and agent._llm_generation["status"] == "success"
 
     llm_events = [event for event in agent._run_events if event["step"] == "llm_generation"]

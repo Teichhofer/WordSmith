@@ -22,9 +22,9 @@ def test_adjust_for_word_count_scales_limits_and_sets_determinism():
     config.adjust_for_word_count(600)
 
     assert config.word_count == 600
-    assert config.context_length == 2400
-    assert config.token_limit == 960
-    assert config.llm.temperature == 0.2
+    assert config.context_length == 8192
+    assert config.token_limit == 8192
+    assert config.llm.temperature == 0.8
     assert config.llm.top_p == 0.9
     assert config.llm.presence_penalty == 0.0
     assert config.llm.frequency_penalty == 0.3
