@@ -20,6 +20,16 @@ def _build_config(tmp_path: Path, word_count: int) -> Config:
     return config
 
 
+def test_load_json_object_handles_invalid_escape_sequences() -> None:
+    malformed = '{"goal": "Test", "key\\_terms": ["KI"], "messages": ["Hinweis"]}'
+
+    result = _load_json_object(malformed)
+
+    assert result["goal"] == "Test"
+    assert "key_terms" in result
+    assert result["key_terms"] == ["KI"]
+
+
 def test_agent_requires_llm_configuration(tmp_path: Path) -> None:
     config = _build_config(tmp_path, 200)
 

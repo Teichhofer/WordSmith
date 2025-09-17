@@ -86,6 +86,21 @@ _JSON_LITERAL_REPLACEMENTS: tuple[tuple[str, str], ...] = (
 )
 
 
+_INVALID_ESCAPE_RE = re.compile(r"\\(?![\"\\/bfnrtu])(?P<char>.)", re.DOTALL)
+
+
+def _sanitize_invalid_json_escapes(candidate: str) -> str:
+    """Drop backslashes from invalid escape sequences in JSON strings."""
+
+    if "\\" not in candidate:
+        return candidate
+
+    def _replace(match: re.Match[str]) -> str:
+        return match.group("char")
+
+    return _INVALID_ESCAPE_RE.sub(_replace, candidate)
+
+
 def _replace_json_literals(candidate: str) -> str:
     """Convert JSON booleans/null to Python equivalents outside of strings."""
 
@@ -144,6 +159,12 @@ def _parse_json_candidate(candidate: str) -> Any:
     try:
         return json.loads(candidate)
     except json.JSONDecodeError:
+        sanitized = _sanitize_invalid_json_escapes(candidate)
+        if sanitized != candidate:
+            try:
+                return json.loads(sanitized)
+            except json.JSONDecodeError:
+                candidate = sanitized
         python_like = _replace_json_literals(candidate)
         try:
             return ast.literal_eval(python_like)
