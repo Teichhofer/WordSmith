@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from dataclasses import asdict, dataclass, field
@@ -78,24 +79,104 @@ def _extract_json_object(text: str, start_index: int = 0) -> tuple[str, int] | N
     return None
 
 
+_JSON_LITERAL_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("true", "True"),
+    ("false", "False"),
+    ("null", "None"),
+)
+
+
+def _replace_json_literals(candidate: str) -> str:
+    """Convert JSON booleans/null to Python equivalents outside of strings."""
+
+    result: list[str] = []
+    index = 0
+    in_string = False
+    string_delimiter = ""
+    length = len(candidate)
+    while index < length:
+        character = candidate[index]
+        if in_string:
+            result.append(character)
+            if character == "\\":
+                if index + 1 < length:
+                    result.append(candidate[index + 1])
+                    index += 2
+                    continue
+            elif character == string_delimiter:
+                in_string = False
+            index += 1
+            continue
+
+        if character in {'"', "'"}:
+            in_string = True
+            string_delimiter = character
+            result.append(character)
+            index += 1
+            continue
+
+        replaced = False
+        for literal, replacement in _JSON_LITERAL_REPLACEMENTS:
+            literal_end = index + len(literal)
+            if candidate.startswith(literal, index):
+                previous = candidate[index - 1] if index > 0 else ""
+                next_char = candidate[literal_end] if literal_end < length else ""
+                if (
+                    (not previous.isalnum() and previous != "_")
+                    and (not next_char.isalnum() and next_char != "_")
+                ):
+                    result.append(replacement)
+                    index = literal_end
+                    replaced = True
+                    break
+        if replaced:
+            continue
+
+        result.append(character)
+        index += 1
+
+    return "".join(result)
+
+
+def _parse_json_candidate(candidate: str) -> Any:
+    """Parse a JSON snippet using strict JSON first, then Python literals."""
+
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        python_like = _replace_json_literals(candidate)
+        try:
+            return ast.literal_eval(python_like)
+        except (SyntaxError, ValueError) as exc:
+            raise ValueError("Ungültiges JSON-Objekt.") from exc
+
+
 def _load_json_object(text: str) -> Any:
     """Attempt to parse ``text`` as JSON, extracting embedded objects if needed."""
 
     cleaned = text.strip()
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as original_exc:
-        search_start = 0
-        while True:
-            extracted = _extract_json_object(cleaned, search_start)
-            if extracted is None:
-                break
-            snippet, search_start = extracted
-            try:
-                return json.loads(snippet)
-            except json.JSONDecodeError:
-                continue
-        raise ValueError("Kein JSON-Objekt gefunden.") from original_exc
+    candidates: list[str] = [cleaned]
+    search_start = 0
+    while True:
+        extracted = _extract_json_object(cleaned, search_start)
+        if extracted is None:
+            break
+        snippet, search_start = extracted
+        snippet = snippet.strip()
+        if snippet and snippet not in candidates:
+            candidates.append(snippet)
+
+    last_error: Exception | None = None
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            return _parse_json_candidate(candidate)
+        except ValueError as exc:
+            last_error = exc
+            continue
+
+    raise ValueError("Kein JSON-Objekt gefunden.") from last_error
 
 
 @dataclass
