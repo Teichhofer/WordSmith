@@ -10,7 +10,7 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from wordsmith import llm
-from wordsmith.agent import WriterAgent, WriterAgentError
+from wordsmith.agent import WriterAgent, WriterAgentError, _load_json_object
 from wordsmith.config import Config
 
 
@@ -18,6 +18,31 @@ def _build_config(tmp_path: Path, word_count: int) -> Config:
     config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
     config.adjust_for_word_count(word_count)
     return config
+
+
+def test_load_json_object_accepts_markdown_escaped_underscores() -> None:
+    raw_text = "\n".join(
+        [
+            "Hier ist ein spannender Tweet über KI! Entdecke, wie künstliche Intelligenz unsere Welt verändert.",
+            "{",
+            '  "goal": "to create an engaging and informative tweet about AI for a general audience",',
+            '  "audience": "general readership with basic knowledge",',
+            '  "tone": "factually lively",',
+            '  "register": "Sie",',
+            '  "variant": "DE-DE",',
+            '  "constraints": "no additional constraints",',
+            '  "key\\_terms": ["KI", "spannend"],',
+            '  "messages": ["Hier ist ein spannender Tweet über KI! Entdecke, wie künstliche Intelligenz unsere Welt verändert."],',
+            '  "seo\\_keywords": []',
+            "}",
+            "",
+        ]
+    )
+
+    parsed = _load_json_object(raw_text)
+
+    assert parsed["key_terms"] == ["KI", "spannend"]
+    assert parsed["seo_keywords"] == []
 
 
 def test_agent_requires_llm_configuration(tmp_path: Path) -> None:

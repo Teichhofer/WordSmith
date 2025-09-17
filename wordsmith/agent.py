@@ -78,6 +78,30 @@ def _extract_json_object(text: str, start_index: int = 0) -> tuple[str, int] | N
     return None
 
 
+_INVALID_ESCAPE_SEQUENCE_RE = re.compile(r"\\(?![\"\\/bfnrtu])")
+
+
+def _remove_invalid_json_escapes(text: str) -> str:
+    """Remove invalid JSON escape sequences from ``text``.
+
+    The helper strips a leading backslash from sequences like ``\\_`` that are
+    commonly produced by LLMs when they attempt to escape Markdown characters in
+    JSON output. Valid escapes (``\\n``, ``\\t`` ...) remain untouched. The
+    substitution is applied repeatedly to also handle nested cases.
+    """
+
+    def _replacement(match: re.Match[str]) -> str:
+        value = match.group(0)
+        return value[1:] if len(value) > 1 else ""
+
+    previous = None
+    cleaned = text
+    while cleaned != previous:
+        previous = cleaned
+        cleaned = _INVALID_ESCAPE_SEQUENCE_RE.sub(_replacement, cleaned)
+    return cleaned
+
+
 def _load_json_object(text: str) -> Any:
     """Attempt to parse ``text`` as JSON, extracting embedded objects if needed."""
 
@@ -85,6 +109,12 @@ def _load_json_object(text: str) -> Any:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as original_exc:
+        sanitized = _remove_invalid_json_escapes(cleaned)
+        if sanitized != cleaned:
+            try:
+                return json.loads(sanitized)
+            except json.JSONDecodeError:
+                cleaned = sanitized
         search_start = 0
         while True:
             extracted = _extract_json_object(cleaned, search_start)
@@ -94,6 +124,12 @@ def _load_json_object(text: str) -> Any:
             try:
                 return json.loads(snippet)
             except json.JSONDecodeError:
+                sanitized_snippet = _remove_invalid_json_escapes(snippet)
+                if sanitized_snippet != snippet:
+                    try:
+                        return json.loads(sanitized_snippet)
+                    except json.JSONDecodeError:
+                        continue
                 continue
         raise ValueError("Kein JSON-Objekt gefunden.") from original_exc
 
