@@ -19,7 +19,7 @@ from .defaults import (
     REGISTER_ALIASES,
     VALID_VARIANTS,
 )
-from .llm import LLMGenerationError, LLMResult
+from .llm import LLMGenerationError
 
 
 _COMPLIANCE_PLACEHOLDERS: tuple[str, ...] = (
@@ -87,6 +87,7 @@ class WriterAgent:
     _compliance_audit: List[dict[str, Any]] = field(init=False, default_factory=list)
     _pending_hints: List[dict[str, Any]] = field(init=False, default_factory=list)
     _llm_generation: dict[str, Any] | None = field(init=False, default=None)
+    _rubric_passed: bool | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -236,6 +237,7 @@ class WriterAgent:
         self._run_events.clear()
         self._pending_hints.clear()
         self._llm_generation = None
+        self._rubric_passed = None
 
         self._record_run_event(
             "start",
@@ -276,7 +278,9 @@ class WriterAgent:
         outline_sections = self._create_outline_with_llm(briefing)
         if not outline_sections:
             raise WriterAgentError("Outline konnte nicht generiert werden.")
-        outline_text = "\n".join(section.format_line() for section in outline_sections)
+        outline_sections = self._refine_outline_with_llm(briefing, outline_sections)
+        outline_sections = self._clean_outline_sections(outline_sections)
+        outline_text = self._format_outline_for_prompt(outline_sections)
         self._write_text(self.output_dir / "outline.txt", outline_text)
         self._write_text(self.output_dir / "iteration_00.txt", outline_text)
         self._record_run_event(
@@ -289,9 +293,14 @@ class WriterAgent:
             data={"sections": len(outline_sections)},
         )
 
-        draft = self._generate_final_draft(briefing, outline_sections, idea_text, outline_text)
+        draft = self._generate_draft_from_outline(
+            briefing,
+            outline_sections,
+            idea_text,
+        )
         if draft is None:
             raise WriterAgentError("Finaler Entwurf konnte nicht erstellt werden.")
+        draft = self._apply_text_type_review(draft, briefing, outline_sections)
         draft = self._run_compliance("draft", draft, ensure_sources=self.sources_allowed)
         self._write_text(self.output_dir / "current_text.txt", draft)
         self._write_text(self.output_dir / "iteration_01.txt", draft)
@@ -525,135 +534,263 @@ class WriterAgent:
             )
 
         return sections
-    def _build_llm_prompt(
-        self,
-        briefing: dict,
-        sections: Sequence[OutlineSection],
-        *,
-        idea_text: str,
-        outline_text: str,
+    def _format_outline_for_prompt(
+        self, sections: Sequence[OutlineSection]
     ) -> str:
-        outline_clean = outline_text.strip() or "\n".join(
-            (
-                f"{section.number}. {section.title} ({section.role}) – "
-                f"{section.deliverable} [{section.budget} Wörter]"
+        return "\n".join(section.format_line() for section in sections)
+
+    def _refine_outline_with_llm(
+        self, briefing: dict, sections: Sequence[OutlineSection]
+    ) -> List[OutlineSection]:
+        prompt = (
+            prompts.OUTLINE_IMPROVEMENT_PROMPT.format(word_count=self.word_count).strip()
+            + "\n\nBriefing:\n"
+            + json.dumps(briefing, ensure_ascii=False, indent=2)
+            + "\n\nAktuelle Outline:\n"
+            + self._format_outline_for_prompt(sections)
+        )
+        improved_text = self._call_llm_stage(
+            stage="outline_improvement_llm",
+            prompt=prompt,
+            success_message="Outline mit LLM verfeinert",
+            failure_message="LLM-Outline-Überarbeitung fehlgeschlagen",
+            data={"phase": "outline"},
+        )
+        if not improved_text:
+            return list(sections)
+
+        improved_sections = self._parse_outline_sections(improved_text)
+        return improved_sections or list(sections)
+
+    def _clean_outline_sections(
+        self, sections: Sequence[OutlineSection]
+    ) -> List[OutlineSection]:
+        cleaned: List[OutlineSection] = []
+        for section in sections:
+            role_value = (section.role or "").strip()
+            deliverable_value = (section.deliverable or "").strip()
+            title_value = (section.title or "").strip()
+            cleaned_section = OutlineSection(
+                number=section.number,
+                title=title_value or f"Abschnitt {section.number}",
+                role=role_value or "Abschnitt",
+                budget=max(section.budget, 0),
+                deliverable=deliverable_value or "Liefergegenstand definieren.",
             )
-            for section in sections
-        )
-        idea_clean = idea_text.strip()
-        if not idea_clean:
-            bullets = self._idea_bullets or ["[KLÄREN: Ideenbriefing ergänzen]"]
-            idea_clean = "\n".join(f"- {item}" for item in bullets)
+            cleaned.append(cleaned_section)
 
-        seo_text = ", ".join(self.seo_keywords or []) or "keine"
-        variant_hint = (
-            f"Verwende Rechtschreibung für {self.variant}" if self.variant else "Nutze Standardsprache"
-        )
-        sources_mode = "Quellen erlaubt" if self.sources_allowed else "Quellenangaben blockiert"
-        constraints = self.constraints or DEFAULT_CONSTRAINTS
+        if not cleaned:
+            return []
 
-        return prompts.FINAL_DRAFT_PROMPT.format(
-            text_type=self.text_type,
-            title=self.topic,
-            word_count=self.word_count,
-            briefing_json=json.dumps(briefing, ensure_ascii=False, indent=2),
-            outline=outline_clean,
-            idea_bullets=idea_clean,
-            tone=self.tone,
-            register=self.register,
-            variant_hint=variant_hint,
-            sources_mode=sources_mode,
-            constraints=constraints,
-            seo_keywords=seo_text,
-        )
+        total_budget = sum(section.budget for section in cleaned)
+        if total_budget <= 0:
+            average_budget = max(50, int(self.word_count / max(1, len(cleaned))))
+            for section in cleaned:
+                section.budget = average_budget
+            total_budget = average_budget * len(cleaned)
 
-    def _generate_final_draft(
+        difference = self.word_count - total_budget
+        if difference != 0:
+            cleaned[-1].budget = max(0, cleaned[-1].budget + difference)
+
+        for section in cleaned:
+            if not section.role:
+                section.role = "Abschnitt"
+
+        return cleaned
+
+    def _generate_draft_from_outline(
         self,
         briefing: dict,
         sections: Sequence[OutlineSection],
         idea_text: str,
-        outline_text: str,
     ) -> str | None:
-        if not self._should_use_llm():
-            raise WriterAgentError("Für den Automatikmodus muss ein LLM-Modell konfiguriert sein.")
+        compiled_sections: List[tuple[OutlineSection, str]] = []
+        aggregate_parts: List[str] = []
 
-        prompt = self._build_llm_prompt(
-            briefing,
-            sections,
-            idea_text=idea_text,
-            outline_text=outline_text,
-        )
-
-        try:
-            result = llm.generate_text(
-                provider=self.config.llm_provider,
-                model=self.config.llm_model,
+        for index, section in enumerate(sections, start=1):
+            prompt = self._build_section_prompt(
+                briefing=briefing,
+                sections=sections,
+                section=section,
+                idea_text=idea_text,
+                compiled_sections=compiled_sections,
+            )
+            stage = f"section_{index:02d}_llm"
+            section_text = self._call_llm_stage(
+                stage=stage,
                 prompt=prompt,
-                system_prompt=prompts.SYSTEM_PROMPT,
-                parameters=self.config.llm,
-                base_url=self.config.ollama_base_url,
-            )
-        except LLMGenerationError as exc:
-            self._llm_generation = {
-                "status": "failed",
-                "provider": self.config.llm_provider,
-                "model": self.config.llm_model,
-                "error": str(exc),
-                "prompt_preview": prompt[:200],
-            }
-            self._record_run_event(
-                "llm_generation",
-                f"LLM-Generierung fehlgeschlagen: {exc}",
-                status="warning",
+                success_message=f"Abschnitt {index:02d} generiert",
+                failure_message=f"Abschnitt {index:02d} fehlgeschlagen",
                 data={
-                    "provider": self.config.llm_provider,
-                    "model": self.config.llm_model,
+                    "phase": "section",
+                    "section": section.number,
+                    "title": section.title,
                 },
             )
-            return None
-
-        text = result.text.strip()
-        if not text:
-            self._llm_generation = {
-                "status": "failed",
-                "provider": self.config.llm_provider,
-                "model": self.config.llm_model,
-                "error": "Leere Antwort erhalten.",
-                "prompt_preview": prompt[:200],
-            }
-            self._record_run_event(
-                "llm_generation",
-                "LLM-Generierung lieferte keinen Text.",
-                status="warning",
-                data={
+            if not section_text:
+                self._llm_generation = {
+                    "status": "failed",
                     "provider": self.config.llm_provider,
                     "model": self.config.llm_model,
-                },
-            )
-            return None
+                    "section": section.number,
+                    "title": section.title,
+                }
+                self._record_run_event(
+                    "llm_generation",
+                    f"Abschnitt {index:02d} konnte nicht generiert werden.",
+                    status="warning",
+                    data={"section": section.number, "title": section.title},
+                )
+                return None
 
-        generation_record: dict[str, Any] = {
+            cleaned_section = section_text.strip()
+            compiled_sections.append((section, cleaned_section))
+            aggregate_parts.append(self._format_section_output(section, cleaned_section))
+            partial_draft = "\n\n".join(aggregate_parts).strip()
+            self._write_text(self.output_dir / "current_text.txt", partial_draft)
+            self.steps.append(f"section_{index:02d}")
+
+        draft = "\n\n".join(aggregate_parts).strip()
+        self._llm_generation = {
             "status": "success",
             "provider": self.config.llm_provider,
             "model": self.config.llm_model,
-            "prompt": prompt,
-            "response_preview": text[:400],
+            "sections": len(compiled_sections),
+            "response_preview": draft[:400],
         }
-        if isinstance(result, LLMResult) and result.raw is not None:
-            generation_record["raw"] = result.raw
-        self._llm_generation = generation_record
         self.steps.append("llm_generation")
         self._record_run_event(
             "llm_generation",
-            f"Entwurf mit {self.config.llm_provider} erstellt",
+            "Abschnittsweise Generierung abgeschlossen",
             status="info",
-            data={
-                "provider": self.config.llm_provider,
-                "model": self.config.llm_model,
-                "characters": len(text),
-            },
+            data={"sections": len(compiled_sections)},
         )
-        return text
+        return draft
+
+    def _build_section_prompt(
+        self,
+        *,
+        briefing: dict,
+        sections: Sequence[OutlineSection],
+        section: OutlineSection,
+        idea_text: str,
+        compiled_sections: Sequence[tuple[OutlineSection, str]],
+    ) -> str:
+        previous_text = "\n\n".join(
+            self._format_section_output(prev_section, text)
+            for prev_section, text in compiled_sections
+        ).strip()
+        idea_clean = idea_text.strip() or "[KLÄREN: Idee ergänzen]"
+        recap = self._build_previous_section_recap(compiled_sections)
+
+        return (
+            prompts.SECTION_PROMPT.format(
+                section_number=section.number,
+                section_title=section.title,
+                role=section.role,
+                deliverable=section.deliverable,
+                budget=section.budget,
+                previous_section_recap=recap,
+            ).strip()
+            + "\n\nBriefing:\n"
+            + json.dumps(briefing, ensure_ascii=False, indent=2)
+            + "\n\nOutline:\n"
+            + self._format_outline_for_prompt(sections)
+            + "\n\nKernaussagen:\n"
+            + idea_clean
+            + "\n\nBisheriger Text:\n"
+            + (previous_text or "Noch kein Abschnitt verfasst.")
+        )
+
+    def _build_previous_section_recap(
+        self, compiled_sections: Sequence[tuple[OutlineSection, str]]
+    ) -> str:
+        if not compiled_sections:
+            return "Erster Abschnitt – etabliere das Thema und die Zielsetzung klar."
+        last_section, last_text = compiled_sections[-1]
+        words = [token for token in re.split(r"\s+", last_text.strip()) if token]
+        tail = " ".join(words[-60:]).strip()
+        return f"Vorheriger Abschnitt '{last_section.title}': {tail}" if tail else (
+            f"Vorheriger Abschnitt '{last_section.title}' zusammenfassen."
+        )
+
+    def _format_section_output(self, section: OutlineSection, text: str) -> str:
+        heading = f"## {section.number}. {section.title}".strip()
+        return f"{heading}\n\n{text.strip()}"
+
+    def _apply_text_type_review(
+        self,
+        draft: str,
+        briefing: dict,
+        sections: Sequence[OutlineSection],
+    ) -> str:
+        check_prompt = (
+            prompts.TEXT_TYPE_CHECK_PROMPT.format(text_type=self.text_type).strip()
+            + "\n\nBriefing:\n"
+            + json.dumps(briefing, ensure_ascii=False, indent=2)
+            + "\n\nOutline:\n"
+            + self._format_outline_for_prompt(sections)
+            + "\n\nText:\n"
+            + draft
+        )
+        report = self._call_llm_stage(
+            stage="text_type_check_llm",
+            prompt=check_prompt,
+            success_message="Texttyp-Prüfung abgeschlossen",
+            failure_message="Texttyp-Prüfung fehlgeschlagen",
+            data={"phase": "text_type_check"},
+        )
+        if report is None:
+            self._rubric_passed = None
+            return draft
+
+        self.steps.append("text_type_check")
+        self._write_text(self.output_dir / "text_type_check.txt", report)
+        if not self._text_type_check_requires_fix(report):
+            self._rubric_passed = True
+            return draft
+
+        fix_prompt = (
+            prompts.TEXT_TYPE_FIX_PROMPT.strip()
+            + "\n\nBriefing:\n"
+            + json.dumps(briefing, ensure_ascii=False, indent=2)
+            + "\n\nOutline:\n"
+            + self._format_outline_for_prompt(sections)
+            + "\n\nAbweichungen:\n"
+            + report
+            + "\n\nText:\n"
+            + draft
+        )
+        fixed = self._call_llm_stage(
+            stage="text_type_fix_llm",
+            prompt=fix_prompt,
+            success_message="Texttyp-Korrektur angewendet",
+            failure_message="Texttyp-Korrektur fehlgeschlagen",
+            data={"phase": "text_type_fix"},
+        )
+        if fixed is None:
+            self._rubric_passed = False
+            return draft
+
+        self.steps.append("text_type_fix")
+        self._write_text(self.output_dir / "text_type_fix.txt", fixed)
+        self._rubric_passed = True
+        return fixed
+
+    def _text_type_check_requires_fix(self, report: str) -> bool:
+        normalised = report.strip().lower()
+        if not normalised:
+            return False
+        ok_markers = [
+            "keine abweichung",
+            "keine auffälligkeit",
+            "erfüllt die kriterien",
+            "alles erfüllt",
+            "passt",
+            "in ordnung",
+        ]
+        return not any(marker in normalised for marker in ok_markers)
 
     def _revise_with_llm(self, text: str, iteration: int, briefing: dict) -> str | None:
         revision_prompt = (
@@ -764,7 +901,7 @@ class WriterAgent:
             "variant": self.variant,
             "keywords": list(self.seo_keywords or []),
             "final_word_count": self._count_words(text),
-            "rubric_passed": None,
+            "rubric_passed": self._rubric_passed,
             "sources_allowed": self.sources_allowed,
             "llm_provider": self.config.llm_provider,
             "llm_model": self.config.llm_model,
@@ -802,7 +939,10 @@ class WriterAgent:
                 "briefing": prompts.BRIEFING_PROMPT.strip(),
                 "idea": prompts.IDEA_IMPROVEMENT_PROMPT.strip(),
                 "outline": prompts.OUTLINE_PROMPT.strip(),
-                "final": prompts.FINAL_DRAFT_PROMPT.strip(),
+                "outline_improvement": prompts.OUTLINE_IMPROVEMENT_PROMPT.strip(),
+                "section": prompts.SECTION_PROMPT.strip(),
+                "text_type_check": prompts.TEXT_TYPE_CHECK_PROMPT.strip(),
+                "text_type_fix": prompts.TEXT_TYPE_FIX_PROMPT.strip(),
                 "revision": prompts.REVISION_PROMPT.strip(),
             },
             "events": run_entries,
