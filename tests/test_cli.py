@@ -188,6 +188,24 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert exit_code == 1
     assert "konnte nicht abgeschlossen" in captured.err
 
+    run_log = logs_dir / "run.log"
+    assert run_log.exists()
+    run_entries = [
+        json.loads(line)
+        for line in run_log.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert any(entry["step"] == "error" and entry["status"] == "failed" for entry in run_entries)
+
+    llm_log = logs_dir / "llm.log"
+    assert llm_log.exists()
+    llm_entries = [
+        json.loads(line)
+        for line in llm_log.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert llm_entries
+
 
 def test_iterations_argument_rejects_negative_value() -> None:
     args = [
