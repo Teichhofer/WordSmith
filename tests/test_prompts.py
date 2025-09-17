@@ -17,6 +17,7 @@ def test_prompt_templates_match_specification() -> None:
         "Verdichte folgende Angaben zu einem Arbeitsbriefing als kompaktes JSON "
         "mit Schlüsseln: goal, audience, tone, register, variant, constraints, "
         "key_terms, messages, seo_keywords (optional).\n"
+        "Gib ausschließlich ein JSON-Objekt ohne erläuternden Text zurück.\n"
         "**Eingaben:**\n"
         "title: {title}\n"
         "text_type: {text_type}\n"
