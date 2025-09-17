@@ -1,4 +1,10 @@
+from __future__ import annotations
+
 import json
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from wordsmith import llm
 from wordsmith.config import LLMParameters, OLLAMA_TIMEOUT_SECONDS
