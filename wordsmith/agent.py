@@ -201,6 +201,10 @@ class OutlineSection:
 class WriterAgentError(Exception):
     """Raised when the writer agent cannot complete its work."""
 
+    def __init__(self, message: str, *, context: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.context: dict[str, Any] = context or {}
+
 
 @dataclass
 class WriterAgent:
@@ -517,14 +521,17 @@ class WriterAgent:
                 if isinstance(exc, WriterAgentError)
                 else f"Automatikmodus unerwartet abgebrochen: {exc}"
             )
+            error_data = {
+                "error": str(exc),
+                "exception_type": exc.__class__.__name__,
+            }
+            if isinstance(exc, WriterAgentError) and exc.context:
+                error_data.update(exc.context)
             self._record_run_event(
                 "error",
                 message,
                 status="failed",
-                data={
-                    "error": str(exc),
-                    "exception_type": exc.__class__.__name__,
-                },
+                data=error_data,
             )
             raise
         finally:
@@ -564,7 +571,8 @@ class WriterAgent:
             briefing = _load_json_object(briefing_text)
         except ValueError as exc:  # pragma: no cover - defensive
             raise WriterAgentError(
-                "Briefing-Antwort konnte nicht als JSON interpretiert werden."
+                "Briefing-Antwort konnte nicht als JSON interpretiert werden.",
+                context={"raw_text": briefing_text},
             ) from exc
         if not isinstance(briefing, dict):
             raise WriterAgentError("Briefing-Antwort muss ein Objekt sein.")

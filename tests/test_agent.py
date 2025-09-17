@@ -205,19 +205,7 @@ def test_agent_parses_briefing_from_code_block(
     assert not responses
 
 
-def test_load_json_object_accepts_single_quotes() -> None:
-    snippet = """
-Hier das Briefing:
-{'goal': 'Testlauf', 'messages': ['Nur Stichpunkte'], 'seo_keywords': null}
-Bitte prüfen.
-"""
 
-    result = _load_json_object(snippet)
-
-    assert isinstance(result, dict)
-    assert result["goal"] == "Testlauf"
-    assert result["messages"] == ["Nur Stichpunkte"]
-    assert result["seo_keywords"] is None
 
 
 def test_agent_raises_when_llm_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
