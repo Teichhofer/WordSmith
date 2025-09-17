@@ -10,6 +10,7 @@ SYSTEM_PROMPT: str = (
 # Normalisiert die Eingaben zu einem strukturierten Arbeitsbriefing.
 BRIEFING_PROMPT: str = """\
 Verdichte folgende Angaben zu einem Arbeitsbriefing als kompaktes JSON mit Schlüsseln: goal, audience, tone, register, variant, constraints, key_terms, messages, seo_keywords (optional).
+Gib ausschließlich ein JSON-Objekt ohne erläuternden Text zurück.
 **Eingaben:**
 title: {title}
 text_type: {text_type}
