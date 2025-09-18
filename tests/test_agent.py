@@ -355,3 +355,60 @@ def test_run_compliance_masks_sensitive_terms(tmp_path: Path) -> None:
     assert last_entry["stage"] == "draft"
     assert last_entry["placeholders_present"] is False
     assert last_entry["sensitive_replacements"] == 1
+
+
+def test_run_compliance_strips_note_by_default(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 80)
+
+    agent = WriterAgent(
+        topic="Hinweis",
+        word_count=80,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    note_text = "Kurzer Text.\n\n[COMPLIANCE-HINWEIS: Quellen prüfen.]"
+    result = agent._run_compliance("draft", note_text)
+
+    assert "[COMPLIANCE-HINWEIS:" not in result
+    assert agent._compliance_note == "[COMPLIANCE-HINWEIS: Quellen prüfen.]"
+    last_entry = agent._compliance_audit[-1]
+    assert last_entry["compliance_note"] is True
+
+
+def test_run_compliance_keeps_note_when_enabled(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 80)
+
+    agent = WriterAgent(
+        topic="Hinweis",
+        word_count=80,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+        include_compliance_note=True,
+    )
+
+    note_text = "Kurzer Text.\n\n[COMPLIANCE-HINWEIS: Quellen prüfen.]"
+    result = agent._run_compliance("draft", note_text)
+
+    assert result.strip().endswith("[COMPLIANCE-HINWEIS: Quellen prüfen.]")
+    assert agent._compliance_note == "[COMPLIANCE-HINWEIS: Quellen prüfen.]"
+    last_entry = agent._compliance_audit[-1]
+    assert last_entry["compliance_note"] is True

@@ -264,6 +264,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Kommagetrennte Liste relevanter SEO-Schlüsselwörter.",
     )
     automatik_parser.add_argument(
+        "--compliance-hint",
+        action="store_true",
+        dest="include_compliance_note",
+        help="Fügt den COMPLIANCE-HINWEIS ans Textende an (Standard: deaktiviert).",
+    )
+    automatik_parser.add_argument(
         "--config",
         type=Path,
         default=None,
@@ -414,6 +420,7 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
         constraints=args.constraints,
         sources_allowed=args.sources_allowed,
         seo_keywords=args.seo_keywords,
+        include_compliance_note=args.include_compliance_note,
         progress_callback=progress_printer,
     )
 

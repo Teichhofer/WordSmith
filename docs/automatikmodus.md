@@ -139,10 +139,12 @@ Nach der letzten Iteration: finaler Text zurückgeben (Länge ±3 %).
 
 ## Anti-Halluzinations- & Compliance-Regeln (durchgängig)
 
-- Keine Tatsachen erfinden; stattdessen **Platzhalter** `[QUELLE]`, `[DATUM]`, `[ZAHL]`.  
-- Wenn `sources_allowed=false`: keine Quellenangaben generieren, nur Platzhalter.  
-- Wenn `sources_allowed=true`: formatiere Quellen konsistent (z. B. Kurzbeleg im Text, Literaturliste).  
+- Keine Tatsachen erfinden; stattdessen **Platzhalter** `[QUELLE]`, `[DATUM]`, `[ZAHL]`.
+- Wenn `sources_allowed=false`: keine Quellenangaben generieren, nur Platzhalter.
+- Wenn `sources_allowed=true`: formatiere Quellen konsistent (z. B. Kurzbeleg im Text, Literaturliste).
 - Keine sensiblen oder verbotenen Inhalte; Markierungen `[ENTFERNT: …]` statt problematischem Text.
+- Compliance-Hinweise (`[COMPLIANCE-HINWEIS: …]`) werden protokolliert und standardmäßig aus dem finalen Text entfernt.
+  Über den CLI-Schalter `--compliance-hint` lassen sie sich bei Bedarf wieder ans Ende des Ergebnisses anhängen.
 
 ---
 

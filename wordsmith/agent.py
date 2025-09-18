@@ -248,6 +248,7 @@ class WriterAgent:
     sources_allowed: bool
     seo_keywords: Sequence[str] | None = None
     progress_callback: Callable[[dict[str, Any]], None] | None = None
+    include_compliance_note: bool = False
 
     output_dir: Path = field(init=False)
     logs_dir: Path = field(init=False)
@@ -259,6 +260,7 @@ class WriterAgent:
     _rubric_passed: bool | None = field(init=False, default=None)
     _run_started_at: float = field(init=False, default=0.0)
     _run_duration: float | None = field(init=False, default=None)
+    _compliance_note: str = field(init=False, default="")
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -1010,7 +1012,7 @@ class WriterAgent:
 
     def _revise_with_llm(self, text: str, iteration: int, briefing: dict) -> str | None:
         revision_prompt = (
-            prompts.REVISION_PROMPT.strip()
+            prompts.build_revision_prompt(self.include_compliance_note)
             + "\n\nBriefing:\n"
             + json.dumps(briefing, ensure_ascii=False, indent=2)
             + "\n\nAktueller Text:\n"
@@ -1062,16 +1064,22 @@ class WriterAgent:
         annotation_label: str | None = None,
     ) -> str:
         updated, sensitive_hits = self._mask_sensitive_content(text)
-        placeholders_present = self._contains_placeholder(updated)
+        body, note = self._extract_compliance_note(updated)
+        self._compliance_note = note
+        if self.include_compliance_note and note:
+            result = body + "\n\n" + note
+        else:
+            result = body
+        placeholders_present = self._contains_placeholder(result)
         sources_detail = "zugelassen" if ensure_sources else "gesperrt"
         self._record_compliance(
             stage,
             placeholders=placeholders_present,
             sensitive_hits=sensitive_hits,
             sources_detail=sources_detail,
-            note_present=False,
+            note_present=bool(note),
         )
-        return updated
+        return result
 
     def _record_compliance(
         self,
@@ -1165,7 +1173,7 @@ class WriterAgent:
                 "section": prompts.SECTION_PROMPT.strip(),
                 "text_type_check": prompts.TEXT_TYPE_CHECK_PROMPT.strip(),
                 "text_type_fix": prompts.TEXT_TYPE_FIX_PROMPT.strip(),
-                "revision": prompts.REVISION_PROMPT.strip(),
+                "revision": prompts.build_revision_prompt(self.include_compliance_note),
             },
             "events": run_entries,
             "llm_generation": self._llm_generation,
