@@ -1191,6 +1191,7 @@ class WriterAgent:
         data: dict[str, Any] | None = None,
     ) -> None:
         event: dict[str, Any] = {"step": step, "status": status, "message": message}
+        event["timestamp"] = datetime.now().astimezone().isoformat(timespec="seconds")
         if artifacts:
             event["artifacts"] = [self._format_artifact_path(Path(artifact)) for artifact in artifacts]
         if data:
