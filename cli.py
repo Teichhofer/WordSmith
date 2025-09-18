@@ -57,6 +57,13 @@ class _ProgressPrinter:
             pass
 
 
+def _print_runtime(runtime_seconds: float | None, stream: TextIO | None = None) -> None:
+    if runtime_seconds is None:
+        return
+    target_stream = stream or sys.stderr
+    print(f"Gesamtlaufzeit: {runtime_seconds:.2f} Sekunden", file=target_stream)
+
+
 def _parse_bool(value: str) -> bool:
     truthy = {"true", "1", "yes", "ja"}
     falsy = {"false", "0", "no", "nein"}
@@ -392,9 +399,11 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
         final_text = agent.run()
     except WriterAgentError as exc:
         print(f"Automatikmodus konnte nicht abgeschlossen werden: {exc}", file=sys.stderr)
+        _print_runtime(agent.runtime_seconds, stream=sys.stderr)
         return 1
 
     print(final_text)
+    _print_runtime(agent.runtime_seconds, stream=sys.stderr)
     return 0
 
 

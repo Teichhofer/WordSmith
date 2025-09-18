@@ -142,6 +142,8 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     stages = {entry["stage"] for entry in compliance["checks"]}
     assert stages == {"draft", "revision_01"}
     assert agent._llm_generation and agent._llm_generation["status"] == "success"
+    assert agent.runtime_seconds is not None
+    assert agent.runtime_seconds >= 0
     assert not responses
 
 
