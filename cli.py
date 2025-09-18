@@ -57,11 +57,33 @@ class _ProgressPrinter:
             pass
 
 
+def _format_runtime(runtime_seconds: float) -> str:
+    if runtime_seconds < 60:
+        return f"{runtime_seconds:.2f} Sekunden"
+
+    hours = int(runtime_seconds // 3600)
+    minutes = int((runtime_seconds % 3600) // 60)
+    seconds = runtime_seconds - hours * 3600 - minutes * 60
+
+    def _format_unit(value: int, singular: str, plural: str) -> str:
+        return f"{value} {singular if value == 1 else plural}"
+
+    parts: list[str] = []
+    if hours:
+        parts.append(_format_unit(hours, "Stunde", "Stunden"))
+    if hours or minutes:
+        parts.append(_format_unit(minutes, "Minute", "Minuten"))
+    parts.append(f"{seconds:.2f} Sekunden")
+
+    formatted = " ".join(parts)
+    return f"{formatted} ({runtime_seconds:.2f} Sekunden)"
+
+
 def _print_runtime(runtime_seconds: float | None, stream: TextIO | None = None) -> None:
     if runtime_seconds is None:
         return
     target_stream = stream or sys.stderr
-    print(f"Gesamtlaufzeit: {runtime_seconds:.2f} Sekunden", file=target_stream)
+    print(f"Gesamtlaufzeit: {_format_runtime(runtime_seconds)}", file=target_stream)
 
 
 def _parse_bool(value: str) -> bool:
