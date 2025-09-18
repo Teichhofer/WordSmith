@@ -15,6 +15,18 @@ MIN_CONTEXT_LENGTH: int = 2048
 MIN_TOKEN_LIMIT: int = 1024
 
 
+TEMPORARY_OUTPUT_PATTERNS: tuple[str, ...] = (
+    "briefing.json",
+    "idea.txt",
+    "outline.txt",
+    "current_text.txt",
+    "text_type_check.txt",
+    "text_type_fix.txt",
+    "iteration_*.txt",
+    "reflection_*.txt",
+)
+
+
 class ConfigError(Exception):
     """Raised when the configuration could not be loaded or validated."""
 
@@ -94,6 +106,17 @@ class Config:
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
+
+    def cleanup_temporary_outputs(self) -> None:
+        """Delete transient artefacts from previous runs in the output directory."""
+
+        for pattern in TEMPORARY_OUTPUT_PATTERNS:
+            for path in self.output_dir.glob(pattern):
+                if path.is_file():
+                    try:
+                        path.unlink()
+                    except FileNotFoundError:  # pragma: no cover - defensive
+                        continue
 
     def _apply_minimum_limits(self) -> None:
         """Ensure configured context and generation windows meet minimum sizes."""
