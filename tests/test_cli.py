@@ -22,12 +22,55 @@ from cli import (
 )
 from wordsmith import llm
 from wordsmith.ollama import OllamaModel
+from wordsmith.config import Config
 
 
 def test_automatikmodus_requires_arguments() -> None:
     with pytest.raises(SystemExit) as exc:
         main(["automatikmodus"])
     assert exc.value.code == 2
+
+
+def test_cli_can_be_interrupted_with_keyboard_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
+
+    monkeypatch.setattr("cli.load_config", lambda _: config)
+    monkeypatch.setattr("cli.prompts.set_system_prompt", lambda prompt: None)
+
+    class InterruptingAgent:
+        runtime_seconds = None
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def run(self) -> str:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr("cli.WriterAgent", InterruptingAgent)
+
+    args = [
+        "automatikmodus",
+        "--title",
+        "Abbruch",
+        "--content",
+        "Test",
+        "--text-type",
+        "Blog",
+        "--word-count",
+        "150",
+        "--llm-provider",
+        "openai",
+    ]
+
+    exit_code = main(args)
+    captured = capsys.readouterr()
+
+    assert exit_code == 130
+    assert "Abbruch durch Benutzer" in captured.err
 
 
 def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
