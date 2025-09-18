@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+from datetime import datetime
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, List, Sequence
@@ -513,6 +514,7 @@ class WriterAgent:
                     data={"iteration": iteration},
                 )
 
+            final_output_path = self._write_final_output(draft)
             final_word_count = self._count_words(draft)
             self._write_metadata(draft)
             self._record_run_event(
@@ -532,6 +534,7 @@ class WriterAgent:
                 "complete",
                 "Automatikmodus erfolgreich abgeschlossen",
                 status="succeeded",
+                artifacts=[final_output_path],
                 data={"iterations": self.iterations, "steps": list(self.steps)},
             )
             return draft
@@ -1088,6 +1091,12 @@ class WriterAgent:
 
     def _write_text(self, path: Path, text: str) -> None:
         path.write_text(text.strip() + "\n", encoding="utf-8")
+
+    def _write_final_output(self, text: str) -> Path:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        final_path = self.output_dir / f"Final-{timestamp}.txt"
+        self._write_text(final_path, text)
+        return final_path
 
     def _write_metadata(self, text: str) -> None:
         metadata = {
