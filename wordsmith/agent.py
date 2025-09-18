@@ -6,6 +6,7 @@ import ast
 import json
 import re
 from datetime import datetime
+from time import perf_counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, List, Sequence
@@ -256,6 +257,8 @@ class WriterAgent:
     _pending_hints: List[dict[str, Any]] = field(init=False, default_factory=list)
     _llm_generation: dict[str, Any] | None = field(init=False, default=None)
     _rubric_passed: bool | None = field(init=False, default=None)
+    _run_started_at: float = field(init=False, default=0.0)
+    _run_duration: float | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -399,6 +402,8 @@ class WriterAgent:
     def run(self) -> str:
         """Execute the LLM-driven pipeline and return the final text."""
 
+        self._run_started_at = perf_counter()
+        self._run_duration = None
         self.config.ensure_directories()
         self._idea_bullets.clear()
         self._compliance_audit.clear()
@@ -531,12 +536,18 @@ class WriterAgent:
                 artifacts=[self.output_dir / "compliance.json"],
                 data={"checks": len(self._compliance_audit)},
             )
+            runtime_seconds = perf_counter() - self._run_started_at
+            self._run_duration = runtime_seconds
             self._record_run_event(
                 "complete",
                 "Automatikmodus erfolgreich abgeschlossen",
                 status="succeeded",
                 artifacts=[final_output_path],
-                data={"iterations": self.iterations, "steps": list(self.steps)},
+                data={
+                    "iterations": self.iterations,
+                    "steps": list(self.steps),
+                    "runtime_seconds": runtime_seconds,
+                },
             )
             return draft
         except Exception as exc:
@@ -546,12 +557,15 @@ class WriterAgent:
                 if isinstance(exc, WriterAgentError)
                 else f"Automatikmodus unerwartet abgebrochen: {exc}"
             )
+            runtime_seconds = perf_counter() - self._run_started_at
+            self._run_duration = runtime_seconds
             error_data = {
                 "error": str(exc),
                 "exception_type": exc.__class__.__name__,
             }
             if isinstance(exc, WriterAgentError) and exc.context:
                 error_data.update(exc.context)
+            error_data["runtime_seconds"] = runtime_seconds
             self._record_run_event(
                 "error",
                 message,
@@ -1154,11 +1168,18 @@ class WriterAgent:
             },
             "events": run_entries,
             "llm_generation": self._llm_generation,
+            "runtime_seconds": self._run_duration,
         }
         llm_log.write_text(
             json.dumps(llm_entry, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+
+    @property
+    def runtime_seconds(self) -> float | None:
+        """Return the measured runtime of the most recent run."""
+
+        return self._run_duration
 
     def _record_run_event(
         self,

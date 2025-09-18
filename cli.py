@@ -392,9 +392,15 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
         final_text = agent.run()
     except WriterAgentError as exc:
         print(f"Automatikmodus konnte nicht abgeschlossen werden: {exc}", file=sys.stderr)
+        runtime_seconds = agent.runtime_seconds
+        if runtime_seconds is not None:
+            print(f"Gesamtlaufzeit: {runtime_seconds:.2f} Sekunden", file=sys.stderr)
         return 1
 
     print(final_text)
+    runtime_seconds = agent.runtime_seconds
+    if runtime_seconds is not None:
+        print(f"Gesamtlaufzeit: {runtime_seconds:.2f} Sekunden")
     return 0
 
 

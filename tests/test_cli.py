@@ -113,6 +113,9 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
 
     assert exit_code == 0
     assert "[ENTFERNT: vertrauliche]" in captured.out
+    runtime_match = re.search(r"Gesamtlaufzeit: ([0-9]+\.[0-9]{2}) Sekunden", captured.out)
+    assert runtime_match
+    runtime_seconds_cli = float(runtime_match.group(1))
 
     total_steps = 7 + iterations
     progress_lines = [line for line in captured.err.splitlines() if line.strip()]
@@ -144,6 +147,10 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     ]
     assert any(entry["step"] == "briefing" for entry in run_entries)
     assert any(entry["step"] == "revision_01" for entry in run_entries)
+    complete_entry = next(entry for entry in run_entries if entry["step"] == "complete")
+    runtime_seconds_log = complete_entry["data"]["runtime_seconds"]
+    assert runtime_seconds_log >= 0
+    assert runtime_seconds_cli == pytest.approx(runtime_seconds_log, rel=0.1, abs=0.1)
 
     llm_entries = [
         json.loads(line)
@@ -151,6 +158,8 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         if line.strip()
     ]
     assert llm_entries and llm_entries[0]["llm_generation"]["status"] == "success"
+    assert "runtime_seconds" in llm_entries[0]
+    assert llm_entries[0]["runtime_seconds"] == pytest.approx(runtime_seconds_log, rel=0.01, abs=0.01)
 
 
 def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -204,6 +213,9 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert exit_code == 1
     assert "konnte nicht abgeschlossen" in captured.err
     assert any(line.startswith("[FEHLER]") for line in captured.err.splitlines())
+    runtime_match = re.search(r"Gesamtlaufzeit: ([0-9]+\.[0-9]{2}) Sekunden", captured.err)
+    assert runtime_match
+    runtime_seconds_cli = float(runtime_match.group(1))
 
     run_log = logs_dir / "run.log"
     assert run_log.exists()
@@ -213,6 +225,10 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         if line.strip()
     ]
     assert any(entry["step"] == "error" and entry["status"] == "failed" for entry in run_entries)
+    error_entry = next(entry for entry in run_entries if entry["step"] == "error")
+    runtime_seconds_log = error_entry["data"]["runtime_seconds"]
+    assert runtime_seconds_log >= 0
+    assert runtime_seconds_cli == pytest.approx(runtime_seconds_log, rel=0.1, abs=0.1)
 
     llm_log = logs_dir / "llm.log"
     assert llm_log.exists()
@@ -222,6 +238,8 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         if line.strip()
     ]
     assert llm_entries
+    assert "runtime_seconds" in llm_entries[0]
+    assert llm_entries[0]["runtime_seconds"] == pytest.approx(runtime_seconds_log, rel=0.01, abs=0.01)
 
 
 def test_iterations_argument_rejects_negative_value() -> None:
