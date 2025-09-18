@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import sys
 from collections import deque
 from pathlib import Path
@@ -112,10 +113,15 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     assert "[ENTFERNT: vertrauliche]" in captured.out
 
     current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
+    final_files = list(output_dir.glob("Final-*.txt"))
     metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
     compliance = json.loads((output_dir / "compliance.json").read_text(encoding="utf-8"))
 
     assert "[ENTFERNT: vertrauliche]" in current_text
+    assert len(final_files) == 1
+    final_file = final_files[0]
+    assert re.fullmatch(r"Final-\d{8}-\d{6}\.txt", final_file.name)
+    assert final_file.read_text(encoding="utf-8").strip() == current_text.strip()
     assert metadata["audience"] == "Vorstand"
     assert metadata["llm_model"] == "llama2"
     assert compliance["checks"]
