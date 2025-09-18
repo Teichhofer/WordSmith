@@ -413,9 +413,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not arguments:
         parser.print_help()
         return 1
-    parsed = parser.parse_args(arguments)
-    if hasattr(parsed, "func"):
-        return parsed.func(parsed)
+    try:
+        parsed = parser.parse_args(arguments)
+        if hasattr(parsed, "func"):
+            return parsed.func(parsed)
+    except KeyboardInterrupt:
+        print("\nAbbruch durch Benutzer.", file=sys.stderr)
+        return 130
     parser.print_help()
     return 1
 
