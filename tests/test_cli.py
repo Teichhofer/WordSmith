@@ -113,7 +113,8 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
 
     assert exit_code == 0
     assert "[ENTFERNT: vertrauliche]" in captured.out
-    runtime_match = re.search(r"Gesamtlaufzeit: ([0-9]+\.[0-9]{2}) Sekunden", captured.out)
+    assert "Gesamtlaufzeit" not in captured.out
+    runtime_match = re.search(r"Gesamtlaufzeit: ([0-9]+\.[0-9]{2}) Sekunden", captured.err)
     assert runtime_match
     runtime_seconds_cli = float(runtime_match.group(1))
 
