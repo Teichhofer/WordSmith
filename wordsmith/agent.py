@@ -8,7 +8,7 @@ import re
 from datetime import datetime
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, List, Sequence
+from typing import Any, Callable, List, Sequence
 
 from . import llm, prompts
 from .config import Config
@@ -246,6 +246,7 @@ class WriterAgent:
     constraints: str
     sources_allowed: bool
     seo_keywords: Sequence[str] | None = None
+    progress_callback: Callable[[dict[str, Any]], None] | None = None
 
     output_dir: Path = field(init=False)
     logs_dir: Path = field(init=False)
@@ -1175,6 +1176,8 @@ class WriterAgent:
             event["data"] = data
         event["sequence"] = len(self._run_events)
         self._run_events.append(event)
+        if self.progress_callback is not None:
+            self.progress_callback(dict(event))
 
     def _format_artifact_path(self, path: Path) -> str:
         try:
