@@ -98,8 +98,20 @@ REVISION_PROMPT: str = """\
 Überarbeite zielgerichtet nach diesen Prioritäten: Klarheit, Flow, Terminologie, Wiederholungen, Rhythmus, starke Verben, Abschluss, Register, Variantenspezifika.
 Arbeite Schritt für Schritt: plane die Eingriffe kurz, führe sie dann aus.
 Liefere den überarbeiteten Text in Markdown ohne Meta-Kommentare; bei fehlenden Daten setze Platzhalter.
-Falls Compliance-Hinweise nötig sind, füge sie als separate Zeile im Format `[COMPLIANCE-HINWEIS: …]` am Ende an.
 """
+
+COMPLIANCE_HINT_INSTRUCTION: str = (
+    "Falls Compliance-Hinweise nötig sind, füge sie als separate Zeile im Format `[COMPLIANCE-HINWEIS: …]` am Ende an."
+)
+
+
+def build_revision_prompt(include_compliance_hint: bool = False) -> str:
+    """Return the revision prompt optionally extended with the compliance hint."""
+
+    prompt = REVISION_PROMPT.strip()
+    if include_compliance_hint:
+        return prompt + "\n" + COMPLIANCE_HINT_INSTRUCTION
+    return prompt
 
 # Hält optionale Reflexionsnotizen zu weiteren Verbesserungsmöglichkeiten fest.
 REFLECTION_PROMPT: str = """\

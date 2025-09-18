@@ -40,6 +40,7 @@ python cli.py automatikmodus \
   --constraints "Keine Zahlen erfinden" \
   --sources-allowed false \
   --seo-keywords "KI, Textautomatisierung" \
+  --compliance-hint \
   --config config.json \
   --output-dir output \
   --logs-dir logs \
@@ -64,6 +65,7 @@ Die Optionen im Einzelnen:
 | `--constraints` |   | Zusätzliche Muss-/Kann-Vorgaben für den Text. |
 | `--sources-allowed` |   | `true`/`false`, ob Quellen im Text erlaubt sind. |
 | `--seo-keywords` |   | Kommagetrennte Liste eindeutiger SEO-Schlüsselwörter. |
+| `--compliance-hint` |   | Flag ohne Parameter; hängt den COMPLIANCE-HINWEIS ans Textende an (Default: deaktiviert). |
 | `--config` |   | Pfad zu einer optionalen JSON-Konfiguration; Werte überschreiben Defaults. |
 | `--output-dir` |   | Zielverzeichnis für Dateien wie `Final-*.txt` oder `metadata.json`. |
 | `--logs-dir` |   | Verzeichnis für Lauf- und Prompt-Logs. |

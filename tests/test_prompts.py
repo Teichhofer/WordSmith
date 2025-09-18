@@ -93,8 +93,16 @@ Gib nur den aktualisierten Text zurück.
 Überarbeite zielgerichtet nach diesen Prioritäten: Klarheit, Flow, Terminologie, Wiederholungen, Rhythmus, starke Verben, Abschluss, Register, Variantenspezifika.
 Arbeite Schritt für Schritt: plane die Eingriffe kurz, führe sie dann aus.
 Liefere den überarbeiteten Text in Markdown ohne Meta-Kommentare; bei fehlenden Daten setze Platzhalter.
-Falls Compliance-Hinweise nötig sind, füge sie als separate Zeile im Format `[COMPLIANCE-HINWEIS: …]` am Ende an.
 """
+    assert (
+        prompts.COMPLIANCE_HINT_INSTRUCTION
+        == "Falls Compliance-Hinweise nötig sind, füge sie als separate Zeile im Format `[COMPLIANCE-HINWEIS: …]` am Ende an."
+    )
+    assert prompts.build_revision_prompt() == prompts.REVISION_PROMPT.strip()
+    assert (
+        prompts.build_revision_prompt(include_compliance_hint=True)
+        == prompts.REVISION_PROMPT.strip() + "\n" + prompts.COMPLIANCE_HINT_INSTRUCTION
+    )
 
     assert prompts.REFLECTION_PROMPT == """\
 Nenne die 3 wirksamsten nächsten Verbesserungen als priorisierte Markdown-Liste (1 = höchste Wirkung).
