@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, TextIO
 
 from wordsmith import prompts
 from wordsmith.agent import WriterAgent, WriterAgentError
@@ -25,6 +25,36 @@ from wordsmith.defaults import (
 DEFAULT_SEO_KEYWORDS: tuple[str, ...] = ()
 
 VALID_REGISTERS = dict(REGISTER_ALIASES)
+
+
+class _ProgressPrinter:
+    def __init__(self, total_steps: int, stream: TextIO | None = None) -> None:
+        self.total_steps = max(1, total_steps)
+        self.stream = stream or sys.stderr
+        self.completed = 0
+
+    def __call__(self, event: dict[str, object]) -> None:
+        status = str(event.get("status", ""))
+        message = str(event.get("message", ""))
+        if status == "started":
+            self._write(f"[0/{self.total_steps}] {message}")
+            return
+        if status in {"completed", "succeeded"}:
+            self.completed = min(self.completed + 1, self.total_steps)
+            self._write(f"[{self.completed}/{self.total_steps}] {message}")
+            return
+        if status == "failed":
+            self._write(f"[FEHLER] {message}")
+            return
+        if status == "warning":
+            self._write(f"[WARNUNG] {message}")
+
+    def _write(self, text: str) -> None:
+        print(text, file=self.stream)
+        try:
+            self.stream.flush()
+        except Exception:  # pragma: no cover - defensive
+            pass
 
 
 def _parse_bool(value: str) -> bool:
@@ -336,6 +366,10 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
 
     prompts.set_system_prompt(config.system_prompt)
 
+    # The pipeline records six completed stages plus a final completion event.
+    total_steps = 7 + max(args.iterations, 0)
+    progress_printer = _ProgressPrinter(total_steps)
+
     agent = WriterAgent(
         topic=args.title,
         word_count=args.word_count,
@@ -351,6 +385,7 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
         constraints=args.constraints,
         sources_allowed=args.sources_allowed,
         seo_keywords=args.seo_keywords,
+        progress_callback=progress_printer,
     )
 
     try:

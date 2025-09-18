@@ -70,6 +70,8 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
 
     monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
 
+    iterations = 1
+
     args = [
         "automatikmodus",
         "--title",
@@ -81,7 +83,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         "--word-count",
         "400",
         "--iterations",
-        "1",
+        str(iterations),
         "--llm-provider",
         "ollama",
         "--ollama-model",
@@ -111,6 +113,14 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
 
     assert exit_code == 0
     assert "[ENTFERNT: vertrauliche]" in captured.out
+
+    total_steps = 7 + iterations
+    progress_lines = [line for line in captured.err.splitlines() if line.strip()]
+    assert progress_lines[0].startswith(f"[0/{total_steps}] Automatikmodus gestartet")
+    assert any(
+        line.startswith(f"[{total_steps}/{total_steps}] Automatikmodus erfolgreich abgeschlossen")
+        for line in progress_lines
+    )
 
     current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
     final_files = list(output_dir.glob("Final-*.txt"))
@@ -193,6 +203,7 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     assert exit_code == 1
     assert "konnte nicht abgeschlossen" in captured.err
+    assert any(line.startswith("[FEHLER]") for line in captured.err.splitlines())
 
     run_log = logs_dir / "run.log"
     assert run_log.exists()
