@@ -34,6 +34,12 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     output_dir = tmp_path / "output"
     logs_dir = tmp_path / "logs"
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    stale_iteration = output_dir / "iteration_99.txt"
+    stale_iteration.write_text("veraltet", encoding="utf-8")
+
     monkeypatch.setattr(
         "wordsmith.ollama.OllamaClient.list_models",
         lambda self: [OllamaModel(name="llama2")],
@@ -111,6 +117,8 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
 
     exit_code = main(args)
     captured = capsys.readouterr()
+
+    assert not stale_iteration.exists()
 
     assert exit_code == 0
     assert "[ENTFERNT: vertrauliche]" in captured.out

@@ -405,6 +405,7 @@ class WriterAgent:
         self._run_started_at = perf_counter()
         self._run_duration = None
         self.config.ensure_directories()
+        self.config.cleanup_temporary_outputs()
         self._idea_bullets.clear()
         self._compliance_audit.clear()
         self._run_events.clear()

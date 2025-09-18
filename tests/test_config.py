@@ -78,3 +78,29 @@ def test_loading_config_enforces_minimum_windows(tmp_path):
 
     assert config.context_length == MIN_CONTEXT_LENGTH
     assert config.token_limit == MIN_TOKEN_LIMIT
+
+
+def test_cleanup_temporary_outputs_removes_previous_run_files(tmp_path: Path) -> None:
+    config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
+
+    temporary_files = [
+        config.output_dir / "briefing.json",
+        config.output_dir / "idea.txt",
+        config.output_dir / "outline.txt",
+        config.output_dir / "current_text.txt",
+        config.output_dir / "text_type_check.txt",
+        config.output_dir / "text_type_fix.txt",
+        config.output_dir / "iteration_07.txt",
+        config.output_dir / "reflection_03.txt",
+    ]
+    for path in temporary_files:
+        path.write_text("veraltet", encoding="utf-8")
+
+    final_file = config.output_dir / "Final-20240101-010101.txt"
+    final_file.write_text("final", encoding="utf-8")
+
+    config.cleanup_temporary_outputs()
+
+    for path in temporary_files:
+        assert not path.exists()
+    assert final_file.exists()
