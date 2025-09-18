@@ -5,6 +5,7 @@ import json
 import re
 import sys
 from collections import deque
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -142,6 +143,9 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         for line in (logs_dir / "run.log").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+    assert all("timestamp" in entry for entry in run_entries)
+    for entry in run_entries:
+        datetime.fromisoformat(entry["timestamp"])
     assert any(entry["step"] == "briefing" for entry in run_entries)
     assert any(entry["step"] == "revision_01" for entry in run_entries)
 
@@ -212,6 +216,9 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         for line in run_log.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+    assert all("timestamp" in entry for entry in run_entries)
+    for entry in run_entries:
+        datetime.fromisoformat(entry["timestamp"])
     assert any(entry["step"] == "error" and entry["status"] == "failed" for entry in run_entries)
 
     llm_log = logs_dir / "llm.log"
