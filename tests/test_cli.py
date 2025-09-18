@@ -12,6 +12,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+import cli
 from cli import (
     DEFAULT_AUDIENCE,
     DEFAULT_CONSTRAINTS,
@@ -23,6 +24,24 @@ from cli import (
 from wordsmith import llm
 from wordsmith.ollama import OllamaModel
 from wordsmith.config import Config
+
+
+def test_print_runtime_formats_minutes_and_seconds() -> None:
+    buffer = io.StringIO()
+    cli._print_runtime(125.5, stream=buffer)
+    assert (
+        buffer.getvalue().strip()
+        == "Gesamtlaufzeit: 2 Minuten 5.50 Sekunden (125.50 Sekunden)"
+    )
+
+
+def test_print_runtime_formats_hours_minutes_and_seconds() -> None:
+    buffer = io.StringIO()
+    cli._print_runtime(3723.5, stream=buffer)
+    assert (
+        buffer.getvalue().strip()
+        == "Gesamtlaufzeit: 1 Stunde 2 Minuten 3.50 Sekunden (3723.50 Sekunden)"
+    )
 
 
 def test_automatikmodus_requires_arguments() -> None:
