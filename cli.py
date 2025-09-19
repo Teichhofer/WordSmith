@@ -539,6 +539,12 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
         print(f"Ungültige Einstellung: {exc}", file=sys.stderr)
         return 2
 
+    try:
+        prompts.load_prompt_config(config.prompt_config_path)
+    except prompts.PromptConfigurationError as exc:
+        print(f"Prompt-Konfiguration konnte nicht geladen werden: {exc}", file=sys.stderr)
+        return 2
+
     prompts.set_system_prompt(config.system_prompt)
 
     # The pipeline records six completed stages plus a final completion event.

@@ -59,6 +59,7 @@ class Config:
 
     output_dir: Path = Path("output")
     logs_dir: Path = Path("logs")
+    prompt_config_path: Path = Path(__file__).with_name("prompts_config.json")
     llm_provider: str = DEFAULT_LLM_PROVIDER
     llm_model: Optional[str] = None
     ollama_base_url: Optional[str] = None
@@ -67,15 +68,16 @@ class Config:
     token_limit: int = 1024
     system_prompt: str = (
         "Du bist ein kreativer deutschsprachiger Autor. Du erfindest "
-        "keine Fakten. Vermeide Wiederholungen und Füllwörter, auch"
-        "Deine Texte sind klar strukturiert, aktiv formuliert, "
-        "redundanzarm und adressatengerecht."
+        "keine Fakten. Vermeide Wiederholungen und Füllwörter. Deine "
+        "Texte sind klar strukturiert, aktiv formuliert, redundanzarm "
+        "und adressatengerecht."
     )
     word_count: int = 0
 
     def __post_init__(self) -> None:
         self.output_dir = Path(self.output_dir)
         self.logs_dir = Path(self.logs_dir)
+        self.prompt_config_path = Path(self.prompt_config_path)
         self.ensure_directories()
         self._apply_minimum_limits()
 
@@ -137,6 +139,8 @@ def _update_config_from_dict(config: Config, data: Dict[str, Any]) -> None:
             config.llm_model = str(value) if value is not None else None
         elif key == "ollama_base_url":
             config.ollama_base_url = str(value) if value is not None else None
+        elif key == "prompt_config_path":
+            config.prompt_config_path = Path(str(value))
         elif key == "system_prompt":
             config.system_prompt = str(value)
         elif key == "context_length":
