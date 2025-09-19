@@ -125,7 +125,14 @@ entsprechen den Attributen des `Config`-Dataclasses, u. a.:
 * `output_dir`, `logs_dir`
 * `llm_provider`, `llm_model`, `ollama_base_url`
 * `system_prompt`, `context_length`, `token_limit`
+* `prompt_config_path` – Pfad zur JSON-Datei mit den Prompt-Templates
 * `llm` (Objekt mit Parametern wie `temperature`, `top_p`, `seed`)
+
+Die mitgelieferte Datei `wordsmith/prompts_config.json` enthält alle
+Prompt-Templates. Wird ein abweichender Satz an Prompts benötigt, kann
+`prompt_config_path` auf eine eigene JSON-Datei zeigen. Vor jedem Lauf
+lädt die CLI diese Datei und nutzt `system_prompt` weiterhin als
+Laufzeitüberschreibung.
 
 Vor jedem Lauf sorgt `Config.adjust_for_word_count` für sinnvolle
 Fenstergrößen und setzt deterministische LLM-Parameter (Seed 42). Die
