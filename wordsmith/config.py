@@ -66,12 +66,7 @@ class Config:
     llm: LLMParameters = field(default_factory=LLMParameters)
     context_length: int = 4096
     token_limit: int = 1024
-    system_prompt: str = (
-        "Du bist ein kreativer deutschsprachiger Autor. Du erfindest "
-        "keine Fakten. Vermeide Wiederholungen und Füllwörter. Deine "
-        "Texte sind klar strukturiert, aktiv formuliert, redundanzarm "
-        "und adressatengerecht."
-    )
+    system_prompt: Optional[str] = None
     word_count: int = 0
 
     def __post_init__(self) -> None:
@@ -142,7 +137,11 @@ def _update_config_from_dict(config: Config, data: Dict[str, Any]) -> None:
         elif key == "prompt_config_path":
             config.prompt_config_path = Path(str(value))
         elif key == "system_prompt":
-            config.system_prompt = str(value)
+            if value is None:
+                config.system_prompt = None
+            else:
+                cleaned = str(value).strip()
+                config.system_prompt = cleaned or None
         elif key == "context_length":
             config.context_length = int(value)
         elif key == "token_limit":
