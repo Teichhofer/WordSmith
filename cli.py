@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
-from typing import List, Optional, Sequence, TextIO
+from typing import Iterable, List, Optional, Sequence, TextIO
 
 from wordsmith import prompts
 from wordsmith.agent import WriterAgent, WriterAgentError
@@ -23,6 +24,33 @@ from wordsmith.defaults import (
 )
 
 DEFAULT_SEO_KEYWORDS: tuple[str, ...] = ()
+
+
+class _InputFileError(Exception):
+    """Raised when the CLI input settings file is invalid."""
+
+
+_CLI_OPTION_MAP: dict[str, str] = {
+    "title": "--title",
+    "content": "--content",
+    "text_type": "--text-type",
+    "word_count": "--word-count",
+    "iterations": "--iterations",
+    "llm_provider": "--llm-provider",
+    "audience": "--audience",
+    "tone": "--tone",
+    "register": "--register",
+    "variant": "--variant",
+    "constraints": "--constraints",
+    "sources_allowed": "--sources-allowed",
+    "seo_keywords": "--seo-keywords",
+    "include_compliance_note": "--compliance-hint",
+    "config": "--config",
+    "output_dir": "--output-dir",
+    "logs_dir": "--logs-dir",
+    "ollama_model": "--ollama-model",
+    "ollama_base_url": "--ollama-base-url",
+}
 
 VALID_REGISTERS = dict(REGISTER_ALIASES)
 
@@ -176,6 +204,111 @@ def _parse_iterations(value: str) -> int:
     return iterations
 
 
+_REQUIRED_SETTINGS: frozenset[str] = frozenset({
+    "title",
+    "content",
+    "text_type",
+    "word_count",
+})
+
+
+def _coerce_bool_from_input(key: str, value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return _parse_bool(value)
+    raise _InputFileError(
+        f"Wert für '{key}' muss boolesch sein (true/false)."
+    )
+
+
+def _format_keywords_argument(value: object) -> str:
+    if isinstance(value, str):
+        keywords = _parse_keywords(value)
+    elif isinstance(value, Iterable):
+        keywords = _parse_keywords(",".join(str(item) for item in value))
+    else:
+        raise _InputFileError(
+            "SEO-Schlüsselwörter müssen als String oder Liste angegeben werden."
+        )
+    return ", ".join(keywords)
+
+
+def _build_setting_tokens(key: str, value: object) -> List[str]:
+    if key not in _CLI_OPTION_MAP:
+        raise _InputFileError(f"Unbekannte Einstellung '{key}'.")
+
+    option = _CLI_OPTION_MAP[key]
+
+    if value is None:
+        if key in _REQUIRED_SETTINGS:
+            raise _InputFileError(f"Einstellung '{key}' darf nicht leer sein.")
+        # Optional Parameter werden bei None ignoriert.
+        return []
+
+    if key == "include_compliance_note":
+        return [option] if _coerce_bool_from_input(key, value) else []
+    if key == "sources_allowed":
+        allowed = _coerce_bool_from_input(key, value)
+        return [option, "true" if allowed else "false"]
+    if key == "seo_keywords":
+        formatted = _format_keywords_argument(value)
+        return [option, formatted]
+
+    # Für numerische Werte vertraut der Parser auf die eigentliche Validierung.
+    return [option, str(value)]
+
+
+def _load_input_file(path: Path) -> List[str]:
+    if not path.exists():
+        raise _InputFileError(
+            f"Einstellungsdatei '{path}' wurde nicht gefunden."
+        )
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+        raise _InputFileError(
+            f"Einstellungsdatei konnte nicht gelesen werden: {exc}"
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise _InputFileError(
+            "Einstellungsdatei muss ein JSON-Objekt enthalten."
+        )
+
+    tokens: List[str] = []
+    for key, value in data.items():
+        tokens.extend(_build_setting_tokens(key, value))
+
+    return tokens
+
+
+def _expand_with_input_file(arguments: Sequence[str]) -> List[str]:
+    values = list(arguments)
+    if not values:
+        return values
+
+    indices = [index for index, item in enumerate(values) if item == "--input-file"]
+    if not indices:
+        return values
+    if len(indices) > 1:
+        raise _InputFileError("--input-file darf nur einmal angegeben werden.")
+
+    index = indices[0]
+    if index + 1 >= len(values):  # Fehlende Angabe; argparse meldet den Fehler.
+        return values
+
+    path_argument = values[index + 1]
+    try:
+        settings_tokens = _load_input_file(Path(path_argument))
+    except _InputFileError:
+        raise
+
+    values[1:1] = settings_tokens
+    return values
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="wordsmith",
@@ -274,6 +407,13 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Pfad zu einer optionalen JSON-Konfigurationsdatei.",
+    )
+    automatik_parser.add_argument(
+        "--input-file",
+        type=Path,
+        dest="input_file",
+        default=None,
+        help="Pfad zu einer JSON-Datei mit allen Eingabeparametern.",
     )
     automatik_parser.add_argument(
         "--output-dir",
@@ -443,6 +583,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.print_help()
         return 1
     try:
+        if arguments and arguments[0] == "automatikmodus":
+            try:
+                arguments = _expand_with_input_file(arguments)
+            except _InputFileError as exc:
+                print(f"Eingabedatei konnte nicht verwendet werden: {exc}", file=sys.stderr)
+                return 2
         parsed = parser.parse_args(arguments)
         if hasattr(parsed, "func"):
             return parsed.func(parsed)

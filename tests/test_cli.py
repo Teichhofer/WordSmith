@@ -50,6 +50,140 @@ def test_automatikmodus_requires_arguments() -> None:
     assert exc.value.code == 2
 
 
+def test_input_file_supplies_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    settings_data = {
+        "title": "Titel aus Datei",
+        "content": "Inhalt aus Datei",
+        "text_type": "Blog",
+        "word_count": 250,
+        "iterations": 2,
+        "llm_provider": "openai",
+        "audience": "Produktteam",
+        "tone": "locker",
+        "register": "du",
+        "variant": "DE-AT",
+        "constraints": "Keine Floskeln",
+        "sources_allowed": True,
+        "seo_keywords": ["Alpha", "Beta"],
+        "include_compliance_note": True,
+    }
+    settings_path.write_text(json.dumps(settings_data), encoding="utf-8")
+
+    config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
+    monkeypatch.setattr("cli.load_config", lambda _: config)
+    monkeypatch.setattr("cli.prompts.set_system_prompt", lambda prompt: None)
+
+    captured_kwargs: dict[str, object] = {}
+
+    class DummyAgent:
+        runtime_seconds = 0.0
+
+        def __init__(self, **kwargs: object) -> None:
+            captured_kwargs.update(kwargs)
+
+        def run(self) -> str:
+            return "Datei-Text"
+
+    monkeypatch.setattr("cli.WriterAgent", DummyAgent)
+
+    exit_code = main(["automatikmodus", "--input-file", str(settings_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Datei-Text" in captured.out
+    assert captured_kwargs["topic"] == "Titel aus Datei"
+    assert captured_kwargs["content"] == "Inhalt aus Datei"
+    assert captured_kwargs["text_type"] == "Blog"
+    assert captured_kwargs["word_count"] == 250
+    assert captured_kwargs["iterations"] == 2
+    assert captured_kwargs["audience"] == "Produktteam"
+    assert captured_kwargs["tone"] == "locker"
+    assert captured_kwargs["register"] == "Du"
+    assert captured_kwargs["variant"] == "DE-AT"
+    assert captured_kwargs["constraints"] == "Keine Floskeln"
+    assert captured_kwargs["sources_allowed"] is True
+    assert captured_kwargs["seo_keywords"] == ["Alpha", "Beta"]
+    assert captured_kwargs["include_compliance_note"] is True
+    assert config.llm_provider == "openai"
+
+
+def test_input_file_allows_cli_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        json.dumps(
+            {
+                "title": "Titel",
+                "content": "Inhalt",
+                "text_type": "Blog",
+                "word_count": 120,
+                "llm_provider": "openai",
+                "tone": "locker",
+                "iterations": 1,
+                "sources_allowed": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
+    monkeypatch.setattr("cli.load_config", lambda _: config)
+    monkeypatch.setattr("cli.prompts.set_system_prompt", lambda prompt: None)
+
+    captured_kwargs: dict[str, object] = {}
+
+    class DummyAgent:
+        runtime_seconds = 0.0
+
+        def __init__(self, **kwargs: object) -> None:
+            captured_kwargs.update(kwargs)
+
+        def run(self) -> str:
+            return "Override"
+
+    monkeypatch.setattr("cli.WriterAgent", DummyAgent)
+
+    exit_code = main(
+        [
+            "automatikmodus",
+            "--input-file",
+            str(settings_path),
+            "--tone",
+            "ernst",
+            "--iterations",
+            "3",
+            "--sources-allowed",
+            "nein",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_kwargs["tone"] == "ernst"
+    assert captured_kwargs["iterations"] == 3
+    assert captured_kwargs["sources_allowed"] is False
+
+
+def test_input_file_reports_errors(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(json.dumps({"unknown": "value"}), encoding="utf-8")
+
+    exit_code = main(["automatikmodus", "--input-file", str(settings_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "Eingabedatei konnte nicht verwendet werden" in captured.err
+
+
 def test_cli_can_be_interrupted_with_keyboard_interrupt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -1,0 +1,23 @@
+{
+  "title": "Strategische Roadmap 2025",
+  "content": "Erstelle einen strukturierten Überblick über die wichtigsten Wachstumsinitiativen.",
+  "text_type": "Strategiepapier",
+  "word_count": 650,
+  "iterations": 1,
+  "llm_provider": "ollama",
+  "audience": "Führungsteam",
+  "tone": "motivierend",
+  "register": "Sie",
+  "variant": "DE-DE",
+  "constraints": "Keine vertraulichen Zahlen nennen.",
+  "sources_allowed": false,
+  "seo_keywords": [
+    "Roadmap",
+    "Strategie",
+    "Wachstum"
+  ],
+  "include_compliance_note": true,
+  "ollama_model": "mistral",
+  "output_dir": "output",
+  "logs_dir": "logs"
+}
