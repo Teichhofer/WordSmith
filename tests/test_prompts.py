@@ -55,6 +55,14 @@ def test_prompt_templates_match_configuration() -> None:
     )
 
 
+def test_prompt_configuration_has_no_merge_markers() -> None:
+    """The distributed prompt configuration must be valid JSON without conflict markers."""
+
+    text = prompts.DEFAULT_PROMPT_CONFIG_PATH.read_text(encoding="utf-8")
+    for marker in ("<<<<<<<", "=======", ">>>>>>>"):
+        assert marker not in text
+
+
 def test_load_prompt_config_respects_custom_system_prompt(tmp_path: Path) -> None:
     """Loading a new configuration keeps an explicitly set system prompt."""
 
