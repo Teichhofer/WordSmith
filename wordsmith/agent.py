@@ -592,6 +592,7 @@ class WriterAgent:
         prompt = prompts.BRIEFING_PROMPT.format(
             title=self.topic,
             text_type=self.text_type,
+            word_count=self.word_count,
             audience=self.audience,
             tone=self.tone,
             register=self.register,
