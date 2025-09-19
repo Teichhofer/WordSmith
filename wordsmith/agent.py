@@ -592,6 +592,7 @@ class WriterAgent:
         prompt = prompts.BRIEFING_PROMPT.format(
             title=self.topic,
             text_type=self.text_type,
+            word_count=self.word_count,
             audience=self.audience,
             tone=self.tone,
             register=self.register,
@@ -603,6 +604,7 @@ class WriterAgent:
         briefing_text = self._call_llm_stage(
             stage="briefing_llm",
             prompt=prompt,
+            system_prompt=prompts.BRIEFING_SYSTEM_PROMPT,
             success_message="Briefing generiert",
             failure_message="Briefing-Generierung fehlgeschlagen",
             data={"phase": "briefing"},
@@ -637,6 +639,7 @@ class WriterAgent:
         return self._call_llm_stage(
             stage="idea_llm",
             prompt=prompt,
+            system_prompt=prompts.IDEA_IMPROVEMENT_SYSTEM_PROMPT,
             success_message="Idee mit LLM überarbeitet",
             failure_message="LLM-Ideenverbesserung fehlgeschlagen",
             data={"phase": "idea"},
@@ -671,6 +674,7 @@ class WriterAgent:
         outline_text = self._call_llm_stage(
             stage="outline_llm",
             prompt=prompt,
+            system_prompt=prompts.OUTLINE_SYSTEM_PROMPT,
             success_message="Outline mit LLM erstellt",
             failure_message="LLM-Outline fehlgeschlagen",
             data={"phase": "outline"},
@@ -770,6 +774,7 @@ class WriterAgent:
         improved_text = self._call_llm_stage(
             stage="outline_improvement_llm",
             prompt=prompt,
+            system_prompt=prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT,
             success_message="Outline mit LLM verfeinert",
             failure_message="LLM-Outline-Überarbeitung fehlgeschlagen",
             data={"phase": "outline"},
@@ -838,6 +843,7 @@ class WriterAgent:
             section_text = self._call_llm_stage(
                 stage=stage,
                 prompt=prompt,
+                system_prompt=prompts.SECTION_SYSTEM_PROMPT,
                 success_message=f"Abschnitt {index:02d} generiert",
                 failure_message=f"Abschnitt {index:02d} fehlgeschlagen",
                 data={
@@ -955,6 +961,7 @@ class WriterAgent:
         report = self._call_llm_stage(
             stage="text_type_check_llm",
             prompt=check_prompt,
+            system_prompt=prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT,
             success_message="Texttyp-Prüfung abgeschlossen",
             failure_message="Texttyp-Prüfung fehlgeschlagen",
             data={"phase": "text_type_check"},
@@ -983,6 +990,7 @@ class WriterAgent:
         fixed = self._call_llm_stage(
             stage="text_type_fix_llm",
             prompt=fix_prompt,
+            system_prompt=prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT,
             success_message="Texttyp-Korrektur angewendet",
             failure_message="Texttyp-Korrektur fehlgeschlagen",
             data={"phase": "text_type_fix"},
@@ -1021,6 +1029,7 @@ class WriterAgent:
         return self._call_llm_stage(
             stage=f"revision_{iteration:02d}_llm",
             prompt=revision_prompt,
+            system_prompt=prompts.REVISION_SYSTEM_PROMPT,
             success_message=f"Revision {iteration:02d} generiert",
             failure_message=f"Revision {iteration:02d} fehlgeschlagen",
             data={"iteration": iteration},
@@ -1136,6 +1145,7 @@ class WriterAgent:
             "llm_provider": self.config.llm_provider,
             "llm_model": self.config.llm_model,
             "system_prompt": prompts.SYSTEM_PROMPT,
+            "system_prompts": dict(prompts.STAGE_SYSTEM_PROMPTS),
             "compliance_checks": self._compliance_audit,
         }
         self._write_json(self.output_dir / "metadata.json", metadata)
@@ -1159,6 +1169,7 @@ class WriterAgent:
             "model": self.config.llm_model,
             "parameters": asdict(self.config.llm),
             "system_prompt": prompts.SYSTEM_PROMPT,
+            "system_prompts": dict(prompts.STAGE_SYSTEM_PROMPTS),
             "topic": self.topic,
             "word_count": self.word_count,
             "audience": self.audience,
@@ -1229,6 +1240,7 @@ class WriterAgent:
         *,
         stage: str,
         prompt: str,
+        system_prompt: str,
         success_message: str,
         failure_message: str,
         data: dict[str, Any] | None = None,
@@ -1240,7 +1252,7 @@ class WriterAgent:
                 provider=self.config.llm_provider,
                 model=self.config.llm_model,
                 prompt=prompt,
-                system_prompt=prompts.SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 parameters=self.config.llm,
                 base_url=self.config.ollama_base_url,
             )

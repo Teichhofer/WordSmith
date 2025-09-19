@@ -10,7 +10,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from wordsmith import llm
+from wordsmith import llm, prompts
 from wordsmith.agent import WriterAgent, WriterAgentError, _load_json_object
 from wordsmith.config import Config
 
@@ -19,6 +19,57 @@ def _build_config(tmp_path: Path, word_count: int) -> Config:
     config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
     config.adjust_for_word_count(word_count)
     return config
+
+
+def test_generate_briefing_includes_word_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 150)
+
+    agent = WriterAgent(
+        topic="Testthema",
+        word_count=150,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Blogartikel",
+        audience="Zielgruppe",
+        tone="lebhaft",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    monkeypatch.setattr(prompts, "BRIEFING_PROMPT", "Wortanzahl: {word_count}")
+    captured: dict[str, str] = {}
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: dict[str, object] | None = None,
+    ) -> str:
+        captured["prompt"] = prompt
+        captured["system_prompt"] = system_prompt
+        return "{\"goal\": \"Test\"}"
+
+    monkeypatch.setattr(
+        WriterAgent,
+        "_call_llm_stage",
+        fake_call_llm_stage,
+    )
+
+    briefing = agent._generate_briefing()
+
+    assert captured["prompt"] == "Wortanzahl: 150"
+    assert captured["system_prompt"] == prompts.BRIEFING_SYSTEM_PROMPT
+    assert briefing["goal"] == "Test"
 
 
 def test_load_json_object_handles_invalid_escape_sequences() -> None:
@@ -138,6 +189,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert metadata["llm_model"] == "llama2"
     assert metadata["final_word_count"] == agent._count_words(final_output)
     assert metadata["rubric_passed"] is True
+    assert metadata["system_prompts"] == dict(prompts.STAGE_SYSTEM_PROMPTS)
     assert compliance["checks"]
     stages = {entry["stage"] for entry in compliance["checks"]}
     assert stages == {"draft", "revision_01"}

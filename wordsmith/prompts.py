@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict
+from types import MappingProxyType
+from typing import Dict, Mapping
 
 
 class PromptConfigurationError(RuntimeError):
@@ -12,23 +13,42 @@ class PromptConfigurationError(RuntimeError):
 
 
 DEFAULT_PROMPT_CONFIG_PATH = Path(__file__).with_name("prompts_config.json")
+_STAGE_PROMPT_ORDER: tuple[tuple[str, str], ...] = (
+    ("briefing", "BRIEFING"),
+    ("idea_improvement", "IDEA_IMPROVEMENT"),
+    ("outline", "OUTLINE"),
+    ("outline_improvement", "OUTLINE_IMPROVEMENT"),
+    ("section", "SECTION"),
+    ("text_type_check", "TEXT_TYPE_CHECK"),
+    ("text_type_fix", "TEXT_TYPE_FIX"),
+    ("revision", "REVISION"),
+    ("reflection", "REFLECTION"),
+    ("final_draft", "FINAL_DRAFT"),
+)
+_STAGE_PREFIXES: Dict[str, str] = {stage: prefix for stage, prefix in _STAGE_PROMPT_ORDER}
 _PROMPT_KEYS: tuple[str, ...] = (
     "system_prompt",
-    "briefing_prompt",
-    "idea_improvement_prompt",
-    "outline_prompt",
-    "outline_improvement_prompt",
-    "section_prompt",
-    "text_type_check_prompt",
-    "text_type_fix_prompt",
-    "revision_prompt",
+    *(
+        key
+        for stage, _ in _STAGE_PROMPT_ORDER
+        for key in (f"{stage}_system_prompt", f"{stage}_prompt")
+    ),
     "compliance_hint_instruction",
-    "reflection_prompt",
-    "final_draft_prompt",
 )
 
 _DEFAULT_SYSTEM_PROMPT: str = ""
+_DEFAULT_STAGE_SYSTEM_PROMPTS: Dict[str, str] = {
+    stage: "" for stage, _ in _STAGE_PROMPT_ORDER
+}
 SYSTEM_PROMPT: str = ""
+_STAGE_SYSTEM_PROMPTS: Dict[str, str] = {
+    stage: "" for stage, _ in _STAGE_PROMPT_ORDER
+}
+STAGE_SYSTEM_PROMPTS: Mapping[str, str] = MappingProxyType(_STAGE_SYSTEM_PROMPTS)
+DEFAULT_STAGE_SYSTEM_PROMPTS: Mapping[str, str] = MappingProxyType(
+    _DEFAULT_STAGE_SYSTEM_PROMPTS
+)
+
 BRIEFING_PROMPT: str = ""
 IDEA_IMPROVEMENT_PROMPT: str = ""
 OUTLINE_PROMPT: str = ""
@@ -37,9 +57,19 @@ SECTION_PROMPT: str = ""
 TEXT_TYPE_CHECK_PROMPT: str = ""
 TEXT_TYPE_FIX_PROMPT: str = ""
 REVISION_PROMPT: str = ""
-COMPLIANCE_HINT_INSTRUCTION: str = ""
 REFLECTION_PROMPT: str = ""
 FINAL_DRAFT_PROMPT: str = ""
+BRIEFING_SYSTEM_PROMPT: str = ""
+IDEA_IMPROVEMENT_SYSTEM_PROMPT: str = ""
+OUTLINE_SYSTEM_PROMPT: str = ""
+OUTLINE_IMPROVEMENT_SYSTEM_PROMPT: str = ""
+SECTION_SYSTEM_PROMPT: str = ""
+TEXT_TYPE_CHECK_SYSTEM_PROMPT: str = ""
+TEXT_TYPE_FIX_SYSTEM_PROMPT: str = ""
+REVISION_SYSTEM_PROMPT: str = ""
+REFLECTION_SYSTEM_PROMPT: str = ""
+FINAL_DRAFT_SYSTEM_PROMPT: str = ""
+COMPLIANCE_HINT_INSTRUCTION: str = ""
 
 
 def _read_prompt_config(path: Path) -> Dict[str, str]:
@@ -83,17 +113,7 @@ def _apply_prompt_values(values: Dict[str, str]) -> None:
 
     global _DEFAULT_SYSTEM_PROMPT
     global SYSTEM_PROMPT
-    global BRIEFING_PROMPT
-    global IDEA_IMPROVEMENT_PROMPT
-    global OUTLINE_PROMPT
-    global OUTLINE_IMPROVEMENT_PROMPT
-    global SECTION_PROMPT
-    global TEXT_TYPE_CHECK_PROMPT
-    global TEXT_TYPE_FIX_PROMPT
-    global REVISION_PROMPT
     global COMPLIANCE_HINT_INSTRUCTION
-    global REFLECTION_PROMPT
-    global FINAL_DRAFT_PROMPT
 
     previous_default = _DEFAULT_SYSTEM_PROMPT
     previous_system_prompt = SYSTEM_PROMPT or previous_default
@@ -106,17 +126,24 @@ def _apply_prompt_values(values: Dict[str, str]) -> None:
     else:
         SYSTEM_PROMPT = previous_system_prompt
 
-    BRIEFING_PROMPT = values["briefing_prompt"]
-    IDEA_IMPROVEMENT_PROMPT = values["idea_improvement_prompt"]
-    OUTLINE_PROMPT = values["outline_prompt"]
-    OUTLINE_IMPROVEMENT_PROMPT = values["outline_improvement_prompt"]
-    SECTION_PROMPT = values["section_prompt"]
-    TEXT_TYPE_CHECK_PROMPT = values["text_type_check_prompt"]
-    TEXT_TYPE_FIX_PROMPT = values["text_type_fix_prompt"]
-    REVISION_PROMPT = values["revision_prompt"]
+    for stage, prefix in _STAGE_PROMPT_ORDER:
+        prompt_key = f"{stage}_prompt"
+        system_key = f"{stage}_system_prompt"
+
+        globals()[f"{prefix}_PROMPT"] = values[prompt_key]
+
+        previous_stage_default = _DEFAULT_STAGE_SYSTEM_PROMPTS[stage]
+        previous_stage_value = _STAGE_SYSTEM_PROMPTS[stage] or previous_stage_default
+
+        new_stage_default = values[system_key]
+        _DEFAULT_STAGE_SYSTEM_PROMPTS[stage] = new_stage_default
+
+        if previous_stage_value == previous_stage_default or not previous_stage_value:
+            _STAGE_SYSTEM_PROMPTS[stage] = new_stage_default
+
+        globals()[f"{prefix}_SYSTEM_PROMPT"] = _STAGE_SYSTEM_PROMPTS[stage]
+
     COMPLIANCE_HINT_INSTRUCTION = values["compliance_hint_instruction"]
-    REFLECTION_PROMPT = values["reflection_prompt"]
-    FINAL_DRAFT_PROMPT = values["final_draft_prompt"]
 
 
 def load_prompt_config(path: str | Path | None = None) -> None:
@@ -127,17 +154,40 @@ def load_prompt_config(path: str | Path | None = None) -> None:
     _apply_prompt_values(values)
 
 
-def set_system_prompt(prompt: str | None) -> None:
-    """Configure the system prompt for subsequent LLM interactions."""
+def set_system_prompt(prompt: str | None, *, stage: str | None = None) -> None:
+    """Configure system prompts for subsequent LLM interactions.
+
+    When ``stage`` is ``None`` all stage-specific system prompts are updated.
+    Otherwise only the named stage (e.g. ``"briefing"``) is changed.
+    """
 
     global SYSTEM_PROMPT
 
+    if stage is not None:
+        if stage not in _STAGE_PREFIXES:
+            raise ValueError(f"Unbekannte Prompt-Stufe: {stage}")
+        if prompt is None:
+            new_value = _DEFAULT_STAGE_SYSTEM_PROMPTS[stage]
+        else:
+            cleaned_stage = str(prompt).strip()
+            new_value = cleaned_stage or _DEFAULT_STAGE_SYSTEM_PROMPTS[stage]
+        _STAGE_SYSTEM_PROMPTS[stage] = new_value
+        globals()[f"{_STAGE_PREFIXES[stage]}_SYSTEM_PROMPT"] = new_value
+        return
+
     if prompt is None:
         SYSTEM_PROMPT = _DEFAULT_SYSTEM_PROMPT
+        for stage_name, prefix in _STAGE_PROMPT_ORDER:
+            _STAGE_SYSTEM_PROMPTS[stage_name] = _DEFAULT_STAGE_SYSTEM_PROMPTS[stage_name]
+            globals()[f"{prefix}_SYSTEM_PROMPT"] = _STAGE_SYSTEM_PROMPTS[stage_name]
         return
 
     cleaned = str(prompt).strip()
-    SYSTEM_PROMPT = cleaned or _DEFAULT_SYSTEM_PROMPT
+    value = cleaned or _DEFAULT_SYSTEM_PROMPT
+    SYSTEM_PROMPT = value
+    for stage_name, prefix in _STAGE_PROMPT_ORDER:
+        _STAGE_SYSTEM_PROMPTS[stage_name] = value
+        globals()[f"{prefix}_SYSTEM_PROMPT"] = value
 
 
 def build_revision_prompt(include_compliance_hint: bool = False) -> str:
