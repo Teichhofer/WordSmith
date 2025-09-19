@@ -48,6 +48,18 @@ python cli.py automatikmodus \
   --ollama-base-url http://localhost:11434
 ```
 
+Alternativ können alle Parameter in einer JSON-Datei hinterlegt und per
+`--input-file` geladen werden:
+
+```bash
+python cli.py automatikmodus --input-file lauf.json
+```
+
+Im Repository liegt unter `docs/examples/automatikmodus-input.json` eine
+vollständig befüllte Beispiel-Datei. Der über `--input-file` angegebene
+Pfad kann entweder relativ zum aktuellen Arbeitsverzeichnis oder als
+absoluter Pfad angegeben werden.
+
 Die Optionen im Einzelnen:
 
 | Option | Pflicht? | Beschreibung |
@@ -71,6 +83,30 @@ Die Optionen im Einzelnen:
 | `--logs-dir` |   | Verzeichnis für Lauf- und Prompt-Logs. |
 | `--ollama-model` |   | Name des Ollama-Modells. Ohne Angabe startet eine interaktive Auswahl (sofern TTY). |
 | `--ollama-base-url` |   | Basis-URL der Ollama-API (Default: `http://localhost:11434`). |
+| `--input-file` |   | Pfad zu einer JSON-Datei, die alle oben genannten Argumente enthalten kann. Angaben auf der CLI überschreiben die Datei. |
+
+### Eingabedatei
+
+Die Eingabedatei muss ein JSON-Objekt enthalten. Die Schlüssel entsprechen
+den CLI-Optionen, jedoch in Snake-Case (z. B. `text_type`). Werte werden wie
+auf der Kommandozeile validiert. Ein Minimalbeispiel:
+
+```json
+{
+  "title": "Strategische Roadmap",
+  "content": "Wir planen die nächsten Schritte.",
+  "text_type": "Strategiepapier",
+  "word_count": 400,
+  "llm_provider": "ollama",
+  "iterations": 1,
+  "sources_allowed": false,
+  "seo_keywords": ["Roadmap", "Strategie"]
+}
+```
+
+Optional lassen sich auch `output_dir`, `logs_dir`, `ollama_model` oder
+`config` definieren. CLI-Argumente haben stets Vorrang vor den Werten aus der
+Datei.
 
 Die CLI gibt den finalen Text auf `stdout` aus, schreibt Statusmeldungen
 auf `stderr` und beendet sich mit
