@@ -50,11 +50,13 @@ def test_generate_briefing_includes_word_count(
         *,
         stage: str,
         prompt: str,
+        system_prompt: str,
         success_message: str,
         failure_message: str,
         data: dict[str, object] | None = None,
     ) -> str:
         captured["prompt"] = prompt
+        captured["system_prompt"] = system_prompt
         return "{\"goal\": \"Test\"}"
 
     monkeypatch.setattr(
@@ -66,6 +68,7 @@ def test_generate_briefing_includes_word_count(
     briefing = agent._generate_briefing()
 
     assert captured["prompt"] == "Wortanzahl: 150"
+    assert captured["system_prompt"] == prompts.BRIEFING_SYSTEM_PROMPT
     assert briefing["goal"] == "Test"
 
 
@@ -186,6 +189,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert metadata["llm_model"] == "llama2"
     assert metadata["final_word_count"] == agent._count_words(final_output)
     assert metadata["rubric_passed"] is True
+    assert metadata["system_prompts"] == dict(prompts.STAGE_SYSTEM_PROMPTS)
     assert compliance["checks"]
     stages = {entry["stage"] for entry in compliance["checks"]}
     assert stages == {"draft", "revision_01"}
