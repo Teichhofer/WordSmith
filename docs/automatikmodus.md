@@ -1,282 +1,159 @@
-# Automatikmodus (überarbeitet für bessere Textqualität)
+# Automatikmodus (Stand der Codebasis)
 
-Dieser Leitfaden beschreibt den **Automatikmodus** so, dass eine Entwicklerin die Funktionalität nachbauen **und** hochwertige Texte reproduzierbar erzeugen kann. Er ergänzt den bisherigen Ablauf um eindeutige Qualitätskriterien, robuste Prompts, Stil-Regeln, Anti-Halluzinations-Vorgaben und deterministische Parameter.
+Dieser Leitfaden dokumentiert den tatsächlichen Ablauf des Automatikmodus
+in der aktuellen WordSmith-Codebasis. Ziel ist es, den Entwicklungsstand
+präzise wiederzugeben und alle LLM-Interaktionen, Prüfungen sowie erzeugten
+Artefakte nachvollziehbar zu machen.
 
----
+## Qualitätsziele
 
-## Ziele & Qualitätskriterien (Akzeptanzkriterien)
+Der WriterAgent steuert die LLM-Aufrufe so, dass der finale Text
+
+1. das angegebene Zielpublikum adressiert,
+2. keine Fakten erfindet (fehlende Daten → Platzhalter wie `[KLÄREN: …]`,
+   `[QUELLE]`, `[DATUM]`),
+3. den gewünschten Texttyp respektiert,
+4. dem Zielumfang möglichst nahekommt und
+5. stilistisch zu Ton, Register und Sprachvariante passt.
 
-Ein Durchlauf gilt als erfolgreich, wenn der finale Text:
+Diese Kriterien werden über Prompt-Vorgaben, den Rubrik-Check und das
+Compliance-Logging abgesichert.
 
-1. **Ziel & Publikum** klar adressiert (Wer liest? Welches Ziel?).  
-2. **Fakten** nicht erfindet (bei Lücken: Platzhalter wie `[QUELLE]`, `[DATUM]` statt Halluzinationen).  
-3. **Struktur** logisch und vollständig ist (keine Überschneidungen zwischen Abschnitten).  
-4. **Stil & Ton** passend zur `text_type`-Spezifikation ist (siehe Rubrik).  
-5. **Länge** innerhalb ±3 % der Zielwortzahl liegt (nach sinnvoller Verdichtung, nicht bloßem Abschneiden).  
-6. **Lesbarkeit** gewährleistet (aktive Verben, konkrete Substantive, variiertes Satztempo, klare Übergänge).  
-7. **Kohärenz** zwischen Abschnitten hat (Begriffe, Perspektive, Zeitform konsistent).  
-8. **Wiederholungen** und Füllwörter vermeidet.
+## Architekturüberblick
+
+* Die CLI (`cli.py`) sammelt Argumente, lädt `Config`, setzt optionale
+  Pfad-Overrides und sorgt dafür, dass ein Ollama-Modell ausgewählt ist.
+* `wordsmith.agent.WriterAgent` orchestriert die komplette Pipeline. Jeder
+  Schritt wird als Ereignis protokolliert; bei Bedarf schreibt der Agent
+  Zwischenstände ins Ausgabeverzeichnis.
+* `wordsmith.prompts` lädt beim Programmstart die Texte aus
+  `prompts_config.json`. Laufzeit-Overrides sind über
+  `prompts.set_system_prompt()` möglich.
 
----
+## Eingabe-Normalisierung
 
-## Eingaben & Initialisierung
+Der WriterAgent überprüft alle Eingaben und ergänzt Defaults, bevor die
+LLM-Pipeline startet:
 
-1. **CLI erfragt**  
-   - `title` (Arbeitstitel), `content` (Briefing/Notizen), `text_type`, `word_count`, `iterations`, `llm_provider`.  
-   - **Neu:** `audience` (Zielgruppe), `tone` (z. B. sachlich, lebendig), `register` (Du/Sie), `variant` (DE-DE/DE-AT/DE-CH), `constraints` (Muss/Muss-nicht), `sources_allowed` (ja/nein), `seo_keywords` (optional).
+* Leere Titel oder `text_type` führen zu einem Abbruch mit
+  `WriterAgentError`.
+* `audience`, `tone`, `register`, `variant` und `constraints` erhalten bei
+  leeren Werten die Defaults aus `wordsmith.defaults`.
+* Register und Varianten werden normalisiert; unbekannte Werte lösen
+  Hinweise im Log aus und fallen auf die Defaults zurück.
+* SEO-Keywords werden bereinigt (Trimmen, Entfernen von Duplikaten).
 
-2. **Agent-Erzeugung**  
-   `WriterAgent(topic, word_count, steps=[], iterations, config, content, text_type, audience, tone, register, variant, constraints, sources_allowed, seo_keywords)`.
+Diese Hinweise erscheinen als `input_defaults`-Events in `logs/run.log`.
 
-3. **Konfiguration**  
-   - `Config.adjust_for_word_count()` skaliert Kontextlänge/Tokenlimit.  
-   - **Determinismus:**  
-     - `temperature=0.2` (0.0–0.3 für Präzision), `top_p=0.9`, `presence_penalty=0`, `frequency_penalty=0.3`.  
-     - Falls unterstützt: `seed` setzen.  
-   - Logs- und Output-Verzeichnisse anlegen.
+## Schritt 1: Briefing erzeugen
 
-4. **System-/Rollenprompt (global)**  
-   „Du bist ein präziser deutschsprachiger Fachtexter. Du erfindest **keine** Fakten. Bei fehlenden Daten nutzt du **Platzhalter** in eckigen Klammern. Deine Texte sind klar strukturiert, aktiv formuliert, redundanzarm und adressatengerecht.“
+`_generate_briefing()` ruft das `BRIEFING_PROMPT` auf, das ein strikt
+valide JSON-Objekt erwartet. Das Ergebnis wird geparst und um fehlende
+Felder ergänzt (z. B. `goal`, `audience`, `tone`). Der Agent speichert die
+Datei als `briefing.json`.
 
----
+## Schritt 2: Idee verdichten
 
-## Schritt 1: Briefing normalisieren (neuer Schritt)
-
-**Ziel:** Aus verstreuten Eingaben ein **Arbeitsbriefing** erzeugen, das alle späteren Prompts speist.
-
-- **PROMPT `BRIEFING_PROMPT`**  
-  _Eingaben:_ `title, content, text_type, audience, tone, register, variant, constraints, seo_keywords`  
-  _Ausgabe:_ kompaktes JSON (Ziel, Kernaussagen, definierte Begriffe, Stilvorgaben, SEO-Begriffe).
-- Dieses JSON wird in `output/briefing.json` gespeichert und in allen Folge-Prompts eingebettet.
-
----
-
-## Schritt 2: Idee verbessern (präzisiert)
-
-1. **`IDEA_IMPROVEMENT_PROMPT`**  
-   Anforderungen:  
-   - Inhalt sprachlich straffen, **ohne neue Fakten**.  
-   - Unklare Stellen markieren (`[KLÄREN: …]`), Widersprüche auflösen oder kenntlich machen.  
-   - Kernaussagen als Bullet-Liste + kurze Zusammenfassung (1–2 Sätze).  
-2. Ergebnis ersetzt den ursprünglichen `content` und wird als `output/idea.txt` gespeichert.
-
----
-
-## Schritt 3: Outline erzeugen & verfeinern (robust)
-
-1. **`OUTLINE_PROMPT`**  
-   Erzeuge eine **hierarchische**, nummerierte Gliederung (1, 1.1, …) mit:  
-   - Abschnittstitel, **Rollenfunktion** (z. B. Hook, Kontext, Argument, Gegenargument, Fazit, CTA),  
-   - **Wortbudget** je Abschnitt (Summe = `word_count`),  
-   - **Liefergegenstand/Ergebnis** je Abschnitt (welche Frage wird beantwortet?),  
-   - **Für Fiktion:** Figurenliste mit Rolle, Ziel, Konflikt. **Für Sachtexte:** Schlüsselbegriffe/Definitionen.
-
-2. **`OUTLINE_IMPROVEMENT_PROMPT`**  
-   - Entfernt Überschneidungen, schärft Reihenfolge, fügt fehlende Brückenabschnitte ein, balanciert Wortbudgets.  
-   - Keine Fakten hinzufügen; bei Bedarf Platzhalter setzen.
-
-3. **Bereinigung**  
-   `_clean_outline()` stellt sicher:  
-   - keine leeren/negativen Budgets; Rest ins letzte sinnvolle Segment,  
-   - alle Abschnittsrollen vergeben,  
-   - Zählung konsistent.  
-   Speichern als `output/outline.txt` + `iteration_00.txt`.
-
----
-
-## Schritt 4: Abschnittsweise Textgenerierung (qualitätsgesichert)
-
-1. `_parse_outline()` liefert `(title, role, budget, brief)`-Paare.  
-2. **`SECTION_PROMPT`** pro Abschnitt:  
-   - Nutzt `briefing.json`, verbesserte Idee und Outline-Brief.  
-   - Regeln:  
-     - **Kein** neues Wissen erfinden; bei Bedarf `[QUELLE]`/`[DATUM]`.  
-     - **Transitionsatz** zum vorherigen Abschnitt (außer beim ersten).  
-     - **Stilregeln**: aktive Verben, spezifische Substantive, Varianz in Satzlängen, keine Füllwörter, keine Phrasen wie „In diesem Abschnitt werden wir…“.  
-     - **Terminologie** aus `briefing.json` verwenden.  
-   - Post-Processing: `_truncate_words()` nur, wenn > Budget; zuvor **verdichten**: Redundanzen kürzen, Füllwörter entfernen, Beispiele straffen.  
-3. Nach jeder Sektion: Append, `output/current_text.txt` + `iteration_01.txt` aktualisieren.
-
----
-
-## Schritt 5: Texttyp-Prüfung & Korrektur (mit Rubrik)
-
-1. Zusammenfügen; `_truncate_text()` nur nach **Verdichtung**.  
-2. **`TEXT_TYPE_CHECK_PROMPT`** mit **Rubrik** (Beispiele):  
-   - **Blog/Artikel:** klare These, Zwischenüberschriften, Beispiele/Belege, Fazit + CTA, SEO-Begriffe natürlich eingebunden.  
-   - **Pressemitteilung:** Headline, Subline, Lead-Absatz (W-Fragen), Zitate, Boilerplate, Kontakt.  
-   - **Produktbeschreibung:** Nutzen vor Features, Spezifikationen, Einwandbehandlung, klare CTA.  
-   - **Whitepaper/Report:** Executive Summary, Methodik, Ergebnisse, Implikationen, Limitierungen, Quellen.  
-   - **Story (Fiktion):** Perspektive konsistent, Ziel/Konflikt, Szene-Struktur, „Show, don’t tell“, sinnvolles Ende.  
-   - **Sonstige**: projektspezifisch erweiterbar.
-
-3. Bei Abweichung: **`TEXT_TYPE_FIX_PROMPT`**  
-   - Korrigiere minimal-invasiv, **ohne** Faktenzuwachs.  
-   - Akzeptiere Ersatz nur, wenn **Ähnlichkeits-Gate** erfüllt: ≥ 80 % gemeinsame Tokens & ≥ 0,9 Sequenzähnlichkeit.  
-   - Sonst: kombiniere Fix mit Original und starte erneute Prüfung.
-
-4. Speichern als `iteration_01.txt` (Basis für Revisionen).
-
----
-
-## Schritt 6: Iterative Überarbeitung (zielgerichtet)
-
-Für `i` in `1…iterations`:
-
-- Lade `iteration_{i:02d}.txt`.  
-- **`REVISION_PROMPT`** (Targeted Editing):  
-  1) Klarheit & Prägnanz, 2) Flow & Übergänge, 3) Terminologie-Konsistenz,  
-  4) Wiederholungen/N-Gram-Dopplungen tilgen, 5) Rhythmus variieren,  
-  6) spezifische Verben/Nomen stärken, 7) Schlussteil schärfen (CTA/Resolution),  
-  8) Registersicherheit (Du/Sie), 9) Variantenspezifika (z. B. ß/ss).  
-- Prüfe Differenz zum Ausgang (Levenshtein/Ähnlichkeits-Schwelle),  
-  verdichte vor `_truncate_words()`, speichere als `output/current_text.txt` und `iteration_{i+1:02d}.txt`.  
-- Optional: **`REFLECTION_PROMPT`** → kurze Selbstkritik (3 Punkte) in `output/reflection_{i+1:02d}.txt`.
-
-Nach der letzten Iteration: finaler Text zurückgeben (Länge ±3 %).
-
----
-
-## Anti-Halluzinations- & Compliance-Regeln (durchgängig)
-
-- Keine Tatsachen erfinden; stattdessen **Platzhalter** `[QUELLE]`, `[DATUM]`, `[ZAHL]`.
-- Wenn `sources_allowed=false`: keine Quellenangaben generieren, nur Platzhalter.
-- Wenn `sources_allowed=true`: formatiere Quellen konsistent (z. B. Kurzbeleg im Text, Literaturliste).
-- Keine sensiblen oder verbotenen Inhalte; Markierungen `[ENTFERNT: …]` statt problematischem Text.
-- Compliance-Hinweise (`[COMPLIANCE-HINWEIS: …]`) werden protokolliert und standardmäßig aus dem finalen Text entfernt.
-  Über den CLI-Schalter `--compliance-hint` lassen sie sich bei Bedarf wieder ans Ende des Ergebnisses anhängen.
-
----
-
-## SEO (optional, falls `seo_keywords` gesetzt)
-
-- Keywords natürlich, nicht erzwungen einbinden; Synonyme erlaubt.  
-- Ein **Snippet** (max. 155 Zeichen) und **Titel-Tag-Vorschlag** generieren.  
-- Slug-Vorschlag aus `title` ableiten.
-
----
-
-## Ausgabe-Artefakte & Logging
-
-- `logs/run.log`: strukturierte Schritt-Logs.  
-- `logs/llm.log`: JSON je LLM-Call (Prompt, Parameter, Antwort-Metadaten).  
-- `output/briefing.json`, `output/idea.txt`, `output/outline.txt`, `output/current_text.txt`, `output/iteration_XX.txt`, optional `output/reflection_XX.txt`.  
-- **Neu:** `output/metadata.json` (title, audience, tone, register, keywords, final_word_count, rubric_passed: bool).
-
----
-
-## Fehlerbehandlung & Defaults
-
-- Fehlende Eingaben → sinnvolle Defaults:  
-  - `audience`: „Allgemeine Leserschaft mit Grundkenntnissen“  
-  - `tone`: „sachlich-lebendig“  
-  - `register`: „Sie“  
-  - `variant`: „DE-DE“  
-- Bei Wortbudget-Unterlauf einzelner Abschnitte: proportionaler **Re-Balance**-Pass.  
-- Bei zu knapper Kontextlänge: Abschnitte in **Batches** generieren; jeweils letzter Absatz rekaptuliert (`Recap-Satz`) für kohärente Übergänge.
-
----
-
-## Prompt-Vorlagen (Platzhalter in `{…}`)
-
-### `BRIEFING_PROMPT`
-> Verdichte folgende Angaben zu einem konsistenten Arbeitsbriefing als strikt valides JSON-Objekt (UTF-8, ohne Kommentare).
-> Erstelle genau die Schlüssel: goal, audience, tone, register, variant, constraints, key_terms, messages, seo_keywords (optional).
-> - Formuliere `goal` als prägnanten Zielsatz.
-> - Gib `audience`, `tone`, `register`, `variant`, `constraints` als getrimmte Strings zurück (fehlende Angaben → `[KLÄREN: …]`).
-> - Liste `key_terms`, `messages` und `seo_keywords` als Arrays mit einzelnen Strings (fehlende Angaben → leeres Array; Einträge trimmen, Duplikate entfernen).
-> - Interpretiere Eingaben wie „keine“ oder leere Werte bei Keywords als leeres Array.
-> Gib ausschließlich ein JSON-Objekt ohne erläuternden Text zurück.
-> **Eingaben:**
-> title: {title}
-> text_type: {text_type}
-> audience: {audience}
-> tone: {tone}
-> register: {register}
-> variant: {variant}
-> constraints: {constraints}
-> seo_keywords: {seo_keywords}
-> notes: {content}
-
-### `IDEA_IMPROVEMENT_PROMPT`
-> Überarbeite diesen Rohinhalt **ohne neue Fakten** und in der vorhandenen Sprache.
-> Liefere das Ergebnis in folgender Markdown-Struktur:
-> 1. **Überarbeitete Fassung:** optimierter Fließtext mit klarer Dramaturgie.
-> 2. **Unklarheiten:** Bullet-Liste mit `[KLÄREN: …]`-Hinweisen für Informationslücken.
-> 3. **Kernaussagen:** Bullet-Liste der wichtigsten Aussagen (ein Bullet pro Gedanke).
-> 4. **Summary:** exakt ein Satz, der die Idee kondensiert.
-> **Rohinhalt:** {content}
-
-### `OUTLINE_PROMPT`
-> Erzeuge eine hierarchische Gliederung für `{text_type}` zu `{title}` basierend auf dem Briefing:
-> {briefing_json}
-> Nutze nummerierte Einträge (`1.`, `1.1` …) mit dem Format `{{nummer}}. {{Titel}} (Rolle: …; Wortbudget: …; Liefergegenstand: …)`.
-> Berücksichtige strategische Übergänge und stelle sicher, dass die Wortbudgets in Summe {word_count} Wörter ergeben (Rundungen dokumentieren).
-> Keine Fakten erfinden; nutze bei Bedarf Platzhalter.
-
-### `OUTLINE_IMPROVEMENT_PROMPT`
-> Prüfe und verbessere die Outline: entferne Überschneidungen, füge fehlende Brücken, balanciere Budgets (Summe = {word_count}).
-> Vorgehen:
-> 1. Liste konkrete Probleme oder Risiken (Stichpunkte).
-> 2. Präsentiere die optimierte Outline im Format `{{nummer}}. {{Titel}} (Rolle: …; Wortbudget: …; Liefergegenstand: …)`.
-> 3. Bestätige die Gesamtsumme als `Gesamt: {word_count} Wörter` (Rundungsabweichungen begründen).
-> Behalte Faktenneutralität.
-
-### `SECTION_PROMPT`
-> Schreibe Abschnitt {section_number} „{section_title}“ (Rolle: {role}) mit Ziel `{deliverable}`.
-> Nutze Briefing, Outline und bisherige Abschnitte für Kohärenz, Terminologie und Übergänge.
-> Regeln:
-> - Liefere ausschließlich den Abschnittsfließtext ohne eigene Überschrift.
-> - Verwende aktive Verben, vermeide Füllphrasen und halte das Register konsistent.
-> - Knüpfe an den vorherigen Abschnitt an und baue einen logischen Ausblick auf den nächsten.
-> - **Keine** erfundenen Fakten; fehlende Details → Platzhalter in eckigen Klammern.
-> - Zielwortzahl: {ziel_woerter} ±10 %.
-> - Mindestlänge: {min_woerter}.
-> - Maximal: {max_woerter}.
-> - Stil: {stilrichtlinien}.
-> **Bisheriger Kontext (Kurz-Recap)**: {previous_section_recap}
-
-### `TEXT_TYPE_CHECK_PROMPT`
-> Prüfe den Text gegen die Rubrik für `{text_type}` (Kriterienliste siehe oben).
-> Strukturiere deine Antwort so:
-> 1. **Gesamturteil:** `PASS` oder `FAIL` mit kurzer Begründung.
-> 2. **Abweichungen:** Markdown-Tabelle mit Spalten `Kriterium | Beschreibung | Fundstelle | Dringlichkeit`. Wenn keine Abweichungen vorliegen, schreibe `Keine Abweichungen`.
-> 3. **Empfehlungen:** Bullet-Liste mit umsetzbaren Korrekturschritten.
-
-### `TEXT_TYPE_FIX_PROMPT`
-> Korrigiere nur die genannten Abweichungen **minimal-invasiv**, ohne Faktenzuwachs. Erhalte Ton, Terminologie, Struktur.
-> Vorgehen:
-> 1. Übernimm ausschließlich die notwendigen Änderungen direkt im Text (keine Anmerkungen).
-> 2. Bewahre Formatierung, Abschnittsüberschriften und Wortbudgets soweit möglich.
-> 3. Nutze vorhandene Platzhalter weiter oder markiere neue Informationslücken mit `[KLÄREN: …]`.
-> Gib nur den aktualisierten Text zurück.
-
-### `REVISION_PROMPT`
-> Aufgabe: Überarbeite den Text nach diesen Prioritäten: Klarheit, Flow, Terminologie, Wiederholungen, Rhythmus, starke Verben, Abschluss, Register, Variantenspezifika.
-> Zielwortzahl gesamt: {ziel_woerter} ±10 %.
-> Mindestlänge: {min_woerter}.
-> Kürzen nur, falls > {max_woerter}. Wenn < {min_woerter}: erweitere mit Beispielen, Fakten und Erklärungen.
-> Vermeide Wiederholungen nur oberhalb des Maximalziels.
-> Plane die Eingriffe Schritt für Schritt, führe sie anschließend im Text aus.
-> Liefere den überarbeiteten Text in Markdown ohne Meta-Kommentare; bei fehlenden Daten setze Platzhalter.
-> Falls Compliance-Hinweise nötig sind, füge sie als separate Zeile im Format `[COMPLIANCE-HINWEIS: …]` am Ende an.
-
-### `REFLECTION_PROMPT` (optional)
-> Nenne die 3 wirksamsten nächsten Verbesserungen als priorisierte Markdown-Liste (1 = höchste Wirkung).
-> Jeder Punkt: maximal 15 Wörter, klar umsetzbar, mit Hinweis auf den betroffenen Abschnitt.
-
----
-
-## Implementierungs-Notizen
-
-- **Ähnlichkeits-Gate:** Verwende Token-Overlap & Sequenz-Ähnlichkeit (z. B. Jaccard & normalized Levenshtein).  
-- **Wortzahl-Kontrolle:** Vor hartem Trimmen stets **Verdichten** (Satzebene → Absatzebene → Abschnittsebene).  
-- **Übergänge:** Jeder Abschnitt beginnt (außer der erste) mit einem 1-Satz-Anschluss, endet mit einem 1-Satz-Vorspann.  
-- **Terminologie-Cache:** Aus `briefing.json/key_terms` generieren; in jedem Schritt injizieren.  
-- **Register/Variante:** Bei „Sie“ keine Du-Formen; ß/ss gemäß `variant`.  
-- **SEO:** Nur, wenn gesetzt; Keyword-Dichte nie erzwingen.
-
----
-
-Mit dieser Fassung erhält der Automatikmodus klare Qualitätsziele, präzise Prompts, belastbare Prüfungen und deterministische Einstellungen – damit der `WriterAgent` seine Kernaufgabe, **bessere Texte zu schreiben**, konsistent und reproduzierbar erfüllt.
+`_improve_idea_with_llm()` nutzt das `IDEA_IMPROVEMENT_PROMPT`. Die Antwort
+enthält einen überarbeiteten Fließtext, eine Unklarheiten-Liste, die
+Kernaussagen sowie eine Summary. Die komplette Ausgabe landet in `idea.txt`;
+Kernaussagen werden intern für spätere Prompts zwischengespeichert.
+
+## Schritt 3: Outline aufbauen
+
+1. `_create_outline_with_llm()` erstellt eine erste Gliederung auf Basis
+   des Briefings.
+2. `_refine_outline_with_llm()` verfeinert diese Struktur.
+3. `_clean_outline_sections()` säubert Titel, Rollen, Budgets und
+   Liefergegenstände. Fehlt ein Budget, wird es aufgefüllt und die Differenz
+   zum Zielumfang im letzten Abschnitt ausgeglichen.
+
+Die Outline wird in `outline.txt` abgelegt; zusätzlich dient sie als
+`iteration_00.txt`.
+
+## Schritt 4: Abschnittstexte generieren
+
+Für jeden Outline-Eintrag erzeugt `_build_section_prompt()` einen Prompt,
+der enthält
+
+* das Briefing (als JSON),
+* die Outline (Textform),
+* die Kernaussagen aus Schritt 2,
+* Stilrichtlinien mit Ton, Register, Sprachvariante, Constraints,
+  SEO-Keywords und Quellenmodus sowie
+* einen Recap des vorherigen Abschnitts (die letzten ca. 60 Tokens).
+
+`_generate_draft_from_outline()` ruft daraufhin das LLM je Abschnitt auf.
+Die Ergebnisse werden mit Markdown-Überschriften kombiniert und laufend in
+`current_text.txt` geschrieben.
+
+## Schritt 5: Rubrik-Prüfung & Korrektur
+
+Der vollständige Entwurf wird vom `TEXT_TYPE_CHECK_PROMPT` geprüft.
+* Die Antwort wird in `text_type_check.txt` gespeichert.
+* Enthält der Bericht keine Formulierungen wie „keine Abweichung“ oder
+  „alles erfüllt“, ruft der Agent das `TEXT_TYPE_FIX_PROMPT` auf, schreibt
+  die korrigierte Fassung in `text_type_fix.txt` und verwendet sie für den
+  weiteren Verlauf.
+
+Das Flag `_rubric_passed` im Agenten spiegelt wider, ob eine Korrektur
+nötig war.
+
+## Schritt 6: Revisionen & Reflexion
+
+Für jede zusätzliche Iteration (Argument `--iterations`) ruft der Agent
+`_revise_with_llm()` mit dem vollständigen Text auf. Der verwendete
+Systemprompt stammt aus `prompts.REVISION_SYSTEM_PROMPT`; zusätzlich hängen
+System-Hinweise die Wortzahlgrenzen sowie – falls `--compliance-hint`
+aktiv ist – die Vorgabe für Compliance-Hinweise an. Optionale Reflexionen
+werden mit `_generate_reflection()` erstellt und als `reflection_XX.txt`
+behalten.
+
+## Compliance-Prüfung
+
+Nach dem Erstentwurf und jeder Revision läuft `_run_compliance()`:
+
+* Sensible Begriffe werden anhand fest kodierter Regexe maskiert und durch
+  `[ENTFERNT: …]` ersetzt.
+* Compliance-Hinweise (`[COMPLIANCE-…]`) werden standardmäßig entfernt,
+  bleiben bei gesetztem CLI-Flag erhalten.
+* Platzhalter wie `[KLÄREN]` oder `[QUELLE]` werden gezählt.
+* Alle Ergebnisse landen im internen Audit-Log, das später in
+  `compliance.json` geschrieben wird.
+
+## Abschluss & Artefakte
+
+Nach der letzten Revision
+
+1. wird der finale Text in `Final-<timestamp>.txt` gespeichert,
+2. schreibt `_write_metadata()` die Metadaten (inklusive LLM-Informationen
+   und Compliance-Ergebnis) in `metadata.json`,
+3. erzeugt `_write_compliance_report()` das Compliance-Protokoll und
+4. legt `_write_logs()` die Dateien `logs/run.log` und `logs/llm.log` an.
+
+`run.log` enthält eine Sequenz aller Pipeline-Ereignisse. `llm.log` fasst
+zusätzlich die Outline, verwendeten Prompts, Parameter sowie Telemetrie
+(z. B. Token-Schätzungen und Rückmeldungen pro LLM-Call) zusammen.
+
+## Konfiguration & LLM-Parameter
+
+`Config.adjust_for_word_count()` stellt sicher, dass Kontextlänge und
+Tokenlimit proportional zum Zielumfang wachsen (mindestens 8192 Tokens).
+Zudem werden deterministische Parameter gesetzt (`temperature=0.7`,
+`top_p=1.0`, `presence_penalty=0.05`, `frequency_penalty=0.05`, Seed 42).
+Falls verfügbar, wird `num_predict` auf das Tokenlimit gesetzt.
+
+`WriterAgent._call_llm_stage()` lehnt Aufrufe ab, deren geschätzter
+Tokenbedarf 85 % des Limits überschreitet, und protokolliert Fehler oder
+leere Antworten. Unterstützt wird ausschließlich Ollama; ohne ausgewähltes
+Modell bricht der Agent mit einem Fehler ab.
+
+## Prompt-Konfiguration
+
+Die Standardprompts und Parameter liegen in
+`wordsmith/prompts_config.json`. Jede Prompt-Stufe besitzt einen eigenen
+Systemprompt sowie Parameter (Temperatur, Top-P, Penalties, optional
+`num_predict`). Änderungen an dieser Datei wirken sich nach einem Neustart
+auf alle Läufe aus; zur Laufzeit können Systemprompts gezielt über
+`prompts.set_system_prompt()` überschrieben werden.
 
