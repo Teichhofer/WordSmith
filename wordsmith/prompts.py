@@ -196,14 +196,17 @@ def build_revision_prompt(
 ) -> str:
     """Return the revision prompt, optionally with the compliance hint appended."""
 
-    prompt = REVISION_PROMPT.strip().format(
-        ziel_woerter=target_words,
-        min_woerter=min_words,
-        max_woerter=max_words,
-    )
-    if include_compliance_hint:
-        return f"{prompt}\n{COMPLIANCE_HINT_INSTRUCTION}"
-    return prompt
+    prompt = REVISION_PROMPT.strip()
+    if not include_compliance_hint:
+        return prompt
+
+    compliance_hint = COMPLIANCE_HINT_INSTRUCTION.strip()
+    if not compliance_hint:
+        return prompt
+
+    if prompt:
+        return f"{prompt}\n{compliance_hint}"
+    return compliance_hint
 
 
 # Load prompt templates immediately so the module exposes populated constants.
