@@ -48,10 +48,27 @@ def test_prompt_templates_match_configuration() -> None:
         == config_data["compliance_hint_instruction"]
     )
 
-    assert prompts.build_revision_prompt() == prompts.REVISION_PROMPT.strip()
+    expected_revision = prompts.REVISION_PROMPT.strip().format(
+        ziel_woerter=500,
+        min_woerter=450,
+        max_woerter=550,
+    )
     assert (
-        prompts.build_revision_prompt(include_compliance_hint=True)
-        == prompts.REVISION_PROMPT.strip() + "\n" + prompts.COMPLIANCE_HINT_INSTRUCTION
+        prompts.build_revision_prompt(
+            target_words=500,
+            min_words=450,
+            max_words=550,
+        )
+        == expected_revision
+    )
+    assert (
+        prompts.build_revision_prompt(
+            include_compliance_hint=True,
+            target_words=500,
+            min_words=450,
+            max_words=550,
+        )
+        == expected_revision + "\n" + prompts.COMPLIANCE_HINT_INSTRUCTION
     )
 
 
@@ -62,6 +79,10 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "[KLÄREN: …]" in prompts.IDEA_IMPROVEMENT_PROMPT
     assert "Fundstelle" in prompts.TEXT_TYPE_CHECK_PROMPT
     assert "Zielwortzahl" in prompts.SECTION_PROMPT
+    assert "Mindestlänge" in prompts.SECTION_PROMPT
+    assert "Stil:" in prompts.SECTION_PROMPT
+    assert "Kürzen nur" in prompts.REVISION_PROMPT
+    assert "ohne Inhalte zu entfernen" in prompts.REVISION_SYSTEM_PROMPT
     assert "packenden Einstieg" in prompts.FINAL_DRAFT_PROMPT
 
 

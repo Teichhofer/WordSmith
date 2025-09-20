@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import math
 import re
 from datetime import datetime
 from time import perf_counter
@@ -908,13 +909,19 @@ class WriterAgent:
         idea_clean = idea_text.strip() or "[KLÄREN: Idee ergänzen]"
         recap = self._build_previous_section_recap(compiled_sections)
 
+        min_words, max_words = self._calculate_word_limits(section.budget)
+        style_guidelines = self._compose_style_guidelines()
+
         return (
             prompts.SECTION_PROMPT.format(
                 section_number=section.number,
                 section_title=section.title,
                 role=section.role,
                 deliverable=section.deliverable,
-                budget=section.budget,
+                ziel_woerter=section.budget,
+                min_woerter=min_words,
+                max_woerter=max_words,
+                stilrichtlinien=style_guidelines,
                 previous_section_recap=recap,
             ).strip()
             + "\n\nBriefing:\n"
@@ -926,6 +933,39 @@ class WriterAgent:
             + "\n\nBisheriger Text:\n"
             + (previous_text or "Noch kein Abschnitt verfasst.")
         )
+
+    def _calculate_word_limits(self, budget: int) -> tuple[int, int]:
+        tolerance = 0.1
+        minimum = max(1, math.floor(budget * (1 - tolerance)))
+        maximum = max(minimum, math.ceil(budget * (1 + tolerance)))
+        return minimum, maximum
+
+    def _compose_style_guidelines(self) -> str:
+        components: list[str] = []
+        if self.tone:
+            components.append(f"Ton: {self.tone}")
+        if self.register:
+            components.append(f"Register: {self.register}")
+        if self.variant:
+            components.append(f"Variante: {self.variant}")
+        if self.audience:
+            components.append(f"Zielgruppe: {self.audience}")
+
+        constraints = (self.constraints or "").strip()
+        if constraints:
+            components.append(f"Zusatzvorgaben: {constraints}")
+        else:
+            components.append("Zusatzvorgaben: keine spezifischen Zusatzvorgaben")
+
+        if self.seo_keywords:
+            components.append(
+                "SEO-Keywords: " + ", ".join(keyword for keyword in self.seo_keywords)
+            )
+
+        sources_note = "Quellenmodus: erlaubt" if self.sources_allowed else "Quellenmodus: gesperrt"
+        components.append(sources_note)
+
+        return "; ".join(components)
 
     def _build_previous_section_recap(
         self, compiled_sections: Sequence[tuple[OutlineSection, str]]
@@ -1019,8 +1059,14 @@ class WriterAgent:
         return not any(marker in normalised for marker in ok_markers)
 
     def _revise_with_llm(self, text: str, iteration: int, briefing: dict) -> str | None:
+        min_words, max_words = self._calculate_word_limits(self.word_count)
         revision_prompt = (
-            prompts.build_revision_prompt(self.include_compliance_note)
+            prompts.build_revision_prompt(
+                include_compliance_hint=self.include_compliance_note,
+                target_words=self.word_count,
+                min_words=min_words,
+                max_words=max_words,
+            )
             + "\n\nBriefing:\n"
             + json.dumps(briefing, ensure_ascii=False, indent=2)
             + "\n\nAktueller Text:\n"
@@ -1168,6 +1214,8 @@ class WriterAgent:
         run_log.write_text("\n".join(run_lines) + "\n", encoding="utf-8")
 
         llm_log = self.logs_dir / "llm.log"
+        min_words, max_words = self._calculate_word_limits(self.word_count)
+
         llm_entry = {
             "stage": "pipeline",
             "provider": self.config.llm_provider,
@@ -1189,7 +1237,12 @@ class WriterAgent:
                 "section": prompts.SECTION_PROMPT.strip(),
                 "text_type_check": prompts.TEXT_TYPE_CHECK_PROMPT.strip(),
                 "text_type_fix": prompts.TEXT_TYPE_FIX_PROMPT.strip(),
-                "revision": prompts.build_revision_prompt(self.include_compliance_note),
+                "revision": prompts.build_revision_prompt(
+                    include_compliance_hint=self.include_compliance_note,
+                    target_words=self.word_count,
+                    min_words=min_words,
+                    max_words=max_words,
+                ),
             },
             "events": run_entries,
             "llm_generation": self._llm_generation,

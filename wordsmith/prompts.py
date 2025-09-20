@@ -187,10 +187,20 @@ def set_system_prompt(prompt: str | None, *, stage: str | None = None) -> None:
     SYSTEM_PROMPT = value
 
 
-def build_revision_prompt(include_compliance_hint: bool = False) -> str:
+def build_revision_prompt(
+    include_compliance_hint: bool = False,
+    *,
+    target_words: int,
+    min_words: int,
+    max_words: int,
+) -> str:
     """Return the revision prompt, optionally with the compliance hint appended."""
 
-    prompt = REVISION_PROMPT.strip()
+    prompt = REVISION_PROMPT.strip().format(
+        ziel_woerter=target_words,
+        min_woerter=min_words,
+        max_woerter=max_words,
+    )
     if include_compliance_hint:
         return f"{prompt}\n{COMPLIANCE_HINT_INSTRUCTION}"
     return prompt
