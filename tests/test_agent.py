@@ -129,9 +129,11 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     section_one = "Der Auftakt liefert vertrauliche Einblicke und schafft Klarheit."
     section_two = "Der Strategiepfad benennt vertrauliche Kennzahlen und den Ausblick."
     text_type_check = "Keine Abweichungen festgestellt."
+    compliance_note = "[COMPLIANCE-HINWEIS: Bitte Quellen final prüfen.]"
     revision_text = (
         "## Überarbeitet\n"
-        "Die Revision fasst vertrauliche Erkenntnisse zusammen und bleibt konkret."
+        "Die Revision fasst vertrauliche Erkenntnisse zusammen und bleibt konkret.\n\n"
+        + compliance_note
     )
 
     responses = deque(
@@ -193,6 +195,19 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert compliance["checks"]
     stages = {entry["stage"] for entry in compliance["checks"]}
     assert stages == {"draft", "revision_01"}
+    revision_entry = next(
+        entry for entry in compliance["checks"] if entry["stage"] == "revision_01"
+    )
+    assert revision_entry["compliance_note"] is True
+    assert revision_entry["compliance_note_text"] == compliance_note
+    draft_entry = next(entry for entry in compliance["checks"] if entry["stage"] == "draft")
+    assert draft_entry["compliance_note_text"] == ""
+    assert compliance["latest_compliance_note"] == compliance_note
+    metadata_revision_entry = next(
+        entry for entry in metadata["compliance_checks"] if entry["stage"] == "revision_01"
+    )
+    assert metadata_revision_entry["compliance_note_text"] == compliance_note
+    assert metadata["latest_compliance_note"] == compliance_note
     assert agent._llm_generation and agent._llm_generation["status"] == "success"
     assert agent.runtime_seconds is not None
     assert agent.runtime_seconds >= 0
@@ -407,6 +422,7 @@ def test_run_compliance_masks_sensitive_terms(tmp_path: Path) -> None:
     assert last_entry["stage"] == "draft"
     assert last_entry["placeholders_present"] is False
     assert last_entry["sensitive_replacements"] == 1
+    assert last_entry["compliance_note_text"] == ""
 
 
 def test_run_compliance_strips_note_by_default(tmp_path: Path) -> None:
@@ -435,6 +451,7 @@ def test_run_compliance_strips_note_by_default(tmp_path: Path) -> None:
     assert agent._compliance_note == "[COMPLIANCE-HINWEIS: Quellen prüfen.]"
     last_entry = agent._compliance_audit[-1]
     assert last_entry["compliance_note"] is True
+    assert last_entry["compliance_note_text"] == "[COMPLIANCE-HINWEIS: Quellen prüfen.]"
 
 
 def test_run_compliance_keeps_note_when_enabled(tmp_path: Path) -> None:
@@ -464,3 +481,4 @@ def test_run_compliance_keeps_note_when_enabled(tmp_path: Path) -> None:
     assert agent._compliance_note == "[COMPLIANCE-HINWEIS: Quellen prüfen.]"
     last_entry = agent._compliance_audit[-1]
     assert last_entry["compliance_note"] is True
+    assert last_entry["compliance_note_text"] == "[COMPLIANCE-HINWEIS: Quellen prüfen.]"

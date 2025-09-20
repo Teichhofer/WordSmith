@@ -1087,6 +1087,7 @@ class WriterAgent:
             sensitive_hits=sensitive_hits,
             sources_detail=sources_detail,
             note_present=bool(note),
+            note_text=note or "",
         )
         return result
 
@@ -1098,6 +1099,7 @@ class WriterAgent:
         sensitive_hits: int,
         sources_detail: str,
         note_present: bool,
+        note_text: str,
     ) -> None:
         self._compliance_audit.append(
             {
@@ -1106,6 +1108,7 @@ class WriterAgent:
                 "sensitive_replacements": sensitive_hits,
                 "sources": sources_detail,
                 "compliance_note": note_present,
+                "compliance_note_text": note_text if note_present else "",
             }
         )
 
@@ -1113,7 +1116,8 @@ class WriterAgent:
         report = {
             "topic": self.topic,
             "sources_allowed": self.sources_allowed,
-            "checks": self._compliance_audit,
+            "checks": [dict(entry) for entry in self._compliance_audit],
+            "latest_compliance_note": self._compliance_note or "",
         }
         self._write_json(self.output_dir / "compliance.json", report)
     # ------------------------------------------------------------------
@@ -1146,7 +1150,8 @@ class WriterAgent:
             "llm_model": self.config.llm_model,
             "system_prompt": prompts.SYSTEM_PROMPT,
             "system_prompts": dict(prompts.STAGE_SYSTEM_PROMPTS),
-            "compliance_checks": self._compliance_audit,
+            "compliance_checks": [dict(entry) for entry in self._compliance_audit],
+            "latest_compliance_note": self._compliance_note or "",
         }
         self._write_json(self.output_dir / "metadata.json", metadata)
 
