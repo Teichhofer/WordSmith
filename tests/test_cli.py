@@ -314,6 +314,10 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     exit_code = main(args)
     captured = capsys.readouterr()
 
+    stderr_lines = [line for line in captured.err.splitlines() if line.strip()]
+
+    assert "Verwende Ollama-Modell: llama2" in stderr_lines
+    assert "Verwende Ollama-Modell: llama2" not in captured.out
     assert not stale_iteration.exists()
 
     assert exit_code == 0
@@ -324,7 +328,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     runtime_seconds_cli = float(runtime_match.group(1))
 
     total_steps = 7 + iterations
-    progress_lines = [line for line in captured.err.splitlines() if line.strip()]
+    progress_lines = [line for line in stderr_lines if line.startswith("[")]
     assert progress_lines[0].startswith(f"[0/{total_steps}] Automatikmodus gestartet")
     assert any(
         line.startswith(f"[{total_steps}/{total_steps}] Automatikmodus erfolgreich abgeschlossen")
@@ -332,6 +336,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     )
 
     current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
+    assert captured.out.rstrip("\n") == current_text.rstrip("\n")
     final_files = list(output_dir.glob("Final-*.txt"))
     metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
     compliance = json.loads((output_dir / "compliance.json").read_text(encoding="utf-8"))
