@@ -33,23 +33,26 @@ def test_prompt_templates_match_configuration() -> None:
     )
 
     assert prompts.SYSTEM_PROMPT == config_data["system_prompt"]
-    expected_stage_systems: dict[str, str] = {}
-    for stage in STAGE_NAMES:
-        prefix = stage.upper()
-        assert getattr(prompts, f"{prefix}_PROMPT") == config_data[f"{stage}_prompt"]
-        assert getattr(prompts, f"{prefix}_SYSTEM_PROMPT") == config_data[
-            f"{stage}_system_prompt"
-        ]
-        expected_stage_systems[stage] = config_data[f"{stage}_system_prompt"]
-        assert dict(prompts.STAGE_PROMPT_PARAMETERS[stage]) == config_data[
-            f"{stage}_parameters"
-        ]
-
-    assert dict(prompts.STAGE_SYSTEM_PROMPTS) == expected_stage_systems
     assert (
         prompts.COMPLIANCE_HINT_INSTRUCTION
         == config_data["compliance_hint_instruction"]
     )
+
+    stage_configs = config_data["stages"]
+    expected_stage_systems: dict[str, str] = {}
+    for stage in STAGE_NAMES:
+        prefix = stage.upper()
+        stage_data = stage_configs[stage]
+        assert getattr(prompts, f"{prefix}_PROMPT") == stage_data["prompt"]
+        assert getattr(prompts, f"{prefix}_SYSTEM_PROMPT") == stage_data[
+            "system_prompt"
+        ]
+        expected_stage_systems[stage] = stage_data["system_prompt"]
+        assert dict(prompts.STAGE_PROMPT_PARAMETERS[stage]) == stage_data[
+            "parameters"
+        ]
+
+    assert dict(prompts.STAGE_SYSTEM_PROMPTS) == expected_stage_systems
 
     expected_revision = prompts.REVISION_PROMPT.strip()
     assert (
@@ -125,7 +128,8 @@ def test_load_prompt_config_respects_custom_system_prompt(tmp_path: Path) -> Non
         prompts.set_system_prompt(None)
         assert prompts.SYSTEM_PROMPT == "Neuer Standard"
         expected_stage_systems = {
-            stage: config_data[f"{stage}_system_prompt"] for stage in STAGE_NAMES
+            stage: config_data["stages"][stage]["system_prompt"]
+            for stage in STAGE_NAMES
         }
         assert dict(prompts.STAGE_SYSTEM_PROMPTS) == expected_stage_systems
     finally:

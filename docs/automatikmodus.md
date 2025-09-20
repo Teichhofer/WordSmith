@@ -153,7 +153,10 @@ Modell bricht der Agent mit einem Fehler ab.
 Die Standardprompts und Parameter liegen in
 `wordsmith/prompts_config.json`. Jede Prompt-Stufe besitzt einen eigenen
 Systemprompt sowie Parameter (Temperatur, Top-P, Penalties, optional
-`num_predict`). Änderungen an dieser Datei wirken sich nach einem Neustart
-auf alle Läufe aus; zur Laufzeit können Systemprompts gezielt über
+`num_predict`). Die Datei organisiert diese Werte unter dem Schlüssel
+`stages`, sodass für jede Stufe (`briefing`, `outline`, `final_draft` …)
+ein Objekt mit `system_prompt`, `prompt` und `parameters` vorliegt.
+Änderungen an dieser Datei wirken sich nach einem Neustart auf alle Läufe
+aus; zur Laufzeit können Systemprompts gezielt über
 `prompts.set_system_prompt()` überschrieben werden.
 
