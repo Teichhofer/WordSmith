@@ -138,6 +138,11 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
         "Die Revision fasst vertrauliche Erkenntnisse zusammen und bleibt konkret.\n\n"
         + compliance_note
     )
+    reflection_text = (
+        "1. Einleitung präzisieren – Abschnitt 1.\n"
+        "2. Zahlenbeispiele ergänzen – Abschnitt 2.\n"
+        "3. Abschluss verdichten – Schlussabsatz."
+    )
 
     responses = deque(
         [
@@ -149,6 +154,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
             llm.LLMResult(text=section_two),
             llm.LLMResult(text=text_type_check),
             llm.LLMResult(text=revision_text),
+            llm.LLMResult(text=reflection_text),
         ]
     )
 
@@ -179,14 +185,23 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     idea_output = (config.output_dir / "idea.txt").read_text(encoding="utf-8").strip()
     outline_output = (config.output_dir / "outline.txt").read_text(encoding="utf-8").strip()
     current_text = (config.output_dir / "current_text.txt").read_text(encoding="utf-8")
+    reflection_output = (
+        config.output_dir / "reflection_02.txt"
+    ).read_text(encoding="utf-8").strip()
     final_files = list(config.output_dir.glob("Final-*.txt"))
     metadata = json.loads((config.output_dir / "metadata.json").read_text(encoding="utf-8"))
     compliance = json.loads((config.output_dir / "compliance.json").read_text(encoding="utf-8"))
+    run_log_entries = [
+        json.loads(line)
+        for line in (config.logs_dir / "run.log").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
     assert "[ENTFERNT: vertrauliche]" in final_output
     assert "[ENTFERNT: vertrauliche]" in current_text
     assert idea_output == idea_text
     assert "Strategiepfad" in outline_output
+    assert "Einleitung präzisieren" in reflection_output
     assert len(final_files) == 1
     final_file = final_files[0]
     assert re.fullmatch(r"Final-\d{8}-\d{6}\.txt", final_file.name)
@@ -214,6 +229,11 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert agent._llm_generation and agent._llm_generation["status"] == "success"
     assert agent.runtime_seconds is not None
     assert agent.runtime_seconds >= 0
+    reflection_event = next(
+        entry for entry in run_log_entries if entry["step"] == "reflection_01"
+    )
+    assert reflection_event["status"] == "completed"
+    assert "reflection_02.txt" in reflection_event["artifacts"]
     assert not responses
     assert agent._telemetry
     telemetry_entry = agent._telemetry[0]

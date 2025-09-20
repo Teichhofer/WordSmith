@@ -526,6 +526,18 @@ class WriterAgent:
                     data={"iteration": iteration},
                 )
 
+                reflection = self._generate_reflection(draft, iteration)
+                if reflection:
+                    reflection_path = self.output_dir / f"reflection_{iteration + 1:02d}.txt"
+                    self._write_text(reflection_path, reflection)
+                    self.steps.append(f"reflection_{iteration:02d}")
+                    self._record_run_event(
+                        f"reflection_{iteration:02d}",
+                        f"Reflexion {iteration:02d} abgeschlossen",
+                        artifacts=[reflection_path],
+                        data={"iteration": iteration},
+                    )
+
             final_output_path = self._write_final_output(draft)
             final_word_count = self._count_words(draft)
             self._write_metadata(draft)
@@ -1093,6 +1105,22 @@ class WriterAgent:
             success_message=f"Revision {iteration:02d} generiert",
             failure_message=f"Revision {iteration:02d} fehlgeschlagen",
             data={"iteration": iteration, "target_words": self.word_count},
+        )
+
+    def _generate_reflection(self, text: str, iteration: int) -> str | None:
+        prompt = (
+            prompts.REFLECTION_PROMPT.strip()
+            + "\n\nText:\n"
+            + text.strip()
+        )
+        return self._call_llm_stage(
+            stage=f"reflection_{iteration:02d}_llm",
+            prompt_type="reflection",
+            prompt=prompt,
+            system_prompt=prompts.REFLECTION_SYSTEM_PROMPT,
+            success_message=f"Reflexion {iteration:02d} generiert",
+            failure_message=f"Reflexion {iteration:02d} fehlgeschlagen",
+            data={"iteration": iteration, "phase": "reflection", "target_words": self.word_count},
         )
 
     # ------------------------------------------------------------------
