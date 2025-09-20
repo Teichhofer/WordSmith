@@ -185,9 +185,6 @@ def set_system_prompt(prompt: str | None, *, stage: str | None = None) -> None:
     cleaned = str(prompt).strip()
     value = cleaned or _DEFAULT_SYSTEM_PROMPT
     SYSTEM_PROMPT = value
-    for stage_name, prefix in _STAGE_PROMPT_ORDER:
-        _STAGE_SYSTEM_PROMPTS[stage_name] = value
-        globals()[f"{prefix}_SYSTEM_PROMPT"] = value
 
 
 def build_revision_prompt(include_compliance_hint: bool = False) -> str:
