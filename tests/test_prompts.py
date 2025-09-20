@@ -77,14 +77,13 @@ def test_load_prompt_config_respects_custom_system_prompt(tmp_path: Path) -> Non
     )
 
     try:
+        original_stage_prompts = dict(prompts.STAGE_SYSTEM_PROMPTS)
+
         prompts.set_system_prompt("Individueller Prompt")
         prompts.load_prompt_config(replacement_path)
 
         assert prompts.SYSTEM_PROMPT == "Individueller Prompt"
-        assert all(
-            value == "Individueller Prompt"
-            for value in prompts.STAGE_SYSTEM_PROMPTS.values()
-        )
+        assert dict(prompts.STAGE_SYSTEM_PROMPTS) == original_stage_prompts
 
         prompts.set_system_prompt(None)
         assert prompts.SYSTEM_PROMPT == "Neuer Standard"
@@ -115,3 +114,16 @@ def test_set_system_prompt_for_specific_stage() -> None:
             assert prompts.STAGE_SYSTEM_PROMPTS[stage] == value
     finally:
         prompts.set_system_prompt(None, stage="outline")
+
+
+def test_set_system_prompt_does_not_override_stage_prompts() -> None:
+    """A global system prompt override keeps the stage-specific prompts intact."""
+
+    prompts.set_system_prompt(None)
+    original_stage_prompts = dict(prompts.STAGE_SYSTEM_PROMPTS)
+
+    try:
+        prompts.set_system_prompt("Global Override")
+        assert dict(prompts.STAGE_SYSTEM_PROMPTS) == original_stage_prompts
+    finally:
+        prompts.set_system_prompt(None)
