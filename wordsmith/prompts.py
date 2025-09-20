@@ -26,7 +26,10 @@ _STAGE_PROMPT_ORDER: tuple[tuple[str, str], ...] = (
     ("final_draft", "FINAL_DRAFT"),
 )
 _STAGE_PREFIXES: Dict[str, str] = {stage: prefix for stage, prefix in _STAGE_PROMPT_ORDER}
-_PROMPT_KEYS: tuple[str, ...] = (
+_STAGE_PARAMETER_KEYS: tuple[str, ...] = (
+    f"{stage}_parameters" for stage, _ in _STAGE_PROMPT_ORDER
+)
+_PROMPT_STRING_KEYS: tuple[str, ...] = (
     "system_prompt",
     *(
         key
@@ -34,6 +37,15 @@ _PROMPT_KEYS: tuple[str, ...] = (
         for key in (f"{stage}_system_prompt", f"{stage}_prompt")
     ),
     "compliance_hint_instruction",
+)
+_REQUIRED_PARAMETER_FIELDS: tuple[str, ...] = (
+    "temperature",
+    "top_p",
+    "presence_penalty",
+    "frequency_penalty",
+)
+_ALLOWED_PARAMETER_FIELDS: frozenset[str] = frozenset(
+    (*_REQUIRED_PARAMETER_FIELDS, "num_predict")
 )
 
 _DEFAULT_SYSTEM_PROMPT: str = ""
@@ -47,6 +59,19 @@ _STAGE_SYSTEM_PROMPTS: Dict[str, str] = {
 STAGE_SYSTEM_PROMPTS: Mapping[str, str] = MappingProxyType(_STAGE_SYSTEM_PROMPTS)
 DEFAULT_STAGE_SYSTEM_PROMPTS: Mapping[str, str] = MappingProxyType(
     _DEFAULT_STAGE_SYSTEM_PROMPTS
+)
+
+_DEFAULT_STAGE_PARAMETERS: Dict[str, Dict[str, float]] = {
+    stage: {} for stage, _ in _STAGE_PROMPT_ORDER
+}
+_STAGE_PARAMETERS: Dict[str, Dict[str, float]] = {
+    stage: {} for stage, _ in _STAGE_PROMPT_ORDER
+}
+DEFAULT_STAGE_PROMPT_PARAMETERS: Mapping[str, Mapping[str, float]] = MappingProxyType(
+    _DEFAULT_STAGE_PARAMETERS
+)
+STAGE_PROMPT_PARAMETERS: Mapping[str, Mapping[str, float]] = MappingProxyType(
+    _STAGE_PARAMETERS
 )
 
 BRIEFING_PROMPT: str = ""
@@ -72,7 +97,7 @@ FINAL_DRAFT_SYSTEM_PROMPT: str = ""
 COMPLIANCE_HINT_INSTRUCTION: str = ""
 
 
-def _read_prompt_config(path: Path) -> Dict[str, str]:
+def _read_prompt_config(path: Path) -> tuple[Dict[str, str], Dict[str, Dict[str, float]]]:
     """Load and validate the prompt configuration from ``path``."""
 
     try:
@@ -89,26 +114,66 @@ def _read_prompt_config(path: Path) -> Dict[str, str]:
     if not isinstance(raw_data, dict):
         raise PromptConfigurationError("Prompt-Konfiguration muss ein JSON-Objekt sein.")
 
-    missing_keys = [key for key in _PROMPT_KEYS if key not in raw_data]
+    missing_keys = [key for key in _PROMPT_STRING_KEYS if key not in raw_data]
     if missing_keys:
         formatted = ", ".join(sorted(missing_keys))
         raise PromptConfigurationError(
             f"Prompt-Konfiguration unvollständig. Fehlende Schlüssel: {formatted}."
         )
 
-    validated: Dict[str, str] = {}
-    for key in _PROMPT_KEYS:
+    for key in _STAGE_PARAMETER_KEYS:
+        if key not in raw_data:
+            missing_keys.append(key)
+    if missing_keys:
+        formatted = ", ".join(sorted(missing_keys))
+        raise PromptConfigurationError(
+            f"Prompt-Konfiguration unvollständig. Fehlende Schlüssel: {formatted}."
+        )
+
+    validated_strings: Dict[str, str] = {}
+    for key in _PROMPT_STRING_KEYS:
         value = raw_data[key]
         if not isinstance(value, str):
             raise PromptConfigurationError(
                 f"Prompt '{key}' muss als String definiert sein."
             )
-        validated[key] = value
+        validated_strings[key] = value
 
-    return validated
+    stage_parameters: Dict[str, Dict[str, float]] = {}
+    for stage, _ in _STAGE_PROMPT_ORDER:
+        parameter_key = f"{stage}_parameters"
+        parameter_value = raw_data[parameter_key]
+        if not isinstance(parameter_value, dict):
+            raise PromptConfigurationError(
+                f"Parameter für '{stage}' müssen als Objekt definiert sein."
+            )
+        missing_fields = [
+            field for field in _REQUIRED_PARAMETER_FIELDS if field not in parameter_value
+        ]
+        if missing_fields:
+            formatted = ", ".join(sorted(missing_fields))
+            raise PromptConfigurationError(
+                f"Parameter für '{stage}' fehlen folgende Felder: {formatted}."
+            )
+        cleaned_parameters: Dict[str, float] = {}
+        for field, raw_value in parameter_value.items():
+            if field not in _ALLOWED_PARAMETER_FIELDS:
+                raise PromptConfigurationError(
+                    f"Unbekannter Parameter '{field}' für Prompt '{stage}'."
+                )
+            if field == "num_predict":
+                cleaned_parameters[field] = float(int(raw_value))
+            else:
+                cleaned_parameters[field] = float(raw_value)
+        stage_parameters[stage] = cleaned_parameters
+
+    return validated_strings, stage_parameters
 
 
-def _apply_prompt_values(values: Dict[str, str]) -> None:
+def _apply_prompt_values(
+    values: Dict[str, str],
+    parameters: Dict[str, Dict[str, float]],
+) -> None:
     """Update module level prompt strings with ``values``."""
 
     global _DEFAULT_SYSTEM_PROMPT
@@ -143,6 +208,10 @@ def _apply_prompt_values(values: Dict[str, str]) -> None:
 
         globals()[f"{prefix}_SYSTEM_PROMPT"] = _STAGE_SYSTEM_PROMPTS[stage]
 
+        new_parameters = dict(parameters.get(stage, {}))
+        _DEFAULT_STAGE_PARAMETERS[stage] = dict(new_parameters)
+        _STAGE_PARAMETERS[stage] = new_parameters
+
     COMPLIANCE_HINT_INSTRUCTION = values["compliance_hint_instruction"]
 
 
@@ -150,8 +219,8 @@ def load_prompt_config(path: str | Path | None = None) -> None:
     """Load prompt templates from ``path`` and update module globals."""
 
     config_path = Path(path) if path is not None else DEFAULT_PROMPT_CONFIG_PATH
-    values = _read_prompt_config(config_path)
-    _apply_prompt_values(values)
+    prompt_values, parameter_values = _read_prompt_config(config_path)
+    _apply_prompt_values(prompt_values, parameter_values)
 
 
 def set_system_prompt(prompt: str | None, *, stage: str | None = None) -> None:

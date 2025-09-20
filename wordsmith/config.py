@@ -35,11 +35,12 @@ class ConfigError(Exception):
 class LLMParameters:
     """Deterministic model parameters for reproducible text generation."""
 
-    temperature: float = 0.8
-    top_p: float = 0.9
-    presence_penalty: float = 0.0
-    frequency_penalty: float = 0.3
+    temperature: float = 0.7
+    top_p: float = 1.0
+    presence_penalty: float = 0.05
+    frequency_penalty: float = 0.05
     seed: Optional[int] = 42
+    num_predict: Optional[int] = None
 
     def update(self, values: Dict[str, Any]) -> None:
         """Update the stored parameters with validated values."""
@@ -47,7 +48,7 @@ class LLMParameters:
         for key, value in values.items():
             if not hasattr(self, key):
                 raise ConfigError(f"Unbekannter LLM-Parameter: {key}")
-            if key == "seed":
+            if key in {"seed", "num_predict"}:
                 setattr(self, key, None if value is None else int(value))
             else:
                 setattr(self, key, float(value))
@@ -87,16 +88,18 @@ class Config:
         # Scale context length and token limits with a safety buffer to
         # accommodate prompts, intermediate artefacts and the final text.
         self.context_length = max(8192, int(self.word_count * 4))
-        self.token_limit = max(8192, int(self.word_count * 1.6))
+        self.token_limit = max(8192, int(self.word_count * 1.9))
         self._apply_minimum_limits()
 
         # Ensure deterministic generation parameters for reproducible runs.
-        self.llm.temperature = 0.8
-        self.llm.top_p = 0.9
-        self.llm.presence_penalty = 0.0
-        self.llm.frequency_penalty = 0.3
+        self.llm.temperature = 0.7
+        self.llm.top_p = 1.0
+        self.llm.presence_penalty = 0.05
+        self.llm.frequency_penalty = 0.05
         if hasattr(self.llm, "seed"):
             self.llm.seed = 42
+        if hasattr(self.llm, "num_predict"):
+            self.llm.num_predict = self.token_limit
 
     def ensure_directories(self) -> None:
         """Create output and log directories if they do not exist."""

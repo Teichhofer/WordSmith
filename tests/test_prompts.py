@@ -41,6 +41,9 @@ def test_prompt_templates_match_configuration() -> None:
             f"{stage}_system_prompt"
         ]
         expected_stage_systems[stage] = config_data[f"{stage}_system_prompt"]
+        assert dict(prompts.STAGE_PROMPT_PARAMETERS[stage]) == config_data[
+            f"{stage}_parameters"
+        ]
 
     assert dict(prompts.STAGE_SYSTEM_PROMPTS) == expected_stage_systems
     assert (
