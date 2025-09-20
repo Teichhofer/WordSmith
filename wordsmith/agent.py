@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, List, Sequence
 
 from . import llm, prompts
-from .config import Config
+from .config import Config, LLMParameters
 from .defaults import (
     DEFAULT_AUDIENCE,
     DEFAULT_CONSTRAINTS,
@@ -262,6 +262,7 @@ class WriterAgent:
     _run_started_at: float = field(init=False, default=0.0)
     _run_duration: float | None = field(init=False, default=None)
     _compliance_note: str = field(init=False, default="")
+    _telemetry: List[dict[str, Any]] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -415,6 +416,7 @@ class WriterAgent:
         self._pending_hints.clear()
         self._llm_generation = None
         self._rubric_passed = None
+        self._telemetry.clear()
 
         self._record_run_event(
             "start",
@@ -604,11 +606,12 @@ class WriterAgent:
         )
         briefing_text = self._call_llm_stage(
             stage="briefing_llm",
+            prompt_type="briefing",
             prompt=prompt,
             system_prompt=prompts.BRIEFING_SYSTEM_PROMPT,
             success_message="Briefing generiert",
             failure_message="Briefing-Generierung fehlgeschlagen",
-            data={"phase": "briefing"},
+            data={"phase": "briefing", "target_words": self.word_count},
         )
         if briefing_text is None:
             raise WriterAgentError("Briefing konnte nicht generiert werden.")
@@ -639,11 +642,12 @@ class WriterAgent:
         prompt = prompts.IDEA_IMPROVEMENT_PROMPT.format(content=content)
         return self._call_llm_stage(
             stage="idea_llm",
+            prompt_type="idea_improvement",
             prompt=prompt,
             system_prompt=prompts.IDEA_IMPROVEMENT_SYSTEM_PROMPT,
             success_message="Idee mit LLM überarbeitet",
             failure_message="LLM-Ideenverbesserung fehlgeschlagen",
-            data={"phase": "idea"},
+            data={"phase": "idea", "target_words": self.word_count},
         )
 
     def _extract_idea_bullets(self, text: str) -> List[str]:
@@ -674,11 +678,12 @@ class WriterAgent:
         )
         outline_text = self._call_llm_stage(
             stage="outline_llm",
+            prompt_type="outline",
             prompt=prompt,
             system_prompt=prompts.OUTLINE_SYSTEM_PROMPT,
             success_message="Outline mit LLM erstellt",
             failure_message="LLM-Outline fehlgeschlagen",
-            data={"phase": "outline"},
+            data={"phase": "outline", "target_words": self.word_count},
         )
         if not outline_text:
             return []
@@ -774,11 +779,12 @@ class WriterAgent:
         )
         improved_text = self._call_llm_stage(
             stage="outline_improvement_llm",
+            prompt_type="outline_improvement",
             prompt=prompt,
             system_prompt=prompts.OUTLINE_IMPROVEMENT_SYSTEM_PROMPT,
             success_message="Outline mit LLM verfeinert",
             failure_message="LLM-Outline-Überarbeitung fehlgeschlagen",
-            data={"phase": "outline"},
+            data={"phase": "outline", "target_words": self.word_count},
         )
         if not improved_text:
             return list(sections)
@@ -843,6 +849,7 @@ class WriterAgent:
             stage = f"section_{index:02d}_llm"
             section_text = self._call_llm_stage(
                 stage=stage,
+                prompt_type="section",
                 prompt=prompt,
                 system_prompt=prompts.SECTION_SYSTEM_PROMPT,
                 success_message=f"Abschnitt {index:02d} generiert",
@@ -851,6 +858,7 @@ class WriterAgent:
                     "phase": "section",
                     "section": section.number,
                     "title": section.title,
+                    "target_words": section.budget,
                 },
             )
             if not section_text:
@@ -1000,11 +1008,12 @@ class WriterAgent:
         )
         report = self._call_llm_stage(
             stage="text_type_check_llm",
+            prompt_type="text_type_check",
             prompt=check_prompt,
             system_prompt=prompts.TEXT_TYPE_CHECK_SYSTEM_PROMPT,
             success_message="Texttyp-Prüfung abgeschlossen",
             failure_message="Texttyp-Prüfung fehlgeschlagen",
-            data={"phase": "text_type_check"},
+            data={"phase": "text_type_check", "target_words": self.word_count},
         )
         if report is None:
             self._rubric_passed = None
@@ -1029,11 +1038,12 @@ class WriterAgent:
         )
         fixed = self._call_llm_stage(
             stage="text_type_fix_llm",
+            prompt_type="text_type_fix",
             prompt=fix_prompt,
             system_prompt=prompts.TEXT_TYPE_FIX_SYSTEM_PROMPT,
             success_message="Texttyp-Korrektur angewendet",
             failure_message="Texttyp-Korrektur fehlgeschlagen",
-            data={"phase": "text_type_fix"},
+            data={"phase": "text_type_fix", "target_words": self.word_count},
         )
         if fixed is None:
             self._rubric_passed = False
@@ -1077,11 +1087,12 @@ class WriterAgent:
 
         return self._call_llm_stage(
             stage=f"revision_{iteration:02d}_llm",
+            prompt_type="revision",
             prompt=prompt_text,
             system_prompt=system_prompt,
             success_message=f"Revision {iteration:02d} generiert",
             failure_message=f"Revision {iteration:02d} fehlgeschlagen",
-            data={"iteration": iteration},
+            data={"iteration": iteration, "target_words": self.word_count},
         )
 
     # ------------------------------------------------------------------
@@ -1249,6 +1260,7 @@ class WriterAgent:
             },
             "events": run_entries,
             "llm_generation": self._llm_generation,
+            "telemetry": self._telemetry,
             "runtime_seconds": self._run_duration,
         }
         llm_log.write_text(
@@ -1282,6 +1294,56 @@ class WriterAgent:
         if self.progress_callback is not None:
             self.progress_callback(dict(event))
 
+    def _build_stage_parameters(self, prompt_type: str) -> LLMParameters:
+        base = LLMParameters(
+            temperature=self.config.llm.temperature,
+            top_p=self.config.llm.top_p,
+            presence_penalty=self.config.llm.presence_penalty,
+            frequency_penalty=self.config.llm.frequency_penalty,
+            seed=self.config.llm.seed,
+        )
+        if hasattr(base, "num_predict"):
+            base.num_predict = getattr(self.config.llm, "num_predict", None)
+        overrides = prompts.STAGE_PROMPT_PARAMETERS.get(prompt_type, {})
+        for key, value in overrides.items():
+            if hasattr(base, key):
+                setattr(base, key, value)
+        return base
+
+    def _record_telemetry(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        parameters: LLMParameters,
+        required_tokens: int,
+        token_limit: int,
+        target_words: int,
+        iteration: int | None,
+        status: str,
+        abort_reason: str | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        output_word_count: int | None = None,
+    ) -> None:
+        entry: dict[str, Any] = {
+            "sequence": len(self._telemetry),
+            "stage": stage,
+            "prompt_type": prompt_type,
+            "iteration": iteration,
+            "token_limit": token_limit,
+            "required_tokens": required_tokens,
+            "target_word_count": target_words,
+            "parameters": asdict(parameters),
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "output_word_count": output_word_count,
+            "status": status,
+        }
+        if abort_reason:
+            entry["abort_reason"] = abort_reason
+        self._telemetry.append(entry)
+
     def _format_artifact_path(self, path: Path) -> str:
         try:
             return str(path.relative_to(self.output_dir))
@@ -1306,6 +1368,7 @@ class WriterAgent:
         self,
         *,
         stage: str,
+        prompt_type: str,
         prompt: str,
         system_prompt: str,
         success_message: str,
@@ -1318,6 +1381,14 @@ class WriterAgent:
         token_limit = max(1, int(self.config.token_limit))
         reserve_limit = max(1, math.floor(token_limit * 0.85))
         required_tokens = self._estimate_token_usage(system_prompt, prompt)
+        parameters = self._build_stage_parameters(prompt_type)
+        context_data = data or {}
+        iteration = context_data.get("iteration")
+        raw_target_words = context_data.get("target_words", self.word_count)
+        try:
+            target_words = int(raw_target_words)
+        except (TypeError, ValueError):
+            target_words = self.word_count
         if required_tokens > reserve_limit:
             context = {
                 "stage": stage,
@@ -1325,6 +1396,19 @@ class WriterAgent:
                 "required_tokens": required_tokens,
                 "usable_tokens": reserve_limit,
             }
+            self._record_telemetry(
+                stage=stage,
+                prompt_type=prompt_type,
+                parameters=parameters,
+                required_tokens=required_tokens,
+                token_limit=token_limit,
+                target_words=target_words,
+                iteration=iteration if isinstance(iteration, int) else None,
+                status="blocked",
+                abort_reason="token_reserve_exceeded",
+                prompt_tokens=required_tokens,
+                completion_tokens=None,
+            )
             raise WriterAgentError(
                 (
                     "Tokenbudget überschritten: "
@@ -1338,7 +1422,7 @@ class WriterAgent:
                 model=self.config.llm_model,
                 prompt=prompt,
                 system_prompt=system_prompt,
-                parameters=self.config.llm,
+                parameters=parameters,
                 base_url=self.config.ollama_base_url,
             )
         except LLMGenerationError as exc:
@@ -1352,6 +1436,19 @@ class WriterAgent:
                 status="warning",
                 data=event_data,
             )
+            self._record_telemetry(
+                stage=stage,
+                prompt_type=prompt_type,
+                parameters=parameters,
+                required_tokens=required_tokens,
+                token_limit=token_limit,
+                target_words=target_words,
+                iteration=iteration if isinstance(iteration, int) else None,
+                status="error",
+                abort_reason=str(exc),
+                prompt_tokens=required_tokens,
+                completion_tokens=None,
+            )
             return None
 
         text = result.text.strip()
@@ -1364,6 +1461,20 @@ class WriterAgent:
                 f"{failure_message}: leere Antwort",
                 status="warning",
                 data=event_data,
+            )
+            self._record_telemetry(
+                stage=stage,
+                prompt_type=prompt_type,
+                parameters=parameters,
+                required_tokens=required_tokens,
+                token_limit=token_limit,
+                target_words=target_words,
+                iteration=iteration if isinstance(iteration, int) else None,
+                status="empty",
+                abort_reason="empty_response",
+                prompt_tokens=result.raw.get("prompt_eval_count") if result.raw else required_tokens,
+                completion_tokens=result.raw.get("eval_count") if result.raw else None,
+                output_word_count=0,
             )
             return None
 
@@ -1379,6 +1490,28 @@ class WriterAgent:
             success_message,
             status="info",
             data=event_data,
+        )
+        prompt_tokens = None
+        completion_tokens = None
+        if isinstance(result.raw, dict):
+            raw_prompt_tokens = result.raw.get("prompt_eval_count")
+            raw_completion_tokens = result.raw.get("eval_count")
+            prompt_tokens = int(raw_prompt_tokens) if isinstance(raw_prompt_tokens, int) else raw_prompt_tokens
+            completion_tokens = (
+                int(raw_completion_tokens) if isinstance(raw_completion_tokens, int) else raw_completion_tokens
+            )
+        self._record_telemetry(
+            stage=stage,
+            prompt_type=prompt_type,
+            parameters=parameters,
+            required_tokens=required_tokens,
+            token_limit=token_limit,
+            target_words=target_words,
+            iteration=iteration if isinstance(iteration, int) else None,
+            status="success",
+            prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else prompt_tokens,
+            completion_tokens=completion_tokens if isinstance(completion_tokens, int) else completion_tokens,
+            output_word_count=self._count_words(text),
         )
         return text
 

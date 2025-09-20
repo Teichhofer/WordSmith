@@ -30,6 +30,8 @@ def _prepare_options(parameters: LLMParameters) -> Dict[str, Any]:
     }
     if getattr(parameters, "seed", None) is not None:
         options["seed"] = parameters.seed
+    if getattr(parameters, "num_predict", None) is not None:
+        options["num_predict"] = int(parameters.num_predict)
     return options
 
 

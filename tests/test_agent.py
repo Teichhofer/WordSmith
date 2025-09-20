@@ -49,6 +49,7 @@ def test_generate_briefing_includes_word_count(
         self,
         *,
         stage: str,
+        prompt_type: str,
         prompt: str,
         system_prompt: str,
         success_message: str,
@@ -57,6 +58,7 @@ def test_generate_briefing_includes_word_count(
     ) -> str:
         captured["prompt"] = prompt
         captured["system_prompt"] = system_prompt
+        captured["prompt_type"] = prompt_type
         return "{\"goal\": \"Test\"}"
 
     monkeypatch.setattr(
@@ -70,6 +72,7 @@ def test_generate_briefing_includes_word_count(
     assert captured["prompt"] == "Wortanzahl: 150"
     assert captured["system_prompt"] == prompts.BRIEFING_SYSTEM_PROMPT
     assert briefing["goal"] == "Test"
+    assert captured["prompt_type"] == "briefing"
 
 
 def test_load_json_object_handles_invalid_escape_sequences() -> None:
@@ -212,6 +215,11 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert agent.runtime_seconds is not None
     assert agent.runtime_seconds >= 0
     assert not responses
+    assert agent._telemetry
+    telemetry_entry = agent._telemetry[0]
+    assert telemetry_entry["token_limit"] == config.token_limit
+    assert telemetry_entry["parameters"]["top_p"] == 1.0
+    assert telemetry_entry["prompt_type"]
 
 
 def test_agent_parses_briefing_from_code_block(
@@ -323,6 +331,7 @@ def test_revision_stage_is_stateless(
         self,
         *,
         stage: str,
+        prompt_type: str,
         prompt: str,
         system_prompt: str,
         success_message: str,
@@ -332,6 +341,7 @@ def test_revision_stage_is_stateless(
         captured["stage"] = stage
         captured["prompt"] = prompt
         captured["system_prompt"] = system_prompt
+        captured["prompt_type"] = prompt_type
         return "Überarbeitet"
 
     monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
@@ -349,6 +359,7 @@ def test_revision_stage_is_stateless(
         assert compliance_instruction in captured["system_prompt"]
     min_words, max_words = agent._calculate_word_limits(agent.word_count)
     assert f"{min_words}-{max_words}" in captured["system_prompt"]
+    assert captured["prompt_type"] == "revision"
 
 
 
@@ -391,6 +402,7 @@ def test_call_llm_stage_enforces_token_reserve(
     with pytest.raises(WriterAgentError, match="Tokenbudget überschritten"):
         agent._call_llm_stage(
             stage="test_stage",
+            prompt_type="section",
             prompt=long_prompt,
             system_prompt=short_system_prompt,
             success_message="ok",
