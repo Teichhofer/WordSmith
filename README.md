@@ -1,29 +1,26 @@
 # WordSmith
 
-WordSmith operates exclusively in the **Automatikmodus** and exposes the
-full workflow through a single CLI command. The core pipeline is
-implemented in `wordsmith.agent.WriterAgent` and orchestrated by
-`cli.py`.
-
-The German-language production guidelines – including every
-LLM-interaction and quality gate – are documented in
-[`docs/automatikmodus.md`](docs/automatikmodus.md).
+WordSmith bündelt die komplette Textproduktion im **Automatikmodus**. Die
+Kommandozeile instanziiert `wordsmith.agent.WriterAgent`, der die Pipeline
+aus Briefing-Aufbereitung, Outline-Generierung, Abschnittstexten,
+Rubrik-Prüfung und optionalen Revisionen durchläuft. Details zum Ablauf
+finden sich in [`docs/automatikmodus.md`](docs/automatikmodus.md).
 
 ## Voraussetzungen
 
-WordSmith setzt auf ein lokal verfügbares LLM. Standardmäßig wird ein
-Ollama-Dienst angesprochen und das CLI erfragt ein installiertes Modell,
-falls keines vorgegeben ist. Stellen Sie daher sicher, dass
+Die aktuelle Implementierung spricht ausschließlich einen lokal verfügbaren
+Ollama-Dienst an. Das CLI ermittelt beim Start das gewünschte Modell oder
+fragt interaktiv nach, falls keines angegeben wurde. Vor dem Start sollten
 
-* der Ollama-Dienst läuft (`ollama serve`),
-* mindestens ein Modell installiert ist (`ollama list`), und
-* das Modell für die gewünschte Textproduktion geeignet ist.
+* der Ollama-Dienst laufen (`ollama serve`),
+* mindestens ein Modell installiert sein (`ollama list`), und
+* die Modellwahl zur gewünschten Textproduktion passen.
 
 ## CLI-Referenz
 
 Der Automatikmodus wird über das Unterkommando `automatikmodus`
-gestartet. Die folgenden Parameter decken sämtliche vom Code
-unterstützten Funktionen ab:
+gestartet. Alle vom Code unterstützten Optionen lassen sich mit folgendem
+Aufruf übergeben:
 
 ```bash
 python cli.py automatikmodus \
@@ -48,42 +45,41 @@ python cli.py automatikmodus \
   --ollama-base-url http://localhost:11434
 ```
 
-Alternativ können alle Parameter in einer JSON-Datei hinterlegt und per
-`--input-file` geladen werden:
+Alternativ können die Einstellungen gesammelt in einer JSON-Datei liegen
+und per `--input-file` geladen werden:
 
 ```bash
 python cli.py automatikmodus --input-file lauf.json
 ```
 
-Im Repository liegt unter `docs/examples/automatikmodus-input.json` eine
-vollständig befüllte Beispiel-Datei. Der über `--input-file` angegebene
-Pfad kann entweder relativ zum aktuellen Arbeitsverzeichnis oder als
-absoluter Pfad angegeben werden.
+Im Repository liegt mit `docs/examples/automatikmodus-input.json` ein
+vollständig befülltes Beispiel. Pfade dürfen absolut oder relativ zum
+aktuellen Arbeitsverzeichnis angegeben werden.
 
-Die Optionen im Einzelnen:
+Die Optionen im Überblick:
 
 | Option | Pflicht? | Beschreibung |
 | ------ | -------- | ------------ |
 | `--title` | ✓ | Arbeitstitel für den Text. |
-| `--content` | ✓ | Briefing oder Notizen, die in Schritt 1 normalisiert werden. |
+| `--content` | ✓ | Briefing oder Notizen, die in Schritt 1 normalisiert werden. |
 | `--text-type` | ✓ | Texttyp (z. B. Blogartikel, Pressemitteilung). |
-| `--word-count` | ✓ | Zielwortzahl des Endtexts. Muss > 0 sein. |
-| `--iterations` |   | Anzahl der Revisionen nach dem ersten Entwurf (Default: 1). |
-| `--llm-provider` |   | Kennung des LLM-Anbieters. Der Code erwartet aktuell `ollama`. |
+| `--word-count` | ✓ | Zielwortzahl des Endtexts. Muss > 0 sein. |
+| `--iterations` |   | Anzahl optionaler Revisionen nach dem Erstentwurf (Default: 1; `0` erlaubt). |
+| `--llm-provider` |   | Kennung des LLM-Anbieters. Aktuell wird nur `ollama` unterstützt. |
 | `--audience` |   | Zielgruppe; Default siehe `wordsmith.defaults.DEFAULT_AUDIENCE`. |
 | `--tone` |   | Tonalität; Default siehe `DEFAULT_TONE`. |
-| `--register` |   | Anrede/Sprachregister (`Du`/`Sie`). Werte werden anhand `REGISTER_ALIASES` normalisiert. |
+| `--register` |   | Anrede/Sprachregister (`Du`/`Sie`), Normalisierung über `REGISTER_ALIASES`. |
 | `--variant` |   | Sprachvariante (`DE-DE`, `DE-AT`, `DE-CH`). |
-| `--constraints` |   | Zusätzliche Muss-/Kann-Vorgaben für den Text. |
-| `--sources-allowed` |   | `true`/`false`, ob Quellen im Text erlaubt sind. |
-| `--seo-keywords` |   | Kommagetrennte Liste eindeutiger SEO-Schlüsselwörter. |
-| `--compliance-hint` |   | Flag ohne Parameter; hängt den COMPLIANCE-HINWEIS ans Textende an (Default: deaktiviert). |
+| `--constraints` |   | Zusätzliche Muss-/Kann-Vorgaben. |
+| `--sources-allowed` |   | `true`/`false`, ob Quellenangaben erlaubt sind. |
+| `--seo-keywords` |   | Kommagetrennte Liste; Duplikate werden entfernt. |
+| `--compliance-hint` |   | Flag ohne Parameter; sorgt dafür, dass ein vorhandener Compliance-Hinweis im Ergebnis verbleibt. |
 | `--config` |   | Pfad zu einer optionalen JSON-Konfiguration; Werte überschreiben Defaults. |
-| `--output-dir` |   | Zielverzeichnis für Dateien wie `Final-*.txt` oder `metadata.json`. |
+| `--output-dir` |   | Zielverzeichnis für Artefakte wie `Final-*.txt` oder `metadata.json`. |
 | `--logs-dir` |   | Verzeichnis für Lauf- und Prompt-Logs. |
-| `--ollama-model` |   | Name des Ollama-Modells. Ohne Angabe startet eine interaktive Auswahl (sofern TTY). |
+| `--ollama-model` |   | Name des Ollama-Modells; ohne Angabe wird interaktiv (TTY) oder automatisch das erste Modell gewählt. |
 | `--ollama-base-url` |   | Basis-URL der Ollama-API (Default: `http://localhost:11434`). |
-| `--input-file` |   | Pfad zu einer JSON-Datei, die alle oben genannten Argumente enthalten kann. Angaben auf der CLI überschreiben die Datei. |
+| `--input-file` |   | Pfad zu einer JSON-Datei, die alle oben genannten Argumente enthalten kann. CLI-Argumente überschreiben diese Werte. |
 
 ### Eingabedatei
 
@@ -104,9 +100,10 @@ auf der Kommandozeile validiert. Ein Minimalbeispiel:
 }
 ```
 
-Optional lassen sich auch `output_dir`, `logs_dir`, `ollama_model` oder
-`config` definieren. CLI-Argumente haben stets Vorrang vor den Werten aus der
-Datei.
+Optional lassen sich u. a. `output_dir`, `logs_dir`, `ollama_model` oder
+`config` definieren. CLI-Argumente haben stets Vorrang vor den Werten aus
+der Datei. Boolesche Werte dürfen als `true`/`false` oder `"ja"`/`"nein"`
+angegeben werden.
 
 Die CLI gibt den finalen Text auf `stdout` aus, schreibt Statusmeldungen
 auf `stderr` und beendet sich mit
@@ -115,6 +112,41 @@ auf `stderr` und beendet sich mit
 * `1` bei Fehlern im WriterAgent oder Benutzungsfehlern,
 * `2` für Konfigurationsprobleme und
 * `3` bei Ollama-spezifischen Fehlern.
+
+## Ablauf des Automatikmodus
+
+1. **Initialisierung:** Die CLI lädt `Config`, setzt optionale
+   Pfad-Overrides und sorgt für ein gewähltes Ollama-Modell. Anschließend
+   erstellt sie einen `WriterAgent` mit allen Eingaben. Fehlende Felder wie
+   Zielgruppe, Ton oder Register werden innerhalb des Agents auf sinnvolle
+   Defaults ergänzt und in den Logs vermerkt.
+2. **Briefing-Phase:** Der Agent ruft das `BRIEFING_PROMPT` auf und
+   speichert das Ergebnis als `briefing.json`. Fehlende Felder werden auf
+   Basis der Eingaben bzw. Defaults ergänzt.
+3. **Ideen-Phase:** Das `IDEA_IMPROVEMENT_PROMPT` erzeugt eine überarbeitete
+   Briefingfassung (Markdown mit Abschnitten). Die Datei `idea.txt` dient
+   als spätere Kontextquelle.
+4. **Outline:** Zunächst wird eine Outline erstellt, anschließend mit einem
+   Verbesserungs-Prompt verfeinert und durch `_clean_outline_sections`
+   bereinigt. Ergebnis sind strukturierte Abschnittsdaten mit Wortbudgets,
+   gespeichert in `outline.txt` sowie als Ausgangspunkt `iteration_00.txt`.
+5. **Abschnittsweise Generierung:** Für jeden Outline-Abschnitt wird ein
+   Prompt erstellt, der Briefing, Outline, Kernaussagen, Stilvorgaben,
+   SEO-Keywords und einen Recap des vorherigen Abschnitts kombiniert. Die
+   generierten Abschnitte werden laufend in `current_text.txt`
+   zusammengeführt.
+6. **Rubrik-Prüfung:** Der vollständige Entwurf wird mit
+   `TEXT_TYPE_CHECK_PROMPT` geprüft. Liefert der Bericht keine Hinweise auf
+   „keine Abweichungen“, folgt eine Korrektur mittels
+   `TEXT_TYPE_FIX_PROMPT`. Beide Antworten landen in separaten Dateien.
+7. **Revisionen:** Für jede zusätzliche Iteration ruft der Agent den Text
+   erneut auf dem `REVISION_SYSTEM_PROMPT` (plus optionalem
+   Compliance-Hinweis) auf. Optional erzeugte Reflexionen werden als
+   `reflection_XX.txt` abgelegt.
+8. **Compliance & Abschluss:** Jeder Textdurchlauf wird auf sensible
+   Begriffe, Platzhalter und Compliance-Hinweise geprüft. Das finale Ergebnis
+   landet in `Final-<timestamp>.txt`, Metadaten in `metadata.json`, das
+   Compliance-Protokoll in `compliance.json`.
 
 ## Konfiguration
 
@@ -128,34 +160,38 @@ entsprechen den Attributen des `Config`-Dataclasses, u. a.:
 * `prompt_config_path` – Pfad zur JSON-Datei mit den Prompt-Templates
 * `llm` (Objekt mit Parametern wie `temperature`, `top_p`, `seed`)
 
+`Config.adjust_for_word_count(word_count)` setzt den gewünschten Umfang,
+skalieren `context_length` auf mindestens `word_count * 4` (mindestens
+8192) und `token_limit` auf mindestens `word_count * 1,9` (ebenfalls
+mindestens 8192). Gleichzeitig werden deterministische LLM-Parameter
+gesetzt (`temperature=0.7`, `top_p=1.0`, `presence_penalty=0.05`,
+`frequency_penalty=0.05`, Seed 42); falls verfügbar, wird `num_predict`
+auf das Token-Limit angepasst. `ensure_directories()` erstellt Output- und
+Log-Ordner, `cleanup_temporary_outputs()` entfernt Artefakte früherer
+Läufe.
+
 Die mitgelieferte Datei `wordsmith/prompts_config.json` enthält alle
-Prompt-Templates. Wird ein abweichender Satz an Prompts benötigt, kann
-`prompt_config_path` auf eine eigene JSON-Datei zeigen. Vor jedem Lauf
-lädt die CLI diese Datei und nutzt `system_prompt` weiterhin als
-Laufzeitüberschreibung.
+Prompt-Templates. Wird ein eigener Satz benötigt, kann `prompt_config_path`
+auf eine alternative JSON-Datei zeigen. `prompts.set_system_prompt()`
+ermöglicht Laufzeit-Overrides für den globalen oder stufenweisen
+Systemprompt.
 
-Vor jedem Lauf sorgt `Config.adjust_for_word_count` für sinnvolle
-Fenstergrößen und setzt deterministische LLM-Parameter (Seed 42). Die
-Methoden `ensure_directories()` und `cleanup_temporary_outputs()` legen
-benötigte Verzeichnisse an und entfernen temporäre Artefakte früherer
-Durchläufe.
+## Artefakte & Logging
 
-## Ausgaben & Artefakte
-
-Während `WriterAgent.run()` den Automatikmodus ausführt, entstehen im
-Ausgabeverzeichnis mehrere Dateien:
+Während `WriterAgent.run()` entstehen im Ausgabeverzeichnis u. a. folgende
+Dateien:
 
 * `Final-<timestamp>.txt` – finaler Text (zusätzlich auf `stdout`).
 * `current_text.txt` – jeweils letzter Zwischenstand.
-* `briefing.json`, `idea.txt`, `outline.txt` – Ergebnisse der frühen Pipeline-Schritte.
-* `iteration_XX.txt` – Versionen nach jeder Überarbeitung.
-* `metadata.json` – Eckdaten wie Zielgruppe, finaler Wortcount,
+* `briefing.json`, `idea.txt`, `outline.txt` – Ergebnisse der frühen Pipeline.
+* `iteration_XX.txt` – Versionen nach jeder Überarbeitung (inklusive `iteration_00.txt` mit der Outline).
+* `text_type_check.txt` und `text_type_fix.txt` – Rubrik-Report bzw. ggf. korrigierte Fassung.
+* `metadata.json` – Eckdaten wie Zielgruppe, finales Wortzählungsergebnis,
   verwendetes Modell und Rubrik-Ergebnis.
-* `compliance.json` – Audit-Log zu Platzhaltern, sensiblen Begriffen und Quellenprüfung.
+* `compliance.json` – Audit-Log zu Platzhaltern, sensiblen Begriffen und Quellenmodus.
 
-Das Log-Verzeichnis enthält ergänzend `run.log` (Ereignisse der
-Pipeline) und `llm.log` (Systemprompt, Outline, LLM-Parameter und
-Zusammenfassung der Aufrufe).
+Das Log-Verzeichnis enthält `run.log` (chronologische Ereignisse) und
+`llm.log` (Systemprompts, Outline, Parameter und Telemetrie).
 
-Alle erzeugten Dateien und Prüfungen entsprechen den in
-`docs/automatikmodus.md` beschriebenen Funktionen und Qualitätskriterien.
+Alle erzeugten Dateien und Prüfungen sind in
+[`docs/automatikmodus.md`](docs/automatikmodus.md) detailliert beschrieben.
