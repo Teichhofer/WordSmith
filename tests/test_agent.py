@@ -293,6 +293,116 @@ def test_agent_parses_briefing_from_code_block(
 
 
 
+def test_revision_stage_is_stateless(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 200)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama2"
+
+    agent = WriterAgent(
+        topic="Stateless Revision",
+        word_count=200,
+        steps=[],
+        iterations=1,
+        config=config,
+        content="",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+        include_compliance_note=True,
+    )
+
+    captured: dict[str, str] = {}
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: dict[str, object] | None = None,
+    ) -> str:
+        captured["stage"] = stage
+        captured["prompt"] = prompt
+        captured["system_prompt"] = system_prompt
+        return "Überarbeitet"
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    source_text = "  Aktueller Text mit Kontext.  "
+    result = agent._revise_with_llm(source_text, 1, {"goal": "Test"})
+
+    assert result == "Überarbeitet"
+    assert captured["prompt"] == source_text.strip()
+    assert "Briefing" not in captured["prompt"]
+    base_prompt = prompts.REVISION_SYSTEM_PROMPT.strip()
+    assert captured["system_prompt"].startswith(base_prompt)
+    compliance_instruction = prompts.COMPLIANCE_HINT_INSTRUCTION.strip()
+    if compliance_instruction:
+        assert compliance_instruction in captured["system_prompt"]
+    min_words, max_words = agent._calculate_word_limits(agent.word_count)
+    assert f"{min_words}-{max_words}" in captured["system_prompt"]
+
+
+
+def test_call_llm_stage_enforces_token_reserve(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 120)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama2"
+    config.token_limit = 120
+
+    agent = WriterAgent(
+        topic="Token-Test",
+        word_count=120,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    called = False
+
+    def fake_generate_text(**_: object) -> llm.LLMResult:
+        nonlocal called
+        called = True
+        return llm.LLMResult(text="ok")
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
+
+    long_prompt = "p" * 500
+    short_system_prompt = "s" * 20
+
+    with pytest.raises(WriterAgentError, match="Tokenbudget überschritten"):
+        agent._call_llm_stage(
+            stage="test_stage",
+            prompt=long_prompt,
+            system_prompt=short_system_prompt,
+            success_message="ok",
+            failure_message="fail",
+        )
+
+    assert not called
+
+
+
+
+
 def test_agent_raises_when_llm_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = _build_config(tmp_path, 200)
     config.llm_provider = "ollama"

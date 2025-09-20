@@ -48,11 +48,7 @@ def test_prompt_templates_match_configuration() -> None:
         == config_data["compliance_hint_instruction"]
     )
 
-    expected_revision = prompts.REVISION_PROMPT.strip().format(
-        ziel_woerter=500,
-        min_woerter=450,
-        max_woerter=550,
-    )
+    expected_revision = prompts.REVISION_PROMPT.strip()
     assert (
         prompts.build_revision_prompt(
             target_words=500,
@@ -61,6 +57,11 @@ def test_prompt_templates_match_configuration() -> None:
         )
         == expected_revision
     )
+    compliance_instruction = prompts.COMPLIANCE_HINT_INSTRUCTION.strip()
+    if expected_revision:
+        expected_with_hint = expected_revision + "\n" + compliance_instruction
+    else:
+        expected_with_hint = compliance_instruction
     assert (
         prompts.build_revision_prompt(
             include_compliance_hint=True,
@@ -68,7 +69,7 @@ def test_prompt_templates_match_configuration() -> None:
             min_words=450,
             max_words=550,
         )
-        == expected_revision + "\n" + prompts.COMPLIANCE_HINT_INSTRUCTION
+        == expected_with_hint
     )
 
 
@@ -81,8 +82,10 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Zielwortzahl" in prompts.SECTION_PROMPT
     assert "Mindestlänge" in prompts.SECTION_PROMPT
     assert "Stil:" in prompts.SECTION_PROMPT
-    assert "Kürzen nur" in prompts.REVISION_PROMPT
-    assert "ohne Inhalte zu entfernen" in prompts.REVISION_SYSTEM_PROMPT
+    assert prompts.REVISION_PROMPT.strip() == ""
+    assert "Poliere" in prompts.REVISION_SYSTEM_PROMPT
+    assert "Markdown" in prompts.REVISION_SYSTEM_PROMPT
+    assert "Fassung" in prompts.REVISION_SYSTEM_PROMPT
     assert "packenden Einstieg" in prompts.FINAL_DRAFT_PROMPT
 
 

@@ -1060,22 +1060,25 @@ class WriterAgent:
 
     def _revise_with_llm(self, text: str, iteration: int, briefing: dict) -> str | None:
         min_words, max_words = self._calculate_word_limits(self.word_count)
-        revision_prompt = (
-            prompts.build_revision_prompt(
-                include_compliance_hint=self.include_compliance_note,
-                target_words=self.word_count,
-                min_words=min_words,
-                max_words=max_words,
-            )
-            + "\n\nBriefing:\n"
-            + json.dumps(briefing, ensure_ascii=False, indent=2)
-            + "\n\nAktueller Text:\n"
-            + text.strip()
+        prompt_text = text.strip()
+        system_prompt = prompts.REVISION_SYSTEM_PROMPT.strip()
+        length_hint = (
+            f"Zielumfang: {min_words}-{max_words} Wörter; bleib nah an der Vorlage."
+            if min_words and max_words
+            else ""
         )
+        if length_hint:
+            system_prompt = f"{system_prompt} {length_hint}".strip()
+
+        if self.include_compliance_note:
+            compliance_hint = prompts.COMPLIANCE_HINT_INSTRUCTION.strip()
+            if compliance_hint:
+                system_prompt = f"{system_prompt} {compliance_hint}".strip()
+
         return self._call_llm_stage(
             stage=f"revision_{iteration:02d}_llm",
-            prompt=revision_prompt,
-            system_prompt=prompts.REVISION_SYSTEM_PROMPT,
+            prompt=prompt_text,
+            system_prompt=system_prompt,
             success_message=f"Revision {iteration:02d} generiert",
             failure_message=f"Revision {iteration:02d} fehlgeschlagen",
             data={"iteration": iteration},
@@ -1288,6 +1291,12 @@ class WriterAgent:
             except ValueError:
                 return str(path)
 
+    def _estimate_token_usage(self, *parts: str) -> int:
+        total_characters = sum(len(part) for part in parts if part)
+        if total_characters <= 0:
+            return 0
+        return math.ceil(total_characters / 4)
+
     def _should_use_llm(self) -> bool:
         provider = (self.config.llm_provider or "").strip().lower()
         model = (self.config.llm_model or "").strip()
@@ -1305,6 +1314,24 @@ class WriterAgent:
     ) -> str | None:
         if not self._should_use_llm():
             raise WriterAgentError("Es ist kein kompatibles LLM-Modell konfiguriert.")
+
+        token_limit = max(1, int(self.config.token_limit))
+        reserve_limit = max(1, math.floor(token_limit * 0.85))
+        required_tokens = self._estimate_token_usage(system_prompt, prompt)
+        if required_tokens > reserve_limit:
+            context = {
+                "stage": stage,
+                "token_limit": token_limit,
+                "required_tokens": required_tokens,
+                "usable_tokens": reserve_limit,
+            }
+            raise WriterAgentError(
+                (
+                    "Tokenbudget überschritten: "
+                    f"{required_tokens} > {reserve_limit} (85 % von {token_limit})."
+                ),
+                context=context,
+            )
         try:
             result = llm.generate_text(
                 provider=self.config.llm_provider,
