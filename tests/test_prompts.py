@@ -55,6 +55,16 @@ def test_prompt_templates_match_configuration() -> None:
     )
 
 
+def test_prompt_templates_emphasize_quality_controls() -> None:
+    """The curated prompts must retain critical quality and safety guidance."""
+
+    assert "[KLÄREN: …]" in prompts.BRIEFING_PROMPT
+    assert "[KLÄREN: …]" in prompts.IDEA_IMPROVEMENT_PROMPT
+    assert "Fundstelle" in prompts.TEXT_TYPE_CHECK_PROMPT
+    assert "Zielwortzahl" in prompts.SECTION_PROMPT
+    assert "packenden Einstieg" in prompts.FINAL_DRAFT_PROMPT
+
+
 def test_prompt_configuration_has_no_merge_markers() -> None:
     """The distributed prompt configuration must be valid JSON without conflict markers."""
 
