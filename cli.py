@@ -506,7 +506,7 @@ def _configure_ollama(args: argparse.Namespace, config: "Config") -> Optional[in
         selected = _interactive_model_choice(model_names)
 
     config.llm_model = selected
-    print(f"Verwende Ollama-Modell: {selected}")
+    print(f"Verwende Ollama-Modell: {selected}", file=sys.stderr)
     return None
 
 
