@@ -254,6 +254,11 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         "## Überarbeitung\n"
         "Die Revision blendet vertrauliche Hinweise aus und fokussiert Umsetzung."
     )
+    reflection_text = (
+        "1. Einstieg zuspitzen – Abschnitt 1.\n"
+        "2. Umsetzung konkretisieren – Abschnitt 2.\n"
+        "3. Schlussfolgerung schärfen – Abschluss."
+    )
 
     responses = deque(
         [
@@ -265,6 +270,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
             llm.LLMResult(text=section_two),
             llm.LLMResult(text=text_type_check),
             llm.LLMResult(text=revision_text),
+            llm.LLMResult(text=reflection_text),
         ]
     )
 
@@ -327,7 +333,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     assert runtime_match
     runtime_seconds_cli = float(runtime_match.group(1))
 
-    total_steps = 7 + iterations
+    total_steps = 7 + iterations * 2
     progress_lines = [line for line in stderr_lines if line.startswith("[")]
     assert progress_lines[0].startswith(f"[0/{total_steps}] Automatikmodus gestartet")
     assert any(
@@ -336,12 +342,14 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     )
 
     current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
+    reflection_output = (output_dir / "reflection_02.txt").read_text(encoding="utf-8").strip()
     assert captured.out.rstrip("\n") == current_text.rstrip("\n")
     final_files = list(output_dir.glob("Final-*.txt"))
     metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
     compliance = json.loads((output_dir / "compliance.json").read_text(encoding="utf-8"))
 
     assert "[ENTFERNT: vertrauliche]" in current_text
+    assert "Einstieg zuspitzen" in reflection_output
     assert len(final_files) == 1
     final_file = final_files[0]
     assert re.fullmatch(r"Final-\d{8}-\d{6}\.txt", final_file.name)
@@ -361,6 +369,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         datetime.fromisoformat(entry["timestamp"])
     assert any(entry["step"] == "briefing" for entry in run_entries)
     assert any(entry["step"] == "revision_01" for entry in run_entries)
+    assert any(entry["step"] == "reflection_01" for entry in run_entries)
     complete_entry = next(entry for entry in run_entries if entry["step"] == "complete")
     runtime_seconds_log = complete_entry["data"]["runtime_seconds"]
     assert runtime_seconds_log >= 0

@@ -547,8 +547,8 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
 
     prompts.set_system_prompt(config.system_prompt)
 
-    # The pipeline records six completed stages plus a final completion event.
-    total_steps = 7 + max(args.iterations, 0)
+    # The pipeline records six baseline completions plus revisions and reflections.
+    total_steps = 7 + max(args.iterations, 0) * 2
     progress_printer = _ProgressPrinter(total_steps)
 
     agent = WriterAgent(
