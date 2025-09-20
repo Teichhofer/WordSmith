@@ -176,6 +176,26 @@ auf eine alternative JSON-Datei zeigen. `prompts.set_system_prompt()`
 ermöglicht Laufzeit-Overrides für den globalen oder stufenweisen
 Systemprompt.
 
+Die JSON-Datei bündelt die Stufen unter dem Schlüssel `stages`. Jede Stufe
+(`briefing`, `section`, `final_draft` usw.) besitzt ein Objekt mit den Feldern
+`system_prompt`, `prompt` und `parameters`. Beispiel:
+
+```json
+{
+  "system_prompt": "…",
+  "stages": {
+    "briefing": {
+      "system_prompt": "…",
+      "prompt": "…",
+      "parameters": {"temperature": 0.65, "top_p": 1.0, "presence_penalty": 0.05, "frequency_penalty": 0.05}
+    }
+  }
+}
+```
+
+So lassen sich Texte, Systemprompts und LLM-Parameter pro Pipeline-Schritt
+gemeinsam anpassen.
+
 ## Artefakte & Logging
 
 Während `WriterAgent.run()` entstehen im Ausgabeverzeichnis u. a. folgende
