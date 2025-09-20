@@ -230,7 +230,10 @@ Nach der letzten Iteration: finaler Text zurückgeben (Länge ±3 %).
 > - Verwende aktive Verben, vermeide Füllphrasen und halte das Register konsistent.
 > - Knüpfe an den vorherigen Abschnitt an und baue einen logischen Ausblick auf den nächsten.
 > - **Keine** erfundenen Fakten; fehlende Details → Platzhalter in eckigen Klammern.
-> Zielwortzahl: {budget}.
+> - Zielwortzahl: {ziel_woerter} ±10 %.
+> - Mindestlänge: {min_woerter}.
+> - Maximal: {max_woerter}.
+> - Stil: {stilrichtlinien}.
 > **Bisheriger Kontext (Kurz-Recap)**: {previous_section_recap}
 
 ### `TEXT_TYPE_CHECK_PROMPT`
@@ -249,8 +252,12 @@ Nach der letzten Iteration: finaler Text zurückgeben (Länge ±3 %).
 > Gib nur den aktualisierten Text zurück.
 
 ### `REVISION_PROMPT`
-> Überarbeite zielgerichtet nach diesen Prioritäten: Klarheit, Flow, Terminologie, Wiederholungen, Rhythmus, starke Verben, Abschluss, Register, Variantenspezifika.
-> Arbeite Schritt für Schritt: plane die Eingriffe kurz, führe sie dann aus.
+> Aufgabe: Überarbeite den Text nach diesen Prioritäten: Klarheit, Flow, Terminologie, Wiederholungen, Rhythmus, starke Verben, Abschluss, Register, Variantenspezifika.
+> Zielwortzahl gesamt: {ziel_woerter} ±10 %.
+> Mindestlänge: {min_woerter}.
+> Kürzen nur, falls > {max_woerter}. Wenn < {min_woerter}: erweitere mit Beispielen, Fakten und Erklärungen.
+> Vermeide Wiederholungen nur oberhalb des Maximalziels.
+> Plane die Eingriffe Schritt für Schritt, führe sie anschließend im Text aus.
 > Liefere den überarbeiteten Text in Markdown ohne Meta-Kommentare; bei fehlenden Daten setze Platzhalter.
 > Falls Compliance-Hinweise nötig sind, füge sie als separate Zeile im Format `[COMPLIANCE-HINWEIS: …]` am Ende an.
 
