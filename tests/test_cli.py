@@ -7,6 +7,7 @@ import sys
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Mapping
 
 import pytest
 
@@ -24,6 +25,20 @@ from cli import (
 from wordsmith import llm
 from wordsmith.ollama import OllamaModel
 from wordsmith.config import Config
+
+
+_DEFAULT_RAW_RESPONSE: dict[str, Any] = {
+    "prompt_eval_count": 30,
+    "eval_count": 60,
+    "total_duration": 9_000_000_000,
+}
+
+
+def _llm_result(text: str, raw_override: Mapping[str, Any] | None = None) -> llm.LLMResult:
+    payload = dict(_DEFAULT_RAW_RESPONSE)
+    if raw_override:
+        payload.update(raw_override)
+    return llm.LLMResult(text=text, raw=payload)
 
 
 def test_print_runtime_formats_minutes_and_seconds() -> None:
@@ -319,15 +334,15 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
 
     responses = deque(
         [
-            llm.LLMResult(text=json.dumps(briefing_payload)),
-            llm.LLMResult(text=idea_text),
-            llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=section_one),
-            llm.LLMResult(text=section_two),
-            llm.LLMResult(text=text_type_check),
-            llm.LLMResult(text=revision_text),
-            llm.LLMResult(text=reflection_text),
+            _llm_result(json.dumps(briefing_payload)),
+            _llm_result(idea_text),
+            _llm_result(outline_text),
+            _llm_result(outline_text),
+            _llm_result(section_one),
+            _llm_result(section_two),
+            _llm_result(text_type_check),
+            _llm_result(revision_text),
+            _llm_result(reflection_text),
         ]
     )
 
@@ -447,7 +462,18 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     for entry in llm_entries:
         datetime.fromisoformat(entry["timestamp"])
     assert llm_entries[0]["telemetry_entry_count"] == len(llm_entries) - 1
-    assert any(entry.get("entry_type") == "telemetry" for entry in llm_entries[1:])
+    telemetry_entries = [
+        entry for entry in llm_entries[1:] if entry.get("entry_type") == "telemetry"
+    ]
+    assert telemetry_entries
+    expected_tokens_per_second = (
+        _DEFAULT_RAW_RESPONSE["prompt_eval_count"]
+        + _DEFAULT_RAW_RESPONSE["eval_count"]
+    ) / (_DEFAULT_RAW_RESPONSE["total_duration"] / 1_000_000_000)
+    assert all("tokens_per_second" in entry for entry in telemetry_entries)
+    assert telemetry_entries[0]["tokens_per_second"] == pytest.approx(
+        expected_tokens_per_second
+    )
 
 
 def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -461,10 +487,10 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     responses = deque(
         [
-            llm.LLMResult(text=json.dumps({"messages": []})),
-            llm.LLMResult(text="- Punkt"),
-            llm.LLMResult(text="1. Eintrag (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
-            llm.LLMResult(text="1. Eintrag (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
+            _llm_result(json.dumps({"messages": []})),
+            _llm_result("- Punkt"),
+            _llm_result("1. Eintrag (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
+            _llm_result("1. Eintrag (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
         ]
     )
 
@@ -612,19 +638,19 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path: Path, monkeyp
 
     responses = deque(
         [
-            llm.LLMResult(
-                text=json.dumps(
+            _llm_result(
+                json.dumps(
                     {
                         "messages": [],
                         "key_terms": [],
                     }
                 )
             ),
-            llm.LLMResult(text="- Hinweis"),
-            llm.LLMResult(text="1. Abschnitt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext."),
-            llm.LLMResult(text="1. Abschnitt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext."),
-            llm.LLMResult(text="Der Text bleibt allgemein."),
-            llm.LLMResult(text="Keine Abweichungen festgestellt."),
+            _llm_result("- Hinweis"),
+            _llm_result("1. Abschnitt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext."),
+            _llm_result("1. Abschnitt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext."),
+            _llm_result("Der Text bleibt allgemein."),
+            _llm_result("Keine Abweichungen festgestellt."),
         ]
     )
 

@@ -1648,6 +1648,7 @@ class WriterAgent:
         prompt_tokens: int | None = None,
         completion_tokens: int | None = None,
         output_word_count: int | None = None,
+        tokens_per_second: float | None = None,
     ) -> None:
         entry: dict[str, Any] = {
             "sequence": len(self._telemetry),
@@ -1662,6 +1663,7 @@ class WriterAgent:
             "completion_tokens": completion_tokens,
             "output_word_count": output_word_count,
             "status": status,
+            "tokens_per_second": tokens_per_second,
         }
         if abort_reason:
             entry["abort_reason"] = abort_reason
@@ -1683,6 +1685,41 @@ class WriterAgent:
         if total_characters <= 0:
             return 0
         return math.ceil(total_characters / 4)
+
+    def _calculate_tokens_per_second(
+        self, raw_payload: Mapping[str, Any] | None
+    ) -> float | None:
+        if not isinstance(raw_payload, Mapping):
+            return None
+
+        token_values = [
+            raw_payload.get("prompt_eval_count"),
+            raw_payload.get("eval_count"),
+        ]
+        total_tokens = sum(value for value in token_values if isinstance(value, int) and value > 0)
+        if total_tokens <= 0:
+            return None
+
+        duration_ns = raw_payload.get("total_duration")
+        if not isinstance(duration_ns, int) or duration_ns <= 0:
+            prompt_duration = raw_payload.get("prompt_eval_duration")
+            eval_duration = raw_payload.get("eval_duration")
+            durations = [
+                duration
+                for duration in (prompt_duration, eval_duration)
+                if isinstance(duration, int) and duration > 0
+            ]
+            if durations:
+                duration_ns = sum(durations)
+
+        if not isinstance(duration_ns, int) or duration_ns <= 0:
+            return None
+
+        seconds = duration_ns / 1_000_000_000
+        if seconds <= 0:
+            return None
+
+        return total_tokens / seconds
 
     def _should_use_llm(self) -> bool:
         provider = (self.config.llm_provider or "").strip().lower()
@@ -1733,6 +1770,7 @@ class WriterAgent:
                 abort_reason="token_reserve_exceeded",
                 prompt_tokens=required_tokens,
                 completion_tokens=None,
+                tokens_per_second=None,
             )
             raise WriterAgentError(
                 (
@@ -1773,10 +1811,12 @@ class WriterAgent:
                 abort_reason=str(exc),
                 prompt_tokens=required_tokens,
                 completion_tokens=None,
+                tokens_per_second=None,
             )
             return None
 
         text = result.text.strip()
+        tokens_per_second = self._calculate_tokens_per_second(result.raw)
         if not text:
             event_data = {"provider": self.config.llm_provider, "model": self.config.llm_model}
             if data:
@@ -1800,6 +1840,7 @@ class WriterAgent:
                 prompt_tokens=result.raw.get("prompt_eval_count") if result.raw else required_tokens,
                 completion_tokens=result.raw.get("eval_count") if result.raw else None,
                 output_word_count=0,
+                tokens_per_second=tokens_per_second,
             )
             return None
 
@@ -1837,6 +1878,7 @@ class WriterAgent:
             prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else prompt_tokens,
             completion_tokens=completion_tokens if isinstance(completion_tokens, int) else completion_tokens,
             output_word_count=self._count_words(text),
+            tokens_per_second=tokens_per_second,
         )
         return text
 
