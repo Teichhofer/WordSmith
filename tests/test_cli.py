@@ -380,9 +380,16 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         for line in (logs_dir / "llm.log").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert llm_entries and llm_entries[0]["llm_generation"]["status"] == "success"
+    assert llm_entries
+    assert llm_entries[0]["entry_type"] == "summary"
+    assert llm_entries[0]["llm_generation"]["status"] == "success"
     assert "runtime_seconds" in llm_entries[0]
     assert llm_entries[0]["runtime_seconds"] == pytest.approx(runtime_seconds_log, rel=0.01, abs=0.01)
+    assert all("timestamp" in entry for entry in llm_entries)
+    for entry in llm_entries:
+        datetime.fromisoformat(entry["timestamp"])
+    assert llm_entries[0]["telemetry_entry_count"] == len(llm_entries) - 1
+    assert any(entry.get("entry_type") == "telemetry" for entry in llm_entries[1:])
 
 
 def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -464,8 +471,13 @@ def test_cli_reports_llm_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         if line.strip()
     ]
     assert llm_entries
+    assert llm_entries[0]["entry_type"] == "summary"
     assert "runtime_seconds" in llm_entries[0]
     assert llm_entries[0]["runtime_seconds"] == pytest.approx(runtime_seconds_log, rel=0.01, abs=0.01)
+    assert all("timestamp" in entry for entry in llm_entries)
+    for entry in llm_entries:
+        datetime.fromisoformat(entry["timestamp"])
+    assert llm_entries[0]["telemetry_entry_count"] == len(llm_entries) - 1
 
 
 def test_iterations_argument_rejects_negative_value() -> None:
