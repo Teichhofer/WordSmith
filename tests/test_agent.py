@@ -5,6 +5,7 @@ import re
 import sys
 from collections import deque
 from pathlib import Path
+from typing import Any, Mapping
 
 import pytest
 
@@ -24,6 +25,20 @@ def _build_config(tmp_path: Path, word_count: int) -> Config:
     config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
     config.adjust_for_word_count(word_count)
     return config
+
+
+_DEFAULT_RAW_RESPONSE: dict[str, Any] = {
+    "prompt_eval_count": 30,
+    "eval_count": 60,
+    "total_duration": 9_000_000_000,
+}
+
+
+def _llm_result(text: str, raw_override: Mapping[str, Any] | None = None) -> llm.LLMResult:
+    payload = dict(_DEFAULT_RAW_RESPONSE)
+    if raw_override:
+        payload.update(raw_override)
+    return llm.LLMResult(text=text, raw=payload)
 
 
 def test_generate_briefing_includes_word_count(
@@ -151,15 +166,15 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
 
     responses = deque(
         [
-            llm.LLMResult(text=json.dumps(briefing_payload)),
-            llm.LLMResult(text=idea_text),
-            llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=section_one),
-            llm.LLMResult(text=section_two),
-            llm.LLMResult(text=text_type_check),
-            llm.LLMResult(text=revision_text),
-            llm.LLMResult(text=reflection_text),
+            _llm_result(json.dumps(briefing_payload)),
+            _llm_result(idea_text),
+            _llm_result(outline_text),
+            _llm_result(outline_text),
+            _llm_result(section_one),
+            _llm_result(section_two),
+            _llm_result(text_type_check),
+            _llm_result(revision_text),
+            _llm_result(reflection_text),
         ]
     )
 
@@ -246,6 +261,13 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert telemetry_entry["token_limit"] == config.token_limit
     assert telemetry_entry["parameters"]["top_p"] == 1.0
     assert telemetry_entry["prompt_type"]
+    expected_tokens_per_second = (
+        _DEFAULT_RAW_RESPONSE["prompt_eval_count"]
+        + _DEFAULT_RAW_RESPONSE["eval_count"]
+    ) / (_DEFAULT_RAW_RESPONSE["total_duration"] / 1_000_000_000)
+    assert telemetry_entry["tokens_per_second"] == pytest.approx(
+        expected_tokens_per_second
+    )
 
 
 def test_perform_source_research_uses_outline_titles(
@@ -394,13 +416,13 @@ def test_agent_parses_briefing_from_code_block(
 
     responses = deque(
         [
-            llm.LLMResult(text=briefing_text),
-            llm.LLMResult(text=idea_text),
-            llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=section_one),
-            llm.LLMResult(text=section_two),
-            llm.LLMResult(text=text_type_check),
+            _llm_result(briefing_text),
+            _llm_result(idea_text),
+            _llm_result(outline_text),
+            _llm_result(outline_text),
+            _llm_result(section_one),
+            _llm_result(section_two),
+            _llm_result(text_type_check),
         ]
     )
 
@@ -534,7 +556,7 @@ def test_call_llm_stage_enforces_token_reserve(
     def fake_generate_text(**_: object) -> llm.LLMResult:
         nonlocal called
         called = True
-        return llm.LLMResult(text="ok")
+        return _llm_result("ok")
 
     monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
 
@@ -565,10 +587,10 @@ def test_agent_raises_when_llm_fails(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     responses = deque(
         [
-            llm.LLMResult(text=json.dumps({"messages": []})),
-            llm.LLMResult(text="- Punkt"),
-            llm.LLMResult(text="1. Abschnitt (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
-            llm.LLMResult(text="1. Abschnitt (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
+            _llm_result(json.dumps({"messages": []})),
+            _llm_result("- Punkt"),
+            _llm_result("1. Abschnitt (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
+            _llm_result("1. Abschnitt (Rolle: Hook, Wortbudget: 50 Wörter) -> Test."),
         ]
     )
 
@@ -616,13 +638,13 @@ def test_text_type_fix_applied_when_needed(
 
     responses = deque(
         [
-            llm.LLMResult(text=json.dumps(briefing_payload)),
-            llm.LLMResult(text=idea_text),
-            llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=outline_text),
-            llm.LLMResult(text=section_text),
-            llm.LLMResult(text=check_report),
-            llm.LLMResult(text=fix_response),
+            _llm_result(json.dumps(briefing_payload)),
+            _llm_result(idea_text),
+            _llm_result(outline_text),
+            _llm_result(outline_text),
+            _llm_result(section_text),
+            _llm_result(check_report),
+            _llm_result(fix_response),
         ]
     )
 
