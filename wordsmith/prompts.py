@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import MappingProxyType
-from typing import Dict, Mapping
+from typing import Any, Dict, Mapping
 
 
 class PromptConfigurationError(RuntimeError):
@@ -302,16 +302,46 @@ def set_system_prompt(prompt: str | None, *, stage: str | None = None) -> None:
     SYSTEM_PROMPT = value
 
 
+class _FormatDict(dict):
+    """Dictionary that leaves unresolved placeholders intact."""
+
+    def __missing__(self, key: str) -> str:  # pragma: no cover - defensive
+        return "{" + key + "}"
+
+
+def _stringify_context(values: Mapping[str, Any]) -> Mapping[str, str]:
+    """Convert context entries to strings for safe formatting."""
+
+    return {key: "" if value is None else str(value) for key, value in values.items()}
+
+
 def build_revision_prompt(
     include_compliance_hint: bool = False,
     *,
     target_words: int,
     min_words: int,
     max_words: int,
+    context: Mapping[str, Any] | None = None,
 ) -> str:
     """Return the revision prompt, optionally with the compliance hint appended."""
 
-    prompt = REVISION_PROMPT.strip()
+    prompt_template = REVISION_PROMPT.strip()
+    combined_context: Dict[str, Any]
+    if context is None:
+        combined_context = {}
+    else:
+        combined_context = dict(context)
+    combined_context.setdefault("target_words", target_words)
+    combined_context.setdefault("min_words", min_words)
+    combined_context.setdefault("max_words", max_words)
+
+    if prompt_template:
+        prompt = prompt_template.format_map(
+            _FormatDict(_stringify_context(combined_context))
+        )
+    else:
+        prompt = ""
+
     if not include_compliance_hint:
         return prompt
 
