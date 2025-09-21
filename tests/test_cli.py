@@ -413,6 +413,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     assert final_file.read_text(encoding="utf-8").strip() == current_text.strip()
     assert metadata["audience"] == "Vorstand"
     assert metadata["llm_model"] == "llama2"
+    assert metadata["source_research"] == []
     assert compliance["checks"]
     assert not responses
 
@@ -681,3 +682,4 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path: Path, monkeyp
     assert metadata["audience"] == DEFAULT_AUDIENCE
     assert metadata["register"] == DEFAULT_REGISTER
     assert metadata["variant"] == DEFAULT_VARIANT
+    assert metadata["source_research"] == []
