@@ -10,7 +10,7 @@ from datetime import datetime
 from time import perf_counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, List, Sequence
+from typing import Any, Callable, List, Mapping, Sequence
 
 from . import llm, prompts
 from .config import Config, LLMParameters
@@ -1080,9 +1080,60 @@ class WriterAgent:
         ]
         return not any(marker in normalised for marker in ok_markers)
 
+    def _build_revision_prompt_context(
+        self,
+        *,
+        text: str,
+        briefing: Mapping[str, object] | None,
+        iteration: Any,
+        min_words: int,
+        max_words: int,
+    ) -> dict[str, Any]:
+        keywords = ", ".join(self.seo_keywords or []) if self.seo_keywords else "Keine"
+        if not keywords:
+            keywords = "Keine"
+
+        sources_mode = (
+            "Externe Quellen erlaubt" if self.sources_allowed else "Keine externen Quellen verwenden"
+        )
+        if briefing:
+            briefing_text = json.dumps(briefing, ensure_ascii=False, indent=2)
+        else:
+            briefing_text = "[Keine Briefing-Daten übergeben.]"
+
+        return {
+            "text": text,
+            "text_type": self.text_type,
+            "audience": self.audience,
+            "tone": self.tone,
+            "register": self.register,
+            "variant": self.variant,
+            "constraints": self.constraints,
+            "seo_keywords": keywords,
+            "sources_mode": sources_mode,
+            "iteration": iteration,
+            "target_words": self.word_count,
+            "min_words": min_words,
+            "max_words": max_words,
+            "briefing": briefing_text,
+        }
+
     def _revise_with_llm(self, text: str, iteration: int, briefing: dict) -> str | None:
         min_words, max_words = self._calculate_word_limits(self.word_count)
-        prompt_text = text.strip()
+        clean_text = text.strip()
+        prompt_context = self._build_revision_prompt_context(
+            text=clean_text,
+            briefing=briefing,
+            iteration=iteration,
+            min_words=min_words,
+            max_words=max_words,
+        )
+        prompt_text = prompts.build_revision_prompt(
+            target_words=self.word_count,
+            min_words=min_words,
+            max_words=max_words,
+            context=prompt_context,
+        )
         system_prompt = prompts.REVISION_SYSTEM_PROMPT.strip()
         length_hint = (
             f"Zielumfang: {min_words}-{max_words} Wörter; bleib nah an der Vorlage."
@@ -1288,6 +1339,13 @@ class WriterAgent:
                     target_words=self.word_count,
                     min_words=min_words,
                     max_words=max_words,
+                    context=self._build_revision_prompt_context(
+                        text="{text}",
+                        briefing=briefing,
+                        iteration="{iteration}",
+                        min_words=min_words,
+                        max_words=max_words,
+                    ),
                 ),
             },
             "events": run_entries,

@@ -54,20 +54,18 @@ def test_prompt_templates_match_configuration() -> None:
 
     assert dict(prompts.STAGE_SYSTEM_PROMPTS) == expected_stage_systems
 
-    expected_revision = prompts.REVISION_PROMPT.strip()
-    assert (
-        prompts.build_revision_prompt(
-            target_words=500,
-            min_words=450,
-            max_words=550,
-        )
-        == expected_revision
+    base_revision = prompts.build_revision_prompt(
+        target_words=500,
+        min_words=450,
+        max_words=550,
     )
+    assert "Wortkorridor: 450–550" in base_revision
+    assert "{audience}" in base_revision
+    assert "{text}" in base_revision
     compliance_instruction = prompts.COMPLIANCE_HINT_INSTRUCTION.strip()
-    if expected_revision:
-        expected_with_hint = expected_revision + "\n" + compliance_instruction
-    else:
-        expected_with_hint = compliance_instruction
+    expected_with_hint = base_revision
+    if compliance_instruction:
+        expected_with_hint = base_revision + "\n" + compliance_instruction
     assert (
         prompts.build_revision_prompt(
             include_compliance_hint=True,
@@ -77,6 +75,29 @@ def test_prompt_templates_match_configuration() -> None:
         )
         == expected_with_hint
     )
+
+    sample_context = {
+        "text": "Entwurf",
+        "text_type": "Memo",
+        "audience": "Team",
+        "tone": "prägnant",
+        "register": "Sie",
+        "variant": "DE-DE",
+        "constraints": "Keine zusätzlichen Vorgaben",
+        "seo_keywords": "Test, Beispiel",
+        "sources_mode": "Keine externen Quellen verwenden",
+        "iteration": 2,
+        "briefing": "{\n  \"goal\": \"Test\"\n}",
+    }
+    filled_revision = prompts.build_revision_prompt(
+        target_words=500,
+        min_words=450,
+        max_words=550,
+        context=sample_context,
+    )
+    assert "Team" in filled_revision
+    assert "Iteration: 2" in filled_revision
+    assert "Text zur Überarbeitung:\nEntwurf" in filled_revision
 
 
 def test_prompt_templates_emphasize_quality_controls() -> None:
@@ -88,7 +109,9 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Zielwortzahl" in prompts.SECTION_PROMPT
     assert "Mindestlänge" in prompts.SECTION_PROMPT
     assert "Stil:" in prompts.SECTION_PROMPT
-    assert prompts.REVISION_PROMPT.strip() == ""
+    revision_template = prompts.REVISION_PROMPT.strip()
+    assert "Überarbeite den folgenden" in revision_template
+    assert "Halte Format" in revision_template
     assert "Poliere" in prompts.REVISION_SYSTEM_PROMPT
     assert "Markdown" in prompts.REVISION_SYSTEM_PROMPT
     assert "Fassung" in prompts.REVISION_SYSTEM_PROMPT

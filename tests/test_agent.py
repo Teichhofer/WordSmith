@@ -370,14 +370,18 @@ def test_revision_stage_is_stateless(
     result = agent._revise_with_llm(source_text, 1, {"goal": "Test"})
 
     assert result == "Überarbeitet"
-    assert captured["prompt"] == source_text.strip()
-    assert "Briefing" not in captured["prompt"]
+    prompt_text = captured["prompt"]
+    assert prompt_text.startswith("Überarbeite den folgenden Memo")
+    assert "Zielgruppe: Team" in prompt_text
+    assert "\"goal\": \"Test\"" in prompt_text
+    assert "Text zur Überarbeitung:\nAktueller Text mit Kontext." in prompt_text
     base_prompt = prompts.REVISION_SYSTEM_PROMPT.strip()
     assert captured["system_prompt"].startswith(base_prompt)
     compliance_instruction = prompts.COMPLIANCE_HINT_INSTRUCTION.strip()
     if compliance_instruction:
         assert compliance_instruction in captured["system_prompt"]
     min_words, max_words = agent._calculate_word_limits(agent.word_count)
+    assert f"Wortkorridor: {min_words}–{max_words}" in prompt_text
     assert f"{min_words}-{max_words}" in captured["system_prompt"]
     assert captured["prompt_type"] == "revision"
 
