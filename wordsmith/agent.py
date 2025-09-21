@@ -1258,7 +1258,11 @@ class WriterAgent:
         llm_log = self.logs_dir / "llm.log"
         min_words, max_words = self._calculate_word_limits(self.word_count)
 
-        llm_entry = {
+        telemetry_entries = [dict(entry) for entry in self._telemetry]
+
+        summary_entry = {
+            "entry_type": "summary",
+            "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
             "stage": "pipeline",
             "provider": self.config.llm_provider,
             "model": self.config.llm_model,
@@ -1288,13 +1292,21 @@ class WriterAgent:
             },
             "events": run_entries,
             "llm_generation": self._llm_generation,
-            "telemetry": self._telemetry,
             "runtime_seconds": self._run_duration,
+            "telemetry_entry_count": len(telemetry_entries),
         }
-        llm_log.write_text(
-            json.dumps(llm_entry, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
+
+        log_lines = [json.dumps(summary_entry, ensure_ascii=False)]
+        for telemetry_entry in telemetry_entries:
+            entry = dict(telemetry_entry)
+            entry.setdefault("entry_type", "telemetry")
+            entry.setdefault(
+                "timestamp",
+                datetime.now().astimezone().isoformat(timespec="seconds"),
+            )
+            log_lines.append(json.dumps(entry, ensure_ascii=False))
+
+        llm_log.write_text("\n".join(log_lines) + "\n", encoding="utf-8")
 
     @property
     def runtime_seconds(self) -> float | None:
@@ -1370,6 +1382,8 @@ class WriterAgent:
         }
         if abort_reason:
             entry["abort_reason"] = abort_reason
+        entry["timestamp"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        entry["entry_type"] = "telemetry"
         self._telemetry.append(entry)
 
     def _format_artifact_path(self, path: Path) -> str:
