@@ -55,6 +55,61 @@ _CLI_OPTION_MAP: dict[str, str] = {
 VALID_REGISTERS = dict(REGISTER_ALIASES)
 
 
+def _strip_json_comments(text: str) -> str:
+    """Remove // and /* */ comments from a JSON string."""
+
+    result: list[str] = []
+    index = 0
+    length = len(text)
+    in_string = False
+
+    while index < length:
+        char = text[index]
+
+        if in_string:
+            result.append(char)
+            if char == "\\":
+                index += 1
+                if index < length:
+                    result.append(text[index])
+            elif char == "\"":
+                in_string = False
+            index += 1
+            continue
+
+        if char == "\"":
+            in_string = True
+            result.append(char)
+            index += 1
+            continue
+
+        if char == "/" and index + 1 < length:
+            next_char = text[index + 1]
+            if next_char == "/":
+                index += 2
+                while index < length and text[index] != "\n":
+                    index += 1
+                if index < length:
+                    result.append("\n")
+                    index += 1
+                continue
+            if next_char == "*":
+                index += 2
+                while index < length:
+                    if index + 1 < length and text[index] == "*" and text[index + 1] == "/":
+                        index += 2
+                        break
+                    if text[index] == "\n":
+                        result.append("\n")
+                    index += 1
+                continue
+
+        result.append(char)
+        index += 1
+
+    return "".join(result)
+
+
 class _ProgressPrinter:
     def __init__(self, total_steps: int, stream: TextIO | None = None) -> None:
         self.total_steps = max(1, total_steps)
@@ -266,7 +321,9 @@ def _load_input_file(path: Path) -> List[str]:
         )
 
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        raw_text = path.read_text(encoding="utf-8")
+        cleaned = _strip_json_comments(raw_text)
+        data = json.loads(cleaned)
     except json.JSONDecodeError as exc:  # pragma: no cover - defensive
         raise _InputFileError(
             f"Einstellungsdatei konnte nicht gelesen werden: {exc}"

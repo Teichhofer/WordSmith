@@ -170,6 +170,63 @@ def test_input_file_allows_cli_overrides(
     assert captured_kwargs["sources_allowed"] is False
 
 
+def test_input_file_supports_commented_lines(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_path = tmp_path / "settings.json"
+    settings_path.write_text(
+        """{
+  // \"config\": \"settings.local.json\",
+  \"title\": \"Kommentar-Titel\",
+  \"content\": \"Kommentar-Inhalt\",
+  \"text_type\": \"Leitfaden\",
+  \"word_count\": 180,
+  \"iterations\": 1, // nur einmal laufen lassen
+  \"llm_provider\": \"openai\",
+  \"audience\": \"Team\",
+  \"tone\": \"locker\",
+  \"register\": \"du\",
+  \"variant\": \"DE-DE\",
+  \"constraints\": \"Keine Floskeln\",
+  \"sources_allowed\": true,
+  \"seo_keywords\": [\"Alpha\"],
+  \"include_compliance_note\": false,
+  \"ollama_model\": \"mistral\",
+  /* \"ollama_base_url\": \"http://localhost:11434\", */
+  \"output_dir\": \"output\",
+  \"logs_dir\": \"logs\"
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
+    monkeypatch.setattr("cli.load_config", lambda _: config)
+    monkeypatch.setattr("cli.prompts.set_system_prompt", lambda prompt: None)
+
+    captured_kwargs: dict[str, object] = {}
+
+    class DummyAgent:
+        runtime_seconds = 0.0
+
+        def __init__(self, **kwargs: object) -> None:
+            captured_kwargs.update(kwargs)
+
+        def run(self) -> str:
+            return "Mit Kommentaren"
+
+    monkeypatch.setattr("cli.WriterAgent", DummyAgent)
+
+    exit_code = main(["automatikmodus", "--input-file", str(settings_path)])
+
+    assert exit_code == 0
+    assert captured_kwargs["topic"] == "Kommentar-Titel"
+    assert config.llm_provider == "openai"
+    assert captured_kwargs["sources_allowed"] is True
+    assert captured_kwargs["seo_keywords"] == ["Alpha"]
+
+
 def test_input_file_reports_errors(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

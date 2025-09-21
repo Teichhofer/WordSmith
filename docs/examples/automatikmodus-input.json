@@ -18,6 +18,8 @@
   ],
   "include_compliance_note": true,
   "ollama_model": "mistral",
+  // "ollama_base_url": "http://localhost:11434",
+  // "config": "pfade/zu/konfiguration.json",
   "output_dir": "output",
   "logs_dir": "logs"
 }
