@@ -11,7 +11,12 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from wordsmith import llm, prompts
-from wordsmith.agent import WriterAgent, WriterAgentError, _load_json_object
+from wordsmith.agent import (
+    OutlineSection,
+    WriterAgent,
+    WriterAgentError,
+    _load_json_object,
+)
 from wordsmith.config import Config
 
 
@@ -210,6 +215,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert metadata["final_word_count"] == agent._count_words(final_output)
     assert metadata["rubric_passed"] is True
     assert metadata["system_prompts"] == dict(prompts.STAGE_SYSTEM_PROMPTS)
+    assert metadata["source_research"] == []
     assert compliance["checks"]
     stages = {entry["stage"] for entry in compliance["checks"]}
     assert stages == {"draft", "revision_01"}
@@ -240,6 +246,118 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert telemetry_entry["token_limit"] == config.token_limit
     assert telemetry_entry["parameters"]["top_p"] == 1.0
     assert telemetry_entry["prompt_type"]
+
+
+def test_perform_source_research_uses_outline_titles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 220)
+    config.source_search_query_count = 2
+
+    agent = WriterAgent(
+        topic="Erneuerbare Energie",
+        word_count=220,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Analyse",
+        audience="Vorstand",
+        tone="nüchtern",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=True,
+    )
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Marktüberblick",
+            role="Hook",
+            budget=100,
+            deliverable="Aktuelle Studien zusammenfassen.",
+        ),
+        OutlineSection(
+            number="2",
+            title="Förderprogramme",
+            role="Argument",
+            budget=120,
+            deliverable="Relevante Programme vergleichen.",
+        ),
+    ]
+
+    captured_queries: list[str] = []
+    responses = [
+        [{"title": "Studie A", "url": "https://example.com/a", "snippet": "A"}],
+        [{"title": "Programm B", "url": "https://example.com/b", "snippet": "B"}],
+    ]
+
+    def fake_search(self: WriterAgent, query: str) -> list[dict[str, str]]:
+        captured_queries.append(query)
+        return responses[len(captured_queries) - 1]
+
+    monkeypatch.setattr(WriterAgent, "_search_duckduckgo", fake_search)
+
+    agent._perform_source_research(sections)
+
+    expected_queries = [
+        "Erneuerbare Energie Marktüberblick",
+        "Erneuerbare Energie Förderprogramme",
+    ]
+    assert captured_queries == expected_queries
+    assert agent._source_research_results == [
+        {"query": expected_queries[0], "results": responses[0]},
+        {"query": expected_queries[1], "results": responses[1]},
+    ]
+
+    stored_results = json.loads(
+        (config.output_dir / "source_research.json").read_text(encoding="utf-8")
+    )
+    assert stored_results == agent._source_research_results
+
+    assert agent._run_events
+    summary_event = agent._run_events[-1]
+    assert summary_event["step"] == "source_research"
+    assert summary_event["status"] == "info"
+    assert summary_event["data"] == {"queries": 2, "results": 2}
+
+
+def test_perform_source_research_skips_without_sources(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 180)
+    config.source_search_query_count = 3
+
+    agent = WriterAgent(
+        topic="Digitalisierung",
+        word_count=180,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Status quo",
+            role="Hook",
+            budget=90,
+            deliverable="Aktuelle Projekte benennen.",
+        )
+    ]
+
+    agent._perform_source_research(sections)
+
+    assert agent._source_research_results == []
+    assert not (config.output_dir / "source_research.json").exists()
+    assert not any(event["step"] == "source_research" for event in agent._run_events)
 
 
 def test_agent_parses_briefing_from_code_block(
@@ -443,6 +561,7 @@ def test_agent_raises_when_llm_fails(tmp_path: Path, monkeypatch: pytest.MonkeyP
     config = _build_config(tmp_path, 200)
     config.llm_provider = "ollama"
     config.llm_model = "mistral"
+    config.source_search_query_count = 0
 
     responses = deque(
         [
@@ -538,6 +657,7 @@ def test_text_type_fix_applied_when_needed(
     assert fix_file == fix_response
     assert "text_type_fix" in agent.steps
     assert metadata["rubric_passed"] is True
+    assert metadata["source_research"] == []
     assert not responses
 
 

@@ -11,6 +11,9 @@ from time import perf_counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, List, Mapping, Sequence
+from urllib.error import URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from . import llm, prompts
 from .config import Config, LLMParameters
@@ -40,6 +43,11 @@ _SENSITIVE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?<!\[ENTFERNT: )\b(?P<term>sensibel(?:e[nr]?|n)?)\b", re.IGNORECASE),
     re.compile(r"(?<!\[ENTFERNT: )\b(?P<term>personenbezogene?n? daten)\b", re.IGNORECASE),
 )
+
+
+_DUCKDUCKGO_API_URL = "https://api.duckduckgo.com/"
+_DUCKDUCKGO_TIMEOUT = 10
+_MAX_DUCKDUCKGO_RESULTS = 5
 
 
 def _extract_json_object(text: str, start_index: int = 0) -> tuple[str, int] | None:
@@ -263,6 +271,9 @@ class WriterAgent:
     _run_duration: float | None = field(init=False, default=None)
     _compliance_note: str = field(init=False, default="")
     _telemetry: List[dict[str, Any]] = field(init=False, default_factory=list)
+    _source_research_results: List[dict[str, Any]] = field(
+        init=False, default_factory=list
+    )
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -417,6 +428,7 @@ class WriterAgent:
         self._llm_generation = None
         self._rubric_passed = None
         self._telemetry.clear()
+        self._source_research_results.clear()
 
         self._record_run_event(
             "start",
@@ -476,6 +488,8 @@ class WriterAgent:
                 ],
                 data={"sections": len(outline_sections)},
             )
+
+            self._perform_source_research(outline_sections)
 
             draft = self._generate_draft_from_outline(
                 briefing,
@@ -840,6 +854,184 @@ class WriterAgent:
                 section.role = "Abschnitt"
 
         return cleaned
+
+    def _perform_source_research(
+        self, sections: Sequence[OutlineSection]
+    ) -> None:
+        self._source_research_results.clear()
+        if not self.sources_allowed:
+            return
+
+        try:
+            query_limit = int(self.config.source_search_query_count)
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            query_limit = 0
+
+        if query_limit <= 0:
+            return
+
+        queries = self._generate_source_queries(sections, query_limit)
+        if not queries:
+            return
+
+        aggregated: List[dict[str, Any]] = []
+        total_results = 0
+
+        for query in queries:
+            try:
+                hits = self._search_duckduckgo(query)
+            except WriterAgentError as exc:
+                self._record_run_event(
+                    "source_research",
+                    "DuckDuckGo-Suche fehlgeschlagen",
+                    status="warning",
+                    data={"query": query, "error": str(exc)},
+                )
+                hits = []
+            aggregated.append({"query": query, "results": hits})
+            total_results += len(hits)
+
+        if not aggregated:
+            return
+
+        self._source_research_results = aggregated
+        artifact_path = self.output_dir / "source_research.json"
+        self._write_json(artifact_path, aggregated)
+        self._record_run_event(
+            "source_research",
+            "DuckDuckGo-Recherche abgeschlossen",
+            status="info",
+            artifacts=[artifact_path],
+            data={"queries": len(aggregated), "results": total_results},
+        )
+
+    def _generate_source_queries(
+        self, sections: Sequence[OutlineSection], limit: int
+    ) -> List[str]:
+        queries: List[str] = []
+        seen: set[str] = set()
+
+        def _add(candidate: str) -> None:
+            cleaned = re.sub(r"\s+", " ", candidate).strip(" .")
+            if not cleaned:
+                return
+            normalized = cleaned.lower()
+            if normalized in seen:
+                return
+            seen.add(normalized)
+            queries.append(cleaned)
+
+        for section in sections:
+            if len(queries) >= limit:
+                break
+            fragment = section.title.strip()
+            if fragment:
+                _add(f"{self.topic} {fragment}")
+
+        if len(queries) < limit:
+            for section in sections:
+                if len(queries) >= limit:
+                    break
+                deliverable = section.deliverable.strip()
+                if not deliverable:
+                    continue
+                if "liefergegenstand" in deliverable.lower():
+                    continue
+                _add(f"{self.topic} {deliverable}")
+
+        if len(queries) < limit:
+            _add(f"{self.topic} Hintergrund")
+
+        return queries[:limit]
+
+    def _search_duckduckgo(self, query: str) -> List[dict[str, str]]:
+        params = {
+            "q": query,
+            "format": "json",
+            "no_redirect": "1",
+            "no_html": "1",
+            "skip_disambig": "1",
+        }
+        request = Request(
+            f"{_DUCKDUCKGO_API_URL}?{urlencode(params)}",
+            headers={
+                "User-Agent": "WordSmith/1.0 (+https://github.com/)",
+                "Accept": "application/json",
+            },
+        )
+        try:
+            with urlopen(request, timeout=_DUCKDUCKGO_TIMEOUT) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                payload = response.read().decode(charset, errors="replace")
+        except (URLError, OSError, TimeoutError) as exc:  # pragma: no cover - network
+            raise WriterAgentError("DuckDuckGo-Anfrage fehlgeschlagen.") from exc
+
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+            raise WriterAgentError("DuckDuckGo-Antwort konnte nicht gelesen werden.") from exc
+
+        results: List[dict[str, str]] = []
+
+        def _append_result(title: str, url: str, snippet: str) -> None:
+            cleaned_title = title.strip() or url.strip()
+            cleaned_url = url.strip()
+            cleaned_snippet = snippet.strip() or cleaned_title
+            if not cleaned_url:
+                return
+            results.append(
+                {
+                    "title": cleaned_title,
+                    "url": cleaned_url,
+                    "snippet": cleaned_snippet,
+                }
+            )
+
+        abstract = data.get("AbstractText")
+        abstract_url = data.get("AbstractURL")
+        heading = data.get("Heading")
+        if isinstance(abstract, str) and isinstance(abstract_url, str):
+            _append_result(str(heading or query), abstract_url, abstract)
+
+        direct_results = data.get("Results")
+        if isinstance(direct_results, list):
+            for entry in direct_results:
+                if not isinstance(entry, dict):
+                    continue
+                text = entry.get("Text")
+                url_value = entry.get("FirstURL")
+                if isinstance(text, str) and isinstance(url_value, str):
+                    _append_result(text, url_value, text)
+
+        def _extract_related(items: Sequence[Any]) -> None:
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                topics = item.get("Topics")
+                if isinstance(topics, list):
+                    _extract_related(topics)
+                    continue
+                text = item.get("Text")
+                url_value = item.get("FirstURL")
+                if isinstance(text, str) and isinstance(url_value, str):
+                    _append_result(text, url_value, text)
+
+        related = data.get("RelatedTopics")
+        if isinstance(related, list):
+            _extract_related(related)
+
+        unique_results: List[dict[str, str]] = []
+        seen_urls: set[str] = set()
+        for entry in results:
+            url_value = entry.get("url", "")
+            if not url_value or url_value in seen_urls:
+                continue
+            seen_urls.add(url_value)
+            unique_results.append(entry)
+            if len(unique_results) >= _MAX_DUCKDUCKGO_RESULTS:
+                break
+
+        return unique_results
 
     def _generate_draft_from_outline(
         self,
@@ -1262,8 +1454,13 @@ class WriterAgent:
     # ------------------------------------------------------------------
     # Output helpers
     # ------------------------------------------------------------------
-    def _write_json(self, path: Path, data: dict) -> None:
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    def _write_json(
+        self, path: Path, data: Mapping[str, Any] | Sequence[Any]
+    ) -> None:
+        path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
 
     def _write_text(self, path: Path, text: str) -> None:
         path.write_text(text.strip() + "\n", encoding="utf-8")
@@ -1291,6 +1488,22 @@ class WriterAgent:
             "system_prompts": dict(prompts.STAGE_SYSTEM_PROMPTS),
             "compliance_checks": [dict(entry) for entry in self._compliance_audit],
             "latest_compliance_note": self._compliance_note or "",
+            "source_research": [
+                {
+                    "query": str(entry.get("query", "")),
+                    "results": [
+                        {
+                            "title": str(result.get("title", "")),
+                            "url": str(result.get("url", "")),
+                            "snippet": str(result.get("snippet", "")),
+                        }
+                        for result in entry.get("results", [])
+                        if isinstance(result, dict)
+                    ],
+                }
+                for entry in self._source_research_results
+                if isinstance(entry, dict)
+            ],
         }
         self._write_json(self.output_dir / "metadata.json", metadata)
 
@@ -1326,6 +1539,18 @@ class WriterAgent:
             "text_type": self.text_type,
             "messages": briefing.get("messages", []),
             "outline": [asdict(section) for section in outline_sections],
+            "source_research": [
+                {
+                    "query": entry.get("query"),
+                    "results": [
+                        dict(result)
+                        for result in entry.get("results", [])
+                        if isinstance(result, dict)
+                    ],
+                }
+                for entry in self._source_research_results
+                if isinstance(entry, dict)
+            ],
             "prompts": {
                 "briefing": prompts.BRIEFING_PROMPT.strip(),
                 "idea": prompts.IDEA_IMPROVEMENT_PROMPT.strip(),

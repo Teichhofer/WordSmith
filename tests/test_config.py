@@ -5,11 +5,14 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+import pytest
+
 from wordsmith.config import (
     DEFAULT_LLM_PROVIDER,
     MIN_CONTEXT_LENGTH,
     MIN_TOKEN_LIMIT,
     Config,
+    ConfigError,
     load_config,
 )
 
@@ -88,6 +91,7 @@ def test_cleanup_temporary_outputs_removes_previous_run_files(tmp_path: Path) ->
         config.output_dir / "briefing.json",
         config.output_dir / "idea.txt",
         config.output_dir / "outline.txt",
+        config.output_dir / "source_research.json",
         config.output_dir / "current_text.txt",
         config.output_dir / "text_type_check.txt",
         config.output_dir / "text_type_fix.txt",
@@ -105,3 +109,34 @@ def test_cleanup_temporary_outputs_removes_previous_run_files(tmp_path: Path) ->
     for path in temporary_files:
         assert not path.exists()
     assert final_file.exists()
+
+
+def test_load_config_supports_source_search_query_count(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        """
+        {
+            "source_search_query_count": 5
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.source_search_query_count == 5
+
+
+def test_load_config_rejects_negative_source_query_count(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        """
+        {
+            "source_search_query_count": -1
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="darf nicht negativ"):
+        load_config(config_path)

@@ -19,6 +19,7 @@ TEMPORARY_OUTPUT_PATTERNS: tuple[str, ...] = (
     "briefing.json",
     "idea.txt",
     "outline.txt",
+    "source_research.json",
     "current_text.txt",
     "text_type_check.txt",
     "text_type_fix.txt",
@@ -69,6 +70,7 @@ class Config:
     token_limit: int = 1024
     system_prompt: Optional[str] = None
     word_count: int = 0
+    source_search_query_count: int = 3
 
     def __post_init__(self) -> None:
         self.output_dir = Path(self.output_dir)
@@ -76,6 +78,8 @@ class Config:
         self.prompt_config_path = Path(self.prompt_config_path)
         self.ensure_directories()
         self._apply_minimum_limits()
+        if self.source_search_query_count < 0:
+            raise ConfigError("`source_search_query_count` darf nicht negativ sein.")
 
     def adjust_for_word_count(self, word_count: int) -> None:
         """Store the desired word count and ensure it is sensible."""
@@ -153,6 +157,11 @@ def _update_config_from_dict(config: Config, data: Dict[str, Any]) -> None:
             if not isinstance(value, dict):
                 raise ConfigError("LLM-Einstellungen müssen ein Objekt sein.")
             config.llm.update(value)
+        elif key == "source_search_query_count":
+            count = int(value)
+            if count < 0:
+                raise ConfigError("`source_search_query_count` darf nicht negativ sein.")
+            config.source_search_query_count = count
         else:
             raise ConfigError(f"Unbekannter Konfigurationsschlüssel: {key}")
 
