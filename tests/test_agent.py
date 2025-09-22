@@ -515,6 +515,7 @@ def test_revision_stage_is_stateless(
     assert "Zielgruppe: Team" in prompt_text
     assert "\"goal\": \"Test\"" in prompt_text
     assert "Text zur Überarbeitung:\nAktueller Text mit Kontext." in prompt_text
+    assert prompts.REVISION_REFLECTION_HEADER not in prompt_text
     base_prompt = prompts.REVISION_SYSTEM_PROMPT.strip()
     assert captured["system_prompt"].startswith(base_prompt)
     compliance_instruction = prompts.COMPLIANCE_HINT_INSTRUCTION.strip()
@@ -525,6 +526,60 @@ def test_revision_stage_is_stateless(
     assert f"{min_words}-{max_words}" in captured["system_prompt"]
     assert captured["prompt_type"] == "revision"
 
+def test_revision_prompt_includes_reflection_suggestions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 200)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama2"
+
+    agent = WriterAgent(
+        topic="Reflexionsintegration",
+        word_count=200,
+        steps=[],
+        iterations=1,
+        config=config,
+        content="",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+        include_compliance_note=True,
+    )
+
+    captured_prompt: dict[str, str] = {}
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: dict[str, object] | None = None,
+    ) -> str:
+        captured_prompt["stage"] = stage
+        captured_prompt["prompt"] = prompt
+        captured_prompt["system_prompt"] = system_prompt
+        captured_prompt["prompt_type"] = prompt_type
+        return "Überarbeitet"
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    source_text = "Erste Version"
+    improvements = "1. Einstieg zuspitzen (Absatz 1)"
+    result = agent._revise_with_llm(source_text, 2, {"goal": "Test"}, improvements)
+
+    assert result == "Überarbeitet"
+    prompt_text = captured_prompt["prompt"]
+    assert prompts.REVISION_REFLECTION_HEADER in prompt_text
+    assert improvements in prompt_text
+    assert captured_prompt["prompt_type"] == "revision"
 
 
 def test_call_llm_stage_enforces_token_reserve(
