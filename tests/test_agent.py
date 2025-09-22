@@ -41,6 +41,96 @@ def _llm_result(text: str, raw_override: Mapping[str, Any] | None = None) -> llm
     return llm.LLMResult(text=text, raw=payload)
 
 
+def test_build_section_prompt_includes_full_previous_text(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 200)
+
+    agent = WriterAgent(
+        topic="Test",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Artikel",
+        audience="Leser",
+        tone="neutral",
+        register="Du",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Einleitung",
+            role="Hook",
+            budget=100,
+            deliverable="Aufhänger",
+        ),
+        OutlineSection(
+            number="2",
+            title="Hauptteil",
+            role="Analyse",
+            budget=100,
+            deliverable="Vertiefung",
+        ),
+    ]
+    compiled_sections = [(sections[0], "Erster Abschnitt.\nNoch etwas.")]
+
+    prompt = agent._build_section_prompt(
+        briefing={"goal": "Test"},
+        sections=sections,
+        section=sections[1],
+        idea_text="Kerngedanke",
+        compiled_sections=compiled_sections,
+    )
+
+    expected_block = (
+        "**Bisheriger Text (vollständig)**:\n"
+        "## 1. Einleitung\n\nErster Abschnitt.\nNoch etwas."
+    )
+    assert expected_block in prompt
+
+
+def test_build_section_prompt_handles_missing_previous_text(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 150)
+
+    agent = WriterAgent(
+        topic="Test",
+        word_count=150,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Artikel",
+        audience="Leser",
+        tone="neutral",
+        register="Du",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    section = OutlineSection(
+        number="1",
+        title="Einleitung",
+        role="Hook",
+        budget=150,
+        deliverable="Aufhänger",
+    )
+
+    prompt = agent._build_section_prompt(
+        briefing={"goal": "Test"},
+        sections=[section],
+        section=section,
+        idea_text="Kerngedanke",
+        compiled_sections=[],
+    )
+
+    assert "**Bisheriger Text (vollständig)**:\nNoch kein Abschnitt verfasst." in prompt
+
+
 def test_generate_briefing_includes_word_count(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

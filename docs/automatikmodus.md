@@ -81,7 +81,8 @@ der enthält
 * die Kernaussagen aus Schritt 2,
 * Stilrichtlinien mit Ton, Register, Sprachvariante, Constraints,
   SEO-Keywords und Quellenmodus sowie
-* einen Recap des vorherigen Abschnitts (die letzten ca. 60 Tokens).
+* einen Recap des vorherigen Abschnitts (die letzten ca. 60 Tokens) sowie
+  den vollständigen, bislang generierten Text zur inhaltlichen Anknüpfung.
 
 `_generate_draft_from_outline()` ruft daraufhin das LLM je Abschnitt auf.
 Die Ergebnisse werden mit Markdown-Überschriften kombiniert und laufend in
