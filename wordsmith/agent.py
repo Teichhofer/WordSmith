@@ -512,8 +512,12 @@ class WriterAgent:
                 ],
             )
 
+            pending_reflection: str | None = None
+
             for iteration in range(1, self.iterations + 1):
-                revised = self._revise_with_llm(draft, iteration, briefing)
+                revised = self._revise_with_llm(
+                    draft, iteration, briefing, pending_reflection
+                )
                 if revised is None:
                     raise WriterAgentError(
                         f"Revision {iteration:02d} konnte nicht generiert werden."
@@ -551,6 +555,9 @@ class WriterAgent:
                         artifacts=[reflection_path],
                         data={"iteration": iteration},
                     )
+                    pending_reflection = reflection.strip() or None
+                else:
+                    pending_reflection = None
 
             final_output_path = self._write_final_output(draft)
             final_word_count = self._count_words(draft)
@@ -1280,6 +1287,7 @@ class WriterAgent:
         iteration: Any,
         min_words: int,
         max_words: int,
+        reflection: str | None = None,
     ) -> dict[str, Any]:
         keywords = ", ".join(self.seo_keywords or []) if self.seo_keywords else "Keine"
         if not keywords:
@@ -1293,7 +1301,9 @@ class WriterAgent:
         else:
             briefing_text = "[Keine Briefing-Daten übergeben.]"
 
-        return {
+        reflection_text = (reflection or "").strip()
+
+        context = {
             "text": text,
             "text_type": self.text_type,
             "audience": self.audience,
@@ -1310,21 +1320,31 @@ class WriterAgent:
             "briefing": briefing_text,
         }
 
-    def _revise_with_llm(self, text: str, iteration: int, briefing: dict) -> str | None:
+        if reflection_text:
+            context["improvement_suggestions"] = reflection_text
+
+        return context
+
+    def _revise_with_llm(
+        self, text: str, iteration: int, briefing: dict, reflection: str | None = None
+    ) -> str | None:
         min_words, max_words = self._calculate_word_limits(self.word_count)
         clean_text = text.strip()
+        reflection_text = (reflection or "").strip()
         prompt_context = self._build_revision_prompt_context(
             text=clean_text,
             briefing=briefing,
             iteration=iteration,
             min_words=min_words,
             max_words=max_words,
+            reflection=reflection_text or None,
         )
         prompt_text = prompts.build_revision_prompt(
             target_words=self.word_count,
             min_words=min_words,
             max_words=max_words,
             context=prompt_context,
+            improvement_suggestions=reflection_text or None,
         )
         system_prompt = prompts.REVISION_SYSTEM_PROMPT.strip()
         length_hint = (
@@ -1570,7 +1590,9 @@ class WriterAgent:
                         iteration="{iteration}",
                         min_words=min_words,
                         max_words=max_words,
+                        reflection="{improvement_suggestions}",
                     ),
+                    improvement_suggestions="{improvement_suggestions}",
                 ),
             },
             "events": run_entries,

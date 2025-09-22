@@ -93,6 +93,7 @@ REVISION_SYSTEM_PROMPT: str = ""
 REFLECTION_SYSTEM_PROMPT: str = ""
 FINAL_DRAFT_SYSTEM_PROMPT: str = ""
 COMPLIANCE_HINT_INSTRUCTION: str = ""
+REVISION_REFLECTION_HEADER: str = "Verbesserungsfokus aus letzter Reflexion:"
 
 
 def _read_prompt_config(
@@ -322,6 +323,7 @@ def build_revision_prompt(
     min_words: int,
     max_words: int,
     context: Mapping[str, Any] | None = None,
+    improvement_suggestions: str | None = None,
 ) -> str:
     """Return the revision prompt, optionally with the compliance hint appended."""
 
@@ -341,6 +343,14 @@ def build_revision_prompt(
         )
     else:
         prompt = ""
+
+    suggestions_text = (improvement_suggestions or "").strip()
+    if suggestions_text:
+        suggestions_block = f"{REVISION_REFLECTION_HEADER}\n{suggestions_text}"
+        if prompt:
+            prompt = f"{prompt}\n\n{suggestions_block}"
+        else:
+            prompt = suggestions_block
 
     if not include_compliance_hint:
         return prompt
