@@ -99,6 +99,31 @@ def test_prompt_templates_match_configuration() -> None:
     assert "Iteration: 2" in filled_revision
     assert "Text zur Überarbeitung:\nEntwurf" in filled_revision
 
+    improvement_text = "1. Einleitung schärfen (Absatz 1)"
+    revision_with_guidance = prompts.build_revision_prompt(
+        target_words=500,
+        min_words=450,
+        max_words=550,
+        context=sample_context,
+        improvement_suggestions=improvement_text,
+    )
+    assert prompts.REVISION_REFLECTION_HEADER in revision_with_guidance
+    assert improvement_text in revision_with_guidance
+    if compliance_instruction:
+        revision_with_hint = prompts.build_revision_prompt(
+            include_compliance_hint=True,
+            target_words=500,
+            min_words=450,
+            max_words=550,
+            context=sample_context,
+            improvement_suggestions=improvement_text,
+        )
+        assert revision_with_hint.endswith(compliance_instruction)
+        assert (
+            revision_with_hint.index(prompts.REVISION_REFLECTION_HEADER)
+            < revision_with_hint.rindex(compliance_instruction)
+        )
+
 
 def test_prompt_templates_emphasize_quality_controls() -> None:
     """The curated prompts must retain critical quality and safety guidance."""
