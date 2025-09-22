@@ -95,6 +95,93 @@ def test_generate_briefing_includes_word_count(
     assert captured["prompt_type"] == "briefing"
 
 
+def test_section_prompt_includes_full_previous_text(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 200)
+    agent = WriterAgent(
+        topic="Serial", 
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Roman",
+        audience="Leser:innen",
+        tone="spannend",
+        register="Du",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    section_one = OutlineSection(
+        number="1",
+        title="Einleitung",
+        role="Hook",
+        budget=100,
+        deliverable="Spannung erzeugen",
+    )
+    section_two = OutlineSection(
+        number="2",
+        title="Konflikt",
+        role="Drama",
+        budget=100,
+        deliverable="Konflikt zuspitzen",
+    )
+
+    previous_text = "Der Auftakt legt die Welt dar und führt die Heldin ein."
+    prompt = agent._build_section_prompt(
+        briefing={"goal": "Test", "audience": "Leser:innen"},
+        sections=[section_one, section_two],
+        section=section_two,
+        idea_text="- Konflikt klar darstellen",
+        compiled_sections=[(section_one, previous_text)],
+    )
+
+    marker = "**Bisheriger Text (vollständige Abschnitte):**"
+    assert marker in prompt
+    section_block = prompt.split(marker, 1)[1]
+    context_block = section_block.split("\n\nBriefing:", 1)[0]
+    assert previous_text in context_block
+    assert context_block.count(previous_text) == 1
+
+
+def test_section_prompt_handles_missing_previous_sections(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 150)
+    agent = WriterAgent(
+        topic="Serial",
+        word_count=150,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Roman",
+        audience="Leser:innen",
+        tone="spannend",
+        register="Du",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    section_one = OutlineSection(
+        number="1",
+        title="Einleitung",
+        role="Hook",
+        budget=150,
+        deliverable="Spannung erzeugen",
+    )
+
+    prompt = agent._build_section_prompt(
+        briefing={"goal": "Test"},
+        sections=[section_one],
+        section=section_one,
+        idea_text="",
+        compiled_sections=[],
+    )
+
+    assert "Noch kein Abschnitt verfasst." in prompt
+
+
 def test_load_json_object_handles_invalid_escape_sequences() -> None:
     malformed = '{"goal": "Test", "key\\_terms": ["KI"], "messages": ["Hinweis"]}'
 

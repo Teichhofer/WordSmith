@@ -1178,6 +1178,7 @@ class WriterAgent:
         ).strip()
         idea_clean = idea_text.strip() or "[KLÄREN: Idee ergänzen]"
         recap = self._build_previous_section_recap(compiled_sections)
+        previous_sections_text = previous_text or "Noch kein Abschnitt verfasst."
 
         min_words, max_words = self._calculate_word_limits(section.budget)
         style_guidelines = self._compose_style_guidelines()
@@ -1193,6 +1194,7 @@ class WriterAgent:
                 max_woerter=max_words,
                 stilrichtlinien=style_guidelines,
                 previous_section_recap=recap,
+                previous_sections_text=previous_sections_text,
             ).strip()
             + "\n\nBriefing:\n"
             + json.dumps(briefing, ensure_ascii=False, indent=2)
@@ -1200,8 +1202,6 @@ class WriterAgent:
             + self._format_outline_for_prompt(sections)
             + "\n\nKernaussagen:\n"
             + idea_clean
-            + "\n\nBisheriger Text:\n"
-            + (previous_text or "Noch kein Abschnitt verfasst.")
         )
 
     def _calculate_word_limits(self, budget: int) -> tuple[int, int]:
