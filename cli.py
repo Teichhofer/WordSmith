@@ -43,6 +43,7 @@ _CLI_OPTION_MAP: dict[str, str] = {
     "variant": "--variant",
     "constraints": "--constraints",
     "sources_allowed": "--sources-allowed",
+    "include_outline_headings": "--outline-headings",
     "seo_keywords": "--seo-keywords",
     "include_compliance_note": "--compliance-hint",
     "config": "--config",
@@ -306,6 +307,9 @@ def _build_setting_tokens(key: str, value: object) -> List[str]:
     if key == "sources_allowed":
         allowed = _coerce_bool_from_input(key, value)
         return [option, "true" if allowed else "false"]
+    if key == "include_outline_headings":
+        include = _coerce_bool_from_input(key, value)
+        return [option, "true" if include else "false"]
     if key == "seo_keywords":
         formatted = _format_keywords_argument(value)
         return [option, formatted]
@@ -445,6 +449,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_SOURCES_ALLOWED,
         dest="sources_allowed",
         help="Ob Quellenangaben erlaubt sind (ja/nein).",
+    )
+    automatik_parser.add_argument(
+        "--outline-headings",
+        type=_parse_bool,
+        default=True,
+        dest="include_outline_headings",
+        help="Ob die Outline-Überschriften im finalen Text stehen bleiben (ja/nein).",
     )
     automatik_parser.add_argument(
         "--seo-keywords",
@@ -624,6 +635,7 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
         sources_allowed=args.sources_allowed,
         seo_keywords=args.seo_keywords,
         include_compliance_note=args.include_compliance_note,
+        include_outline_headings=args.include_outline_headings,
         progress_callback=progress_printer,
     )
 

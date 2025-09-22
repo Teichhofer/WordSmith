@@ -258,6 +258,7 @@ class WriterAgent:
     seo_keywords: Sequence[str] | None = None
     progress_callback: Callable[[dict[str, Any]], None] | None = None
     include_compliance_note: bool = False
+    include_outline_headings: bool = True
 
     output_dir: Path = field(init=False)
     logs_dir: Path = field(init=False)
@@ -283,6 +284,7 @@ class WriterAgent:
 
         self.steps = list(self.steps or [])
         self.seo_keywords = [kw.strip() for kw in (self.seo_keywords or []) if kw.strip()]
+        self.include_outline_headings = bool(self.include_outline_headings)
         self._apply_input_defaults()
         self.output_dir = Path(self.config.output_dir)
         self.logs_dir = Path(self.config.logs_dir)
@@ -1088,7 +1090,7 @@ class WriterAgent:
                 )
                 return None
 
-            cleaned_section = section_text.strip()
+            cleaned_section = self._normalise_section_text(section, section_text)
             compiled_sections.append((section, cleaned_section))
             aggregate_parts.append(self._format_section_output(section, cleaned_section))
             partial_draft = "\n\n".join(aggregate_parts).strip()
@@ -1111,6 +1113,55 @@ class WriterAgent:
             data={"sections": len(compiled_sections)},
         )
         return draft
+
+    def _normalise_section_text(self, section: OutlineSection, text: str) -> str:
+        cleaned = text.strip()
+        if not cleaned:
+            return ""
+        if self.include_outline_headings:
+            return cleaned
+        return self._strip_section_heading(section, cleaned)
+
+    @staticmethod
+    def _normalise_heading_token(value: str) -> str:
+        cleaned = re.sub(r"[\W_]+", " ", value, flags=re.UNICODE)
+        return " ".join(cleaned.split()).casefold()
+
+    def _strip_section_heading(self, section: OutlineSection, text: str) -> str:
+        lines = text.splitlines()
+        index = 0
+        while index < len(lines) and not lines[index].strip():
+            index += 1
+        if index >= len(lines):
+            return ""
+
+        first_line = lines[index]
+        candidate = self._normalise_heading_token(first_line)
+        title_token = self._normalise_heading_token(section.title)
+        number = section.number.strip()
+        expected: set[str] = set()
+        if title_token:
+            expected.add(title_token)
+        if number:
+            expected.add(self._normalise_heading_token(f"{number}. {section.title}"))
+            expected.add(self._normalise_heading_token(f"{number} {section.title}"))
+
+        matches_expected = False
+        if candidate and expected:
+            if candidate in expected:
+                matches_expected = True
+            else:
+                matches_expected = any(
+                    candidate.endswith(f" {token}") for token in expected if token
+                )
+
+        if not matches_expected:
+            return text.strip()
+
+        remaining = lines[index + 1 :]
+        while remaining and not remaining[0].strip():
+            remaining.pop(0)
+        return "\n".join(remaining).strip()
 
     def _build_section_prompt(
         self,
@@ -1184,6 +1235,9 @@ class WriterAgent:
         sources_note = "Quellenmodus: erlaubt" if self.sources_allowed else "Quellenmodus: gesperrt"
         components.append(sources_note)
 
+        if not self.include_outline_headings:
+            components.append("Outline-Überschriften: weglassen")
+
         return "; ".join(components)
 
     def _build_previous_section_recap(
@@ -1199,8 +1253,13 @@ class WriterAgent:
         )
 
     def _format_section_output(self, section: OutlineSection, text: str) -> str:
+        cleaned = text.strip()
+        if not self.include_outline_headings:
+            return cleaned
         heading = f"## {section.number}. {section.title}".strip()
-        return f"{heading}\n\n{text.strip()}"
+        if cleaned:
+            return f"{heading}\n\n{cleaned}"
+        return heading
 
     def _apply_text_type_review(
         self,
@@ -1502,6 +1561,7 @@ class WriterAgent:
             "final_word_count": self._count_words(text),
             "rubric_passed": self._rubric_passed,
             "sources_allowed": self.sources_allowed,
+            "include_outline_headings": self.include_outline_headings,
             "llm_provider": self.config.llm_provider,
             "llm_model": self.config.llm_model,
             "system_prompt": prompts.SYSTEM_PROMPT,

@@ -229,6 +229,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert metadata["llm_model"] == "llama2"
     assert metadata["final_word_count"] == agent._count_words(final_output)
     assert metadata["rubric_passed"] is True
+    assert metadata["include_outline_headings"] is True
     assert metadata["system_prompts"] == dict(prompts.STAGE_SYSTEM_PROMPTS)
     assert metadata["source_research"] == []
     assert compliance["checks"]
@@ -268,6 +269,69 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert telemetry_entry["tokens_per_second"] == pytest.approx(
         expected_tokens_per_second
     )
+
+
+def test_agent_can_omit_outline_headings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 200)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama2"
+    config.ollama_base_url = "http://ollama.local"
+
+    briefing_payload = {"goal": "Skizze", "messages": ["Leitfaden"], "key_terms": []}
+    idea_text = "- Auftakt strukturieren"
+    outline_text = (
+        "1. Einstieg (Rolle: Hook, Wortbudget: 80 Wörter) -> Spannung erzeugen.\n"
+        "2. Ausblick (Rolle: Fazit, Wortbudget: 120 Wörter) -> Nutzen zuspitzen."
+    )
+    section_one = "## 1. Einstieg\nDer Auftakt führt ins Thema ein und bindet die Leser:innen direkt ein."
+    section_two = "## 2. Ausblick\nDer Ausblick formuliert klar den Mehrwert und ruft zur Aktion auf."
+    text_type_check = "Keine Abweichungen festgestellt."
+
+    responses = deque(
+        [
+            _llm_result(json.dumps(briefing_payload)),
+            _llm_result(idea_text),
+            _llm_result(outline_text),
+            _llm_result(outline_text),
+            _llm_result(section_one),
+            _llm_result(section_two),
+            _llm_result(text_type_check),
+        ]
+    )
+
+    def fake_generate_text(**_: object) -> llm.LLMResult:
+        return responses.popleft()
+
+    monkeypatch.setattr("wordsmith.llm.generate_text", fake_generate_text)
+
+    agent = WriterAgent(
+        topic="Oberfläche ohne Überschriften",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Bitte nur Fließtext.",
+        text_type="Blogartikel",
+        audience="Leser:innen",
+        tone="informativ",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+        include_outline_headings=False,
+    )
+
+    final_output = agent.run()
+
+    assert "##" not in final_output
+    assert final_output.startswith("Der Auftakt führt")
+    assert "Mehrwert" in final_output
+
+    current_text = (config.output_dir / "current_text.txt").read_text(encoding="utf-8").strip()
+    assert current_text == final_output.strip()
+    assert not responses
 
 
 def test_perform_source_research_uses_outline_titles(

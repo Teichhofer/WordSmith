@@ -207,6 +207,7 @@ def test_input_file_supports_commented_lines(
   \"sources_allowed\": true,
   \"seo_keywords\": [\"Alpha\"],
   \"include_compliance_note\": false,
+  \"include_outline_headings\": false,
   \"ollama_model\": \"mistral\",
   /* \"ollama_base_url\": \"http://localhost:11434\", */
   \"output_dir\": \"output\",
@@ -240,6 +241,7 @@ def test_input_file_supports_commented_lines(
     assert config.llm_provider == "openai"
     assert captured_kwargs["sources_allowed"] is True
     assert captured_kwargs["seo_keywords"] == ["Alpha"]
+    assert captured_kwargs["include_outline_headings"] is False
 
 
 def test_input_file_reports_errors(
