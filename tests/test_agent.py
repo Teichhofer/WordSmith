@@ -292,6 +292,9 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     idea_output = (config.output_dir / "idea.txt").read_text(encoding="utf-8").strip()
     outline_output = (config.output_dir / "outline.txt").read_text(encoding="utf-8").strip()
     current_text = (config.output_dir / "current_text.txt").read_text(encoding="utf-8")
+    iteration_output = (
+        config.output_dir / "iteration_02.txt"
+    ).read_text(encoding="utf-8")
     reflection_output = (
         config.output_dir / "reflection_02.txt"
     ).read_text(encoding="utf-8").strip()
@@ -306,6 +309,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
 
     assert "[ENTFERNT: vertrauliche]" in final_output
     assert "[ENTFERNT: vertrauliche]" in current_text
+    assert all(not line.startswith("#") for line in iteration_output.splitlines())
     assert idea_output == idea_text
     assert "Strategiepfad" in outline_output
     assert "Einleitung präzisieren" in reflection_output
