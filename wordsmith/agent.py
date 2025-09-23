@@ -1542,7 +1542,11 @@ class WriterAgent:
         )
 
     def _write_text(self, path: Path, text: str) -> None:
-        path.write_text(text.strip() + "\n", encoding="utf-8")
+        cleaned_text = text.strip()
+        if path.name.startswith("iteration_") and path.suffix == ".txt":
+            lines = [line for line in cleaned_text.splitlines() if not line.startswith("#")]
+            cleaned_text = "\n".join(lines).strip()
+        path.write_text(cleaned_text + "\n", encoding="utf-8")
 
     def _write_final_output(self, text: str) -> Path:
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
