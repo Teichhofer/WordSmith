@@ -128,23 +128,30 @@ def test_prompt_templates_match_configuration() -> None:
 def test_prompt_templates_emphasize_quality_controls() -> None:
     """The curated prompts must retain critical quality and safety guidance."""
 
+    assert "| Abschnitt:" in prompts.COMPLIANCE_HINT_INSTRUCTION
     assert "[KLÄREN: …]" in prompts.BRIEFING_PROMPT
+    assert "Ausgabeformat: genau ein Objekt" in prompts.BRIEFING_PROMPT
     assert "dominierende Sprache der Eingaben" in prompts.BRIEFING_PROMPT
-    assert "handlungsleitenden Formulierungen" in prompts.BRIEFING_PROMPT
+    assert "handlungsleitende Formulierungen" in prompts.BRIEFING_PROMPT
+    assert "Antwortstruktur" in prompts.IDEA_IMPROVEMENT_PROMPT
     assert "[KLÄREN: …]" in prompts.IDEA_IMPROVEMENT_PROMPT
     assert "Fundstelle" in prompts.TEXT_TYPE_CHECK_PROMPT
+    assert "Stütze jede Bewertung" in prompts.TEXT_TYPE_CHECK_PROMPT
     assert "Zielwortzahl" in prompts.SECTION_PROMPT
     assert "Mindestlänge" in prompts.SECTION_PROMPT
     assert "Stil:" in prompts.SECTION_PROMPT
     assert "Qualitätscheck" in prompts.SECTION_PROMPT
     assert "unverkennbar dem im Briefing definierten Texttyp" in prompts.SECTION_PROMPT
+    assert "Verknüpfe sichtbar" in prompts.SECTION_PROMPT
     revision_template = prompts.REVISION_PROMPT.strip()
     assert "Überarbeite den folgenden" in revision_template
     assert "Halte Format" in revision_template
+    assert "dichte Übergänge" in revision_template
     assert "Poliere" in prompts.REVISION_SYSTEM_PROMPT
     assert "Markdown" in prompts.REVISION_SYSTEM_PROMPT
     assert "Fassung" in prompts.REVISION_SYSTEM_PROMPT
     assert "packenden Einstieg" in prompts.FINAL_DRAFT_PROMPT
+    assert "konkrete Handlungen" in prompts.REFLECTION_PROMPT
 
 
 def test_prompt_configuration_has_no_merge_markers() -> None:
