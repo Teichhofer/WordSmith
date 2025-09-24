@@ -192,6 +192,35 @@ def test_load_json_object_handles_invalid_escape_sequences() -> None:
     assert result["key_terms"] == ["KI"]
 
 
+def test_load_json_object_recovers_from_missing_closing_brace() -> None:
+    truncated = (
+        "{\n"
+        "  \"goal\": \"Test\",\n"
+        "  \"key_terms\": [\"KI\", \"keller\"],\n"
+        "  \"messages\": [\n"
+        "    \"Hinweis eins\",\n"
+        "    \"Hinweis zwei\"\n"
+        "  ],\n"
+        "  \"seo_keywords\": [\n"
+        "    \"\",\n"
+        "    \"\"\n"
+        "  ]\n"
+    )
+
+    result = _load_json_object(truncated)
+
+    assert result["goal"] == "Test"
+    assert result["seo_keywords"] == ["", ""]
+
+
+def test_load_json_object_recovers_from_missing_closing_brackets() -> None:
+    truncated = '{"goal": "Test", "messages": ["A", "B"'
+
+    result = _load_json_object(truncated)
+
+    assert result["messages"] == ["A", "B"]
+
+
 def test_agent_requires_llm_configuration(tmp_path: Path) -> None:
     config = _build_config(tmp_path, 200)
 

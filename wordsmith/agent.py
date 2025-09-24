@@ -112,6 +112,55 @@ def _sanitize_invalid_json_escapes(candidate: str) -> str:
     return _INVALID_ESCAPE_RE.sub(_replace, candidate)
 
 
+def _balance_json_brackets(candidate: str) -> str:
+    """Append missing closing brackets/braces for unterminated JSON blocks."""
+
+    if not candidate:
+        return candidate
+
+    stack: list[str] = []
+    result: list[str] = []
+    in_string = False
+    escape = False
+    string_delimiter = ""
+
+    for character in candidate:
+        result.append(character)
+
+        if in_string:
+            if escape:
+                escape = False
+            elif character == "\\":
+                escape = True
+            elif character == string_delimiter:
+                in_string = False
+            continue
+
+        if character in {'"', "'"}:
+            in_string = True
+            string_delimiter = character
+            continue
+
+        if character == "{":
+            stack.append("}")
+            continue
+
+        if character == "[":
+            stack.append("]")
+            continue
+
+        if character in {"}", "]"}:
+            if not stack or stack[-1] != character:
+                return candidate
+            stack.pop()
+
+    if not stack:
+        return candidate
+
+    result.extend(reversed(stack))
+    return "".join(result)
+
+
 def _replace_json_literals(candidate: str) -> str:
     """Convert JSON booleans/null to Python equivalents outside of strings."""
 
@@ -176,6 +225,12 @@ def _parse_json_candidate(candidate: str) -> Any:
                 return json.loads(sanitized)
             except json.JSONDecodeError:
                 candidate = sanitized
+        balanced = _balance_json_brackets(candidate)
+        if balanced != candidate:
+            try:
+                return json.loads(balanced)
+            except json.JSONDecodeError:
+                candidate = balanced
         python_like = _replace_json_literals(candidate)
         try:
             return ast.literal_eval(python_like)
