@@ -330,6 +330,9 @@ class WriterAgent:
     _source_research_results: List[dict[str, Any]] = field(
         init=False, default_factory=list
     )
+    _stage_output_dir: Path = field(init=False)
+    _stage_output_index: int = field(init=False, default=1)
+    _last_stage_output_path: Path | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.word_count <= 0:
@@ -343,6 +346,8 @@ class WriterAgent:
         self._apply_input_defaults()
         self.output_dir = Path(self.config.output_dir)
         self.logs_dir = Path(self.config.logs_dir)
+        self._stage_output_dir = self.logs_dir / "llm_outputs"
+        self._stage_output_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Input normalisation and user hints
@@ -1133,6 +1138,7 @@ class WriterAgent:
         compiled_sections: List[tuple[OutlineSection, str]] = []
         formatted_sections: List[str] = []
         section_summaries: List[dict[str, Any]] = []
+        section_artifacts: List[str] = []
 
         for index, section in enumerate(sections, start=1):
             prompt = self._build_section_prompt(
@@ -1180,6 +1186,9 @@ class WriterAgent:
                 )
                 return None
 
+            artifact_path = self._last_stage_output_path
+            if artifact_path is not None:
+                section_artifacts.append(self._format_artifact_path(artifact_path))
             cleaned_section = self._normalise_section_text(section, section_text)
             if not cleaned_section:
                 cleaned_section = (
@@ -1222,6 +1231,10 @@ class WriterAgent:
             "model": self.config.llm_model,
             "sections": section_summaries,
             "response_preview": final_draft[:400],
+            "section_outputs": section_artifacts,
+            "combined_output": self._format_artifact_path(
+                self.output_dir / "current_text.txt"
+            ),
         }
         self.steps.append("llm_generation")
         self._record_run_event(
@@ -1714,6 +1727,18 @@ class WriterAgent:
             encoding="utf-8",
         )
 
+    def _store_llm_output(self, stage: str, text: str) -> Path:
+        cleaned_stage = re.sub(r"[^0-9A-Za-z_.-]+", "_", stage).strip("_")
+        if not cleaned_stage:
+            cleaned_stage = "stage"
+        index = self._stage_output_index
+        self._stage_output_index += 1
+        filename = f"{index:03d}_{cleaned_stage}.txt"
+        path = self._stage_output_dir / filename
+        content = text if text.endswith("\n") else text + "\n"
+        path.write_text(content, encoding="utf-8")
+        return path
+
     def _write_text(self, path: Path, text: str) -> None:
         cleaned_text = text.strip()
         if path.name.startswith("iteration_") and path.suffix == ".txt":
@@ -2040,6 +2065,7 @@ class WriterAgent:
                 ),
                 context=context,
             )
+        self._last_stage_output_path = None
         try:
             result = llm.generate_text(
                 provider=self.config.llm_provider,
@@ -2076,7 +2102,8 @@ class WriterAgent:
             )
             return None
 
-        text = result.text.strip()
+        raw_text = result.text
+        text = raw_text.strip()
         tokens_per_second = self._calculate_tokens_per_second(result.raw)
         if not text:
             event_data = {"provider": self.config.llm_provider, "model": self.config.llm_model}
@@ -2105,6 +2132,8 @@ class WriterAgent:
             )
             return None
 
+        output_path = self._store_llm_output(stage, raw_text)
+        self._last_stage_output_path = output_path
         event_data = {
             "provider": self.config.llm_provider,
             "model": self.config.llm_model,
@@ -2116,6 +2145,7 @@ class WriterAgent:
             stage,
             success_message,
             status="info",
+            artifacts=[output_path],
             data=event_data,
         )
         prompt_tokens = None
