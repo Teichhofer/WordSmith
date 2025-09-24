@@ -50,6 +50,13 @@ _DUCKDUCKGO_TIMEOUT = 10
 _MAX_DUCKDUCKGO_RESULTS = 5
 
 
+_VARIANT_HINTS: dict[str, str] = {
+    "DE-DE": "Deutsch (Deutschland)",
+    "DE-AT": "Deutsch (Österreich)",
+    "DE-CH": "Deutsch (Schweiz)",
+}
+
+
 def _extract_json_object(text: str, start_index: int = 0) -> tuple[str, int] | None:
     """Return the next balanced JSON object substring and end position.
 
@@ -1048,71 +1055,50 @@ class WriterAgent:
         sections: Sequence[OutlineSection],
         idea_text: str,
     ) -> str | None:
-        compiled_sections: List[tuple[OutlineSection, str]] = []
-        aggregate_parts: List[str] = []
-
-        for index, section in enumerate(sections, start=1):
-            prompt = self._build_section_prompt(
-                briefing=briefing,
-                sections=sections,
-                section=section,
-                idea_text=idea_text,
-                compiled_sections=compiled_sections,
+        prompt = self._build_initial_draft_prompt(
+            briefing=briefing,
+            sections=sections,
+            idea_text=idea_text,
+        )
+        draft = self._call_llm_stage(
+            stage="final_draft_llm",
+            prompt_type="final_draft",
+            prompt=prompt,
+            system_prompt=prompts.FINAL_DRAFT_SYSTEM_PROMPT,
+            success_message="Outline-basierter Entwurf generiert",
+            failure_message="Entwurfsgenerierung fehlgeschlagen",
+            data={"phase": "draft", "target_words": self.word_count},
+        )
+        if not draft:
+            self._llm_generation = {
+                "status": "failed",
+                "provider": self.config.llm_provider,
+                "model": self.config.llm_model,
+            }
+            self._record_run_event(
+                "llm_generation",
+                "Entwurf konnte nicht generiert werden.",
+                status="warning",
+                data={"sections": len(sections)},
             )
-            stage = f"section_{index:02d}_llm"
-            section_text = self._call_llm_stage(
-                stage=stage,
-                prompt_type="section",
-                prompt=prompt,
-                system_prompt=prompts.SECTION_SYSTEM_PROMPT,
-                success_message=f"Abschnitt {index:02d} generiert",
-                failure_message=f"Abschnitt {index:02d} fehlgeschlagen",
-                data={
-                    "phase": "section",
-                    "section": section.number,
-                    "title": section.title,
-                    "target_words": section.budget,
-                },
-            )
-            if not section_text:
-                self._llm_generation = {
-                    "status": "failed",
-                    "provider": self.config.llm_provider,
-                    "model": self.config.llm_model,
-                    "section": section.number,
-                    "title": section.title,
-                }
-                self._record_run_event(
-                    "llm_generation",
-                    f"Abschnitt {index:02d} konnte nicht generiert werden.",
-                    status="warning",
-                    data={"section": section.number, "title": section.title},
-                )
-                return None
+            return None
 
-            cleaned_section = self._normalise_section_text(section, section_text)
-            compiled_sections.append((section, cleaned_section))
-            aggregate_parts.append(self._format_section_output(section, cleaned_section))
-            partial_draft = "\n\n".join(aggregate_parts).strip()
-            self._write_text(self.output_dir / "current_text.txt", partial_draft)
-            self.steps.append(f"section_{index:02d}")
-
-        draft = "\n\n".join(aggregate_parts).strip()
+        cleaned_draft = draft.strip()
         self._llm_generation = {
             "status": "success",
             "provider": self.config.llm_provider,
             "model": self.config.llm_model,
-            "sections": len(compiled_sections),
-            "response_preview": draft[:400],
+            "sections": len(sections),
+            "response_preview": cleaned_draft[:400],
         }
         self.steps.append("llm_generation")
         self._record_run_event(
             "llm_generation",
-            "Abschnittsweise Generierung abgeschlossen",
+            "Outline-basierter Entwurf abgeschlossen",
             status="info",
-            data={"sections": len(compiled_sections)},
+            data={"sections": len(sections)},
         )
-        return draft
+        return cleaned_draft
 
     def _normalise_section_text(self, section: OutlineSection, text: str) -> str:
         cleaned = text.strip()
@@ -1162,6 +1148,64 @@ class WriterAgent:
         while remaining and not remaining[0].strip():
             remaining.pop(0)
         return "\n".join(remaining).strip()
+
+    def _build_initial_draft_prompt(
+        self,
+        *,
+        briefing: Mapping[str, Any],
+        sections: Sequence[OutlineSection],
+        idea_text: str,
+    ) -> str:
+        outline_text = self._format_outline_for_prompt(sections)
+        briefing_json = json.dumps(briefing, ensure_ascii=False, indent=2)
+        idea_bullets = self._format_idea_bullets_for_prompt(idea_text)
+        constraints_note = (self.constraints or "").strip()
+        if not constraints_note:
+            constraints_note = DEFAULT_CONSTRAINTS
+        if not self.include_outline_headings:
+            headings_note = "Outline-Überschriften nicht als Markdown ausgeben"
+            if constraints_note and constraints_note != DEFAULT_CONSTRAINTS:
+                constraints_note = f"{constraints_note}; {headings_note}"
+            else:
+                constraints_note = headings_note
+        keywords = ", ".join(self.seo_keywords or []) if self.seo_keywords else ""
+        if not keywords:
+            keywords = "Keine"
+        sources_mode = (
+            "Externe Quellen erlaubt" if self.sources_allowed else "Keine externen Quellen verwenden"
+        )
+        variant_hint = self._build_variant_hint()
+        prompt = prompts.FINAL_DRAFT_PROMPT.format(
+            text_type=self.text_type,
+            title=self.topic,
+            word_count=self.word_count,
+            briefing_json=briefing_json,
+            outline=outline_text,
+            idea_bullets=idea_bullets,
+            tone=self.tone,
+            register=self.register,
+            variant_hint=variant_hint,
+            sources_mode=sources_mode,
+            constraints=constraints_note,
+            seo_keywords=keywords,
+        )
+        return prompt.strip()
+
+    def _format_idea_bullets_for_prompt(self, idea_text: str) -> str:
+        bullets = [bullet.strip() for bullet in (self._idea_bullets or []) if bullet.strip()]
+        if bullets:
+            return "\n".join(f"- {bullet}" for bullet in bullets)
+        fallback = idea_text.strip()
+        if fallback:
+            return fallback
+        return "[KLÄREN: Kernaussagen aus der Idee ergänzen]"
+
+    def _build_variant_hint(self) -> str:
+        variant = (self.variant or "").strip().upper() or DEFAULT_VARIANT
+        base = _VARIANT_HINTS.get(variant, variant)
+        if not self.include_outline_headings:
+            return f"{base}; Outline-Überschriften nicht als Markdown ausgeben"
+        return base
 
     def _build_section_prompt(
         self,
