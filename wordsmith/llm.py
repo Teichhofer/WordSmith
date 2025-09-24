@@ -4,7 +4,7 @@ import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from .config import LLMParameters, OLLAMA_TIMEOUT_SECONDS
 
@@ -44,6 +44,82 @@ def _normalise_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         cleaned["context_token_count"] = len(context)
         cleaned.pop("context", None)
     return cleaned
+
+
+def _extract_response_fragment(payload: Mapping[str, Any]) -> str:
+    """Return textual content from an Ollama response payload."""
+
+    response = payload.get("response")
+    if isinstance(response, str):
+        return response
+
+    message = payload.get("message")
+    if isinstance(message, Mapping):
+        content = message.get("content")
+        if isinstance(content, str):
+            return content
+
+    messages = payload.get("messages")
+    if isinstance(messages, Sequence):
+        fragments: list[str] = []
+        for entry in messages:
+            if not isinstance(entry, Mapping):
+                continue
+            content = entry.get("content")
+            if isinstance(content, str):
+                fragments.append(content)
+        if fragments:
+            return "".join(fragments)
+
+    return ""
+
+
+def _parse_ollama_response(text: str) -> tuple[str, Dict[str, Any]]:
+    """Parse a (potentially streamed) Ollama response into text and metadata."""
+
+    payloads: list[Dict[str, Any]] = []
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        for line in text.splitlines():
+            candidate = line.strip()
+            if not candidate:
+                continue
+            try:
+                payload = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                payloads.append(payload)
+        if not payloads:
+            raise ValueError("Kein gültiges JSON im Ollama-Response gefunden.")
+    else:
+        if isinstance(payload, dict):
+            payloads.append(payload)
+        else:
+            raise ValueError("Ollama-Response hat kein JSON-Objekt geliefert.")
+
+    fragments = [
+        fragment
+        for fragment in (_extract_response_fragment(payload) for payload in payloads)
+        if fragment
+    ]
+
+    combined_text = "".join(fragments).strip()
+    last_payload = payloads[-1]
+
+    if not combined_text:
+        combined_text = _extract_response_fragment(last_payload).strip()
+
+    if not combined_text:
+        raise ValueError("Ollama-API lieferte keinen Text zurück.")
+
+    raw_payload = _normalise_payload(last_payload)
+    if len(fragments) > 1:
+        raw_payload["response_fragments"] = fragments
+
+    return combined_text, raw_payload
 
 
 def generate_text(
@@ -116,14 +192,17 @@ def _generate_with_ollama(
         ) from exc
 
     try:
-        payload = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        decoded = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
         raise LLMGenerationError(
             "Antwort der Ollama-API konnte nicht interpretiert werden."
         ) from exc
 
-    text = payload.get("response")
-    if not isinstance(text, str) or not text.strip():
-        raise LLMGenerationError("Ollama-API lieferte keinen Text zurück.")
+    try:
+        text, raw_payload = _parse_ollama_response(decoded)
+    except ValueError as exc:
+        raise LLMGenerationError(
+            "Antwort der Ollama-API konnte nicht interpretiert werden."
+        ) from exc
 
-    return LLMResult(text=text.strip(), raw=_normalise_payload(payload))
+    return LLMResult(text=text, raw=raw_payload)
