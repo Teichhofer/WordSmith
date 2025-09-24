@@ -182,6 +182,124 @@ def test_section_prompt_handles_missing_previous_sections(tmp_path: Path) -> Non
     assert "Noch kein Abschnitt verfasst." in prompt
 
 
+def test_call_llm_stage_stores_raw_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _build_config(tmp_path, 150)
+    config.llm_model = "dummy-model"
+
+    agent = WriterAgent(
+        topic="Test",
+        word_count=150,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Story",
+        audience="Publikum",
+        tone="neutral",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    def fake_generate_text(**_: Any) -> llm.LLMResult:
+        return _llm_result("  Rohtext mit Leerzeichen  \nZweite Zeile  ")
+
+    monkeypatch.setattr(llm, "generate_text", fake_generate_text)
+
+    result = agent._call_llm_stage(
+        stage="section_01_llm",
+        prompt_type="section",
+        prompt="Prompt",
+        system_prompt="System",
+        success_message="OK",
+        failure_message="Fehler",
+        data={"phase": "section", "target_words": 75},
+    )
+
+    assert result == "Rohtext mit Leerzeichen  \nZweite Zeile"
+
+    output_files = sorted((config.logs_dir / "llm_outputs").glob("*.txt"))
+    assert len(output_files) == 1
+    stored = output_files[0].read_text(encoding="utf-8")
+    assert stored == "  Rohtext mit Leerzeichen  \nZweite Zeile  \n"
+
+    last_event = agent._run_events[-1]
+    assert "artifacts" in last_event
+    assert last_event["artifacts"][0].startswith("llm_outputs/")
+
+
+def test_generate_draft_records_section_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _build_config(tmp_path, 200)
+    config.llm_model = "dummy-model"
+
+    agent = WriterAgent(
+        topic="Serie",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Roman",
+        audience="Leser",
+        tone="spannend",
+        register="Du",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Einleitung",
+            role="Hook",
+            budget=100,
+            deliverable="Spannung",
+        ),
+        OutlineSection(
+            number="2",
+            title="Hauptteil",
+            role="Konflikt",
+            budget=100,
+            deliverable="Auflösung",
+        ),
+    ]
+
+    stage_outputs = {
+        "section_01_llm": "  Erste Szene mit Geheimnissen.  ",
+        "section_02_llm": "  Zweite Szene mit Auflösung.  ",
+    }
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: dict[str, Any] | None = None,
+    ) -> str:
+        text = stage_outputs[stage]
+        path = self._store_llm_output(stage, text)
+        self._last_stage_output_path = path
+        return text.strip()
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    draft = agent._generate_draft_from_outline({"goal": "Test"}, sections, "Idee")
+
+    assert "Erste Szene" in draft
+    assert "Zweite Szene" in draft
+
+    expected_paths = [
+        agent._format_artifact_path(agent._stage_output_dir / "001_section_01_llm.txt"),
+        agent._format_artifact_path(agent._stage_output_dir / "002_section_02_llm.txt"),
+    ]
+    assert agent._llm_generation["section_outputs"] == expected_paths
+    assert agent._llm_generation["combined_output"] == "current_text.txt"
 def test_load_json_object_handles_invalid_escape_sequences() -> None:
     malformed = '{"goal": "Test", "key\\_terms": ["KI"], "messages": ["Hinweis"]}'
 
