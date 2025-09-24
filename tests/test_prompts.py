@@ -155,8 +155,53 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Poliere" in prompts.REVISION_SYSTEM_PROMPT
     assert "Markdown" in prompts.REVISION_SYSTEM_PROMPT
     assert "Fassung" in prompts.REVISION_SYSTEM_PROMPT
-    assert "packenden Einstieg" in prompts.FINAL_DRAFT_PROMPT
+    final_template = prompts.FINAL_DRAFT_PROMPT
+    assert "Titel: {title}" in final_template
+    assert "Outline:\n{outline}" in final_template
+    assert "Stil: {style}" in final_template
+    assert "Zielwortzahl: {target_words}" in final_template
+    assert "{format_instruction}" in final_template
     assert "konkrete Handlungen" in prompts.REFLECTION_PROMPT
+
+
+def test_build_final_draft_prompt_removes_meta_guidance() -> None:
+    """The final draft prompt collapses to the requested minimalist form."""
+
+    outline = (
+        "1. Auftakt (Rolle: Hook, Budget: 200 Wörter) -> Setup\n"
+        "    - Fokus: Spannung\n"
+        "2. Finale (Rolle: Abschluss, Budget: 180 Wörter)"
+    )
+    prompt_text = prompts.buildFinalDraftPrompt(
+        title="Erfolgsgeschichte",
+        outline=outline,
+        style="Ton: inspirierend; Register: Du",
+        targetWords=500,
+    )
+
+    assert prompt_text.startswith("Titel: Erfolgsgeschichte")
+    assert "Outline:\n1. Auftakt" in prompt_text
+    assert "Rolle" not in prompt_text
+    assert "Budget" not in prompt_text
+    assert "->" not in prompt_text
+    assert "Stil: Ton: inspirierend; Register: Du" in prompt_text
+    assert "Zielwortzahl: 500" in prompt_text
+    assert prompt_text.endswith("Gib nur den Fließtext zurück.")
+
+
+def test_build_final_draft_prompt_accepts_custom_output_format() -> None:
+    """Custom output instructions can replace the default text-only hint."""
+
+    prompt_text = prompts.buildFinalDraftPrompt(
+        title="Whitepaper",
+        outline="1. Einleitung",
+        style="Ton: sachlich",
+        targetWords=1200,
+        output_format="Bitte als Markdown mit Überschriften liefern.",
+    )
+
+    assert prompt_text.endswith("Bitte als Markdown mit Überschriften liefern.")
+    assert "Gib nur den Fließtext zurück." not in prompt_text
 
 
 def test_prompt_configuration_has_no_merge_markers() -> None:

@@ -50,13 +50,6 @@ _DUCKDUCKGO_TIMEOUT = 10
 _MAX_DUCKDUCKGO_RESULTS = 5
 
 
-_VARIANT_HINTS: dict[str, str] = {
-    "DE-DE": "Deutsch (Deutschland)",
-    "DE-AT": "Deutsch (Österreich)",
-    "DE-CH": "Deutsch (Schweiz)",
-}
-
-
 def _extract_json_object(text: str, start_index: int = 0) -> tuple[str, int] | None:
     """Return the next balanced JSON object substring and end position.
 
@@ -1232,55 +1225,14 @@ class WriterAgent:
         idea_text: str,
     ) -> str:
         outline_text = self._format_outline_for_prompt(sections)
-        briefing_json = json.dumps(briefing, ensure_ascii=False, indent=2)
-        idea_bullets = self._format_idea_bullets_for_prompt(idea_text)
-        constraints_note = (self.constraints or "").strip()
-        if not constraints_note:
-            constraints_note = DEFAULT_CONSTRAINTS
-        if not self.include_outline_headings:
-            headings_note = "Outline-Überschriften nicht als Markdown ausgeben"
-            if constraints_note and constraints_note != DEFAULT_CONSTRAINTS:
-                constraints_note = f"{constraints_note}; {headings_note}"
-            else:
-                constraints_note = headings_note
-        keywords = ", ".join(self.seo_keywords or []) if self.seo_keywords else ""
-        if not keywords:
-            keywords = "Keine"
-        sources_mode = (
-            "Externe Quellen erlaubt" if self.sources_allowed else "Keine externen Quellen verwenden"
-        )
-        variant_hint = self._build_variant_hint()
-        prompt = prompts.FINAL_DRAFT_PROMPT.format(
-            text_type=self.text_type,
+        style_summary = self._compose_final_style_summary()
+        return prompts.buildFinalDraftPrompt(
             title=self.topic,
-            word_count=self.word_count,
-            briefing_json=briefing_json,
             outline=outline_text,
-            idea_bullets=idea_bullets,
-            tone=self.tone,
-            register=self.register,
-            variant_hint=variant_hint,
-            sources_mode=sources_mode,
-            constraints=constraints_note,
-            seo_keywords=keywords,
+            style=style_summary,
+            targetWords=self.word_count,
+            output_format="text-only",
         )
-        return prompt.strip()
-
-    def _format_idea_bullets_for_prompt(self, idea_text: str) -> str:
-        bullets = [bullet.strip() for bullet in (self._idea_bullets or []) if bullet.strip()]
-        if bullets:
-            return "\n".join(f"- {bullet}" for bullet in bullets)
-        fallback = idea_text.strip()
-        if fallback:
-            return fallback
-        return "[KLÄREN: Kernaussagen aus der Idee ergänzen]"
-
-    def _build_variant_hint(self) -> str:
-        variant = (self.variant or "").strip().upper() or DEFAULT_VARIANT
-        base = _VARIANT_HINTS.get(variant, variant)
-        if not self.include_outline_headings:
-            return f"{base}; Outline-Überschriften nicht als Markdown ausgeben"
-        return base
 
     def _build_section_prompt(
         self,
@@ -1328,6 +1280,41 @@ class WriterAgent:
         minimum = max(1, math.floor(budget * (1 - tolerance)))
         maximum = max(minimum, math.ceil(budget * (1 + tolerance)))
         return minimum, maximum
+
+    def _compose_final_style_summary(self) -> str:
+        components: list[str] = []
+        if self.text_type:
+            components.append(f"Texttyp: {self.text_type}")
+        if self.tone:
+            components.append(f"Ton: {self.tone}")
+        if self.register:
+            components.append(f"Register: {self.register}")
+        if self.variant:
+            components.append(f"Variante: {self.variant}")
+        if self.audience:
+            components.append(f"Zielgruppe: {self.audience}")
+
+        constraints = (self.constraints or "").strip()
+        if constraints:
+            components.append(f"Zusatzvorgaben: {constraints}")
+
+        if self.seo_keywords:
+            keyword_list = ", ".join(keyword for keyword in self.seo_keywords if keyword)
+            if keyword_list:
+                components.append(f"Keywords: {keyword_list}")
+
+        if self.sources_allowed:
+            components.append("Quellenmodus: externe Quellen erlaubt")
+        else:
+            components.append("Quellenmodus: keine externen Quellen nutzen")
+
+        components.append(
+            "Outline-Überschriften übernehmen"
+            if self.include_outline_headings
+            else "Outline-Überschriften weglassen"
+        )
+
+        return "; ".join(components)
 
     def _compose_style_guidelines(self) -> str:
         components: list[str] = []

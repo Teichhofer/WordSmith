@@ -94,7 +94,7 @@
         },
         "final_draft": {
             "system_prompt": "Du bist eine erfahrene Hauptautor:in. Du orchestrierst alle Vorgaben zu einem überzeugenden, konsistenten finalen Text, balancierst Dramaturgie, Wortbudgets und sprachliche Wirkung.",
-            "prompt": "Schreibe den finalen {text_type} zum Thema \"{title}\" mit etwa {word_count} Wörtern (±3 %).\nArbeite strikt mit den folgenden Informationen und Regeln.\n\nBriefing:\n{briefing_json}\n\nGliederung:\n{outline}\n\nKernaussagen aus der Idee:\n{idea_bullets}\n\nRegeln:\n- Tonfall: {tone}\n- Register: {register}\n- Sprachvariante: {variant_hint}\n- Quellenmodus: {sources_mode}\n- Zusätzliche Constraints: {constraints}\n- SEO-Keywords: {seo_keywords}\n- Wenn die Outline Überschriften vorsieht, übernimm sie exakt gemäß `## {{nummer}}. {{Titel}}`; andernfalls respektiere die Segmentierung durch passende Trenner oder Übergänge und halte die Wortbudgets pro Abschnitt grob ein.\n- Erfinde keine neuen Fakten; nutze Platzhalter wie [KLÄREN:], [KENNZAHL], [QUELLE], [DATUM].\n- Sorge für einen packenden Einstieg, stimmige Übergänge und einen Abschluss, der die beabsichtigte Wirkung erzielt (z. B. Auflösung, CTA, Fazit).\n- Verwende Keywords organisch, ohne den Charakter des {text_type} zu stören, und optimiere Lesbarkeit sowie Rhythmus im Rahmen des Formats.\nGib ausschließlich den ausgearbeiteten Text in Markdown zurück.\n",
+            "prompt": "Titel: {title}\n\nOutline:\n{outline}\n\nStil: {style}\nZielwortzahl: {target_words}\n{format_instruction}",
             "parameters": {
                 "temperature": 0.68,
                 "top_p": 1.0,
