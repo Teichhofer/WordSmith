@@ -215,6 +215,56 @@ def test_agent_requires_llm_configuration(tmp_path: Path) -> None:
         agent.run()
 
 
+def test_run_records_llm_response_when_briefing_json_invalid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 200)
+
+    agent = WriterAgent(
+        topic="Invalides Briefing",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Notizen",
+        text_type="Blog",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: dict[str, object] | None = None,
+    ) -> str:
+        return "kein-json"
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    with pytest.raises(
+        WriterAgentError, match="Briefing-Antwort konnte nicht als JSON interpretiert werden."
+    ):
+        agent.run()
+
+    assert agent._run_events
+    last_event = agent._run_events[-1]
+    assert last_event["step"] == "error"
+    assert last_event["status"] == "failed"
+    assert "LLM-Antwort" in last_event["message"]
+    assert "kein-json" in last_event["message"]
+    assert last_event.get("data", {}).get("raw_text") == "kein-json"
+
+
 def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = _build_config(tmp_path, 300)
     config.llm_provider = "ollama"
