@@ -364,5 +364,90 @@ def build_revision_prompt(
     return compliance_hint
 
 
+def _clean_final_outline(outline: str | None) -> str:
+    """Return a simplified outline limited to numbered section headings."""
+
+    if not outline:
+        return ""
+
+    cleaned_lines: list[str] = []
+    for raw_line in outline.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        stripped = stripped.lstrip("# ").strip()
+        if not stripped or not stripped[0].isdigit():
+            continue
+
+        candidate = stripped
+        for marker in ("->", "("):
+            index = candidate.find(marker)
+            if index != -1:
+                candidate = candidate[:index]
+        candidate = " ".join(candidate.split())
+        if candidate:
+            cleaned_lines.append(candidate)
+
+    return "\n".join(cleaned_lines)
+
+
+def _normalise_target_words(value: Any) -> str:
+    """Return a stringified positive word target or a clarification request."""
+
+    try:
+        words = int(value)
+    except (TypeError, ValueError):
+        return "[KLÄREN: Zielwortzahl bestimmen]"
+
+    if words <= 0:
+        return "[KLÄREN: Zielwortzahl bestimmen]"
+    return str(words)
+
+
+def _format_final_instruction(output_format: str | None) -> str:
+    """Translate ``output_format`` into the final line of the prompt."""
+
+    if output_format is None:
+        return ""
+
+    cleaned = output_format.strip()
+    if not cleaned:
+        return ""
+
+    if cleaned == "text-only":
+        return "Gib nur den Fließtext zurück."
+
+    return cleaned
+
+
+def buildFinalDraftPrompt(
+    title: str,
+    outline: str,
+    style: str,
+    targetWords: int,
+    *,
+    output_format: str = "text-only",
+) -> str:
+    """Create the final draft prompt limited to essential guidance."""
+
+    cleaned_title = (title or "").strip() or "[KLÄREN: Titel ergänzen]"
+    cleaned_outline = _clean_final_outline(outline)
+    if not cleaned_outline:
+        cleaned_outline = "[KLÄREN: Outline ergänzen]"
+
+    cleaned_style = (style or "").strip() or "[KLÄREN: Stil definieren]"
+    target_words_value = _normalise_target_words(targetWords)
+    format_instruction = _format_final_instruction(output_format)
+
+    prompt = FINAL_DRAFT_PROMPT.format(
+        title=cleaned_title,
+        outline=cleaned_outline,
+        style=cleaned_style,
+        target_words=target_words_value,
+        format_instruction=format_instruction,
+    )
+    return prompt.strip()
+
+
 # Load prompt templates immediately so the module exposes populated constants.
 load_prompt_config()
