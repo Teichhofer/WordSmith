@@ -130,3 +130,19 @@ def test_generate_text_handles_streaming_payload(monkeypatch):
         "Erster Teil ",
         "und zweiter Abschnitt.",
     ]
+
+
+def test_prepare_options_include_stop_and_num_predict_defaults() -> None:
+    params = LLMParameters()
+
+    options = llm._prepare_options(params)
+
+    assert options["num_predict"] == 900
+    assert options["stop"] == []
+
+    params.update({"num_predict": 256, "stop": ["ENDE"]})
+
+    updated = llm._prepare_options(params)
+
+    assert updated["num_predict"] == 256
+    assert updated["stop"] == ["ENDE"]

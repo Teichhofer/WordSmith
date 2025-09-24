@@ -13,6 +13,7 @@ from wordsmith.config import (
     MIN_TOKEN_LIMIT,
     Config,
     ConfigError,
+    LLMParameters,
     load_config,
 )
 
@@ -29,8 +30,8 @@ def test_config_initialisation_creates_directories(tmp_path):
 
 def test_adjust_for_word_count_scales_limits_and_sets_determinism():
     config = Config()
-    config.llm.temperature = 0.7
-    config.llm.top_p = 0.5
+    config.llm.temperature = 0.58
+    config.llm.top_p = 0.65
     config.llm.presence_penalty = 1.2
     config.llm.frequency_penalty = -0.2
     config.llm.seed = None
@@ -40,8 +41,8 @@ def test_adjust_for_word_count_scales_limits_and_sets_determinism():
     assert config.word_count == 600
     assert config.context_length == 8192
     assert config.token_limit == 8192
-    assert config.llm.temperature == 0.7
-    assert config.llm.top_p == 1.0
+    assert config.llm.temperature == 0.58
+    assert config.llm.top_p == 0.65
     assert config.llm.presence_penalty == 0.05
     assert config.llm.frequency_penalty == 0.05
     assert config.llm.seed == 42
@@ -140,3 +141,22 @@ def test_load_config_rejects_negative_source_query_count(tmp_path: Path) -> None
 
     with pytest.raises(ConfigError, match="darf nicht negativ"):
         load_config(config_path)
+
+
+def test_llm_parameters_support_max_tokens_alias_and_stop_normalisation() -> None:
+    params = LLMParameters()
+
+    params.update({"max_tokens": 512, "stop": ["", "ENDE", "  Schluss "]})
+
+    assert params.num_predict == 512
+    assert params.has_override("num_predict")
+    assert params.stop == ("ENDE", "Schluss")
+
+
+def test_adjust_for_word_count_respects_num_predict_override() -> None:
+    config = Config()
+    config.llm.update({"num_predict": 1200})
+
+    config.adjust_for_word_count(600)
+
+    assert config.llm.num_predict == 1200

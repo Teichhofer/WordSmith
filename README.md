@@ -160,15 +160,20 @@ entsprechen den Attributen des `Config`-Dataclasses, u. a.:
 * `prompt_config_path` – Pfad zur JSON-Datei mit den Prompt-Templates
 * `llm` (Objekt mit Parametern wie `temperature`, `top_p`, `seed`)
 
+Ohne weitere Anpassung generiert WordSmith bis zu 900 Tokens pro Aufruf
+(`llm.num_predict`, alias `llm.max_tokens`), wobei der Wert vollständig
+konfigurierbar bleibt.
+
 `Config.adjust_for_word_count(word_count)` setzt den gewünschten Umfang,
 skalieren `context_length` auf mindestens `word_count * 4` (mindestens
 8192) und `token_limit` auf mindestens `word_count * 1,9` (ebenfalls
 mindestens 8192). Gleichzeitig werden deterministische LLM-Parameter
-gesetzt (`temperature=0.7`, `top_p=1.0`, `presence_penalty=0.05`,
-`frequency_penalty=0.05`, Seed 42); falls verfügbar, wird `num_predict`
-auf das Token-Limit angepasst. `ensure_directories()` erstellt Output- und
-Log-Ordner, `cleanup_temporary_outputs()` entfernt Artefakte früherer
-Läufe.
+für `presence_penalty`, `frequency_penalty` und die Seed-Einstellung
+vereinheitlicht; `temperature` und `top_p` behalten die in der
+Konfiguration definierten Werte. Falls verfügbar, wird `num_predict`
+auf das Token-Limit angepasst, sofern kein eigener Wert konfiguriert
+wurde. `ensure_directories()` erstellt Output- und Log-Ordner,
+`cleanup_temporary_outputs()` entfernt Artefakte früherer Läufe.
 
 Die mitgelieferte Datei `wordsmith/prompts_config.json` enthält alle
 Prompt-Templates. Wird ein eigener Satz benötigt, kann `prompt_config_path`

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 
 DEFAULT_LLM_PROVIDER: str = "ollama"
@@ -41,18 +41,58 @@ class LLMParameters:
     presence_penalty: float = 0.05
     frequency_penalty: float = 0.05
     seed: Optional[int] = 42
-    num_predict: Optional[int] = None
+    num_predict: Optional[int] = 900
+    stop: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        # Track user-provided overrides so stage prompts can respect them.
+        if not hasattr(self, "_overrides"):
+            self._overrides: set[str] = set()
+        self.stop = self._normalise_stop(self.stop)
 
     def update(self, values: Dict[str, Any]) -> None:
         """Update the stored parameters with validated values."""
 
         for key, value in values.items():
-            if not hasattr(self, key):
+            normalised_key = "num_predict" if key == "max_tokens" else key
+            if not hasattr(self, normalised_key):
                 raise ConfigError(f"Unbekannter LLM-Parameter: {key}")
-            if key in {"seed", "num_predict"}:
-                setattr(self, key, None if value is None else int(value))
+            if normalised_key in {"seed", "num_predict"}:
+                setattr(
+                    self,
+                    normalised_key,
+                    None if value is None else int(value),
+                )
+            elif normalised_key == "stop":
+                self.stop = self._normalise_stop(value)
             else:
-                setattr(self, key, float(value))
+                setattr(self, normalised_key, float(value))
+            self._overrides.add(normalised_key)
+
+    def has_override(self, key: str) -> bool:
+        """Return ``True`` when the value was explicitly provided by the user."""
+
+        return key in self._overrides
+
+    @staticmethod
+    def _normalise_stop(value: Any) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return (cleaned,) if cleaned else ()
+        if isinstance(value, Sequence):
+            stops: list[str] = []
+            for entry in value:
+                if entry is None:
+                    continue
+                cleaned = str(entry).strip()
+                if cleaned:
+                    stops.append(cleaned)
+            return tuple(stops)
+        raise ConfigError(
+            "LLM-Stop-Sequenzen müssen als String oder Liste von Strings angegeben werden."
+        )
 
 
 @dataclass
@@ -95,14 +135,13 @@ class Config:
         self.token_limit = max(8192, int(self.word_count * 1.9))
         self._apply_minimum_limits()
 
-        # Ensure deterministic generation parameters for reproducible runs.
-        self.llm.temperature = 0.7
-        self.llm.top_p = 1.0
+        # Ensure deterministic generation parameters for reproducible runs while
+        # respecting configurable sampling controls.
         self.llm.presence_penalty = 0.05
         self.llm.frequency_penalty = 0.05
         if hasattr(self.llm, "seed"):
             self.llm.seed = 42
-        if hasattr(self.llm, "num_predict"):
+        if hasattr(self.llm, "num_predict") and not self.llm.has_override("num_predict"):
             self.llm.num_predict = self.token_limit
 
     def ensure_directories(self) -> None:

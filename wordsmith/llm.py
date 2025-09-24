@@ -32,6 +32,18 @@ def _prepare_options(parameters: LLMParameters) -> Dict[str, Any]:
         options["seed"] = parameters.seed
     if getattr(parameters, "num_predict", None) is not None:
         options["num_predict"] = int(parameters.num_predict)
+    stop_sequences = getattr(parameters, "stop", ())
+    if stop_sequences is None:
+        options["stop"] = []
+    elif isinstance(stop_sequences, str):
+        cleaned = stop_sequences.strip()
+        options["stop"] = [cleaned] if cleaned else []
+    else:
+        options["stop"] = [
+            str(entry).strip()
+            for entry in stop_sequences
+            if str(entry).strip()
+        ]
     return options
 
 

@@ -1821,6 +1821,8 @@ class WriterAgent:
             base.num_predict = getattr(self.config.llm, "num_predict", None)
         overrides = prompts.STAGE_PROMPT_PARAMETERS.get(prompt_type, {})
         for key, value in overrides.items():
+            if key in {"temperature", "top_p"} and self.config.llm.has_override(key):
+                continue
             if hasattr(base, key):
                 setattr(base, key, value)
         return base
