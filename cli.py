@@ -643,6 +643,15 @@ def _run_automatikmodus(args: argparse.Namespace) -> int:
         final_text = agent.run()
     except WriterAgentError as exc:
         print(f"Automatikmodus konnte nicht abgeschlossen werden: {exc}", file=sys.stderr)
+        raw_text = getattr(exc, "context", {}).get("raw_text") if hasattr(exc, "context") else None
+        if raw_text:
+            raw_text_str = str(raw_text).rstrip()
+            if raw_text_str:
+                print(
+                    "LLM-Antwort (konnte nicht als JSON interpretiert werden):",
+                    file=sys.stderr,
+                )
+                print(raw_text_str, file=sys.stderr)
         _print_runtime(agent.runtime_seconds, stream=sys.stderr)
         return 1
 

@@ -23,6 +23,7 @@ from cli import (
     main,
 )
 from wordsmith import llm
+from wordsmith.agent import WriterAgentError
 from wordsmith.ollama import OllamaModel
 from wordsmith.config import Config
 
@@ -298,6 +299,56 @@ def test_cli_can_be_interrupted_with_keyboard_interrupt(
 
     assert exit_code == 130
     assert "Abbruch durch Benutzer" in captured.err
+
+
+def test_automatikmodus_prints_llm_response_on_briefing_json_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = Config(output_dir=tmp_path / "output", logs_dir=tmp_path / "logs")
+
+    monkeypatch.setattr("cli.load_config", lambda _: config)
+    monkeypatch.setattr("cli.prompts.set_system_prompt", lambda prompt: None)
+    monkeypatch.setattr("cli.prompts.load_prompt_config", lambda path: None)
+
+    raw_text = "{\"antwort\": \"ungültig\"}"
+
+    class FailingAgent:
+        def __init__(self, **kwargs: object) -> None:
+            self.progress_callback = kwargs.get("progress_callback")
+            self.runtime_seconds = 2.8
+
+        def run(self) -> str:
+            raise WriterAgentError(
+                "Briefing-Antwort konnte nicht als JSON interpretiert werden.",
+                context={"raw_text": raw_text},
+            )
+
+    monkeypatch.setattr("cli.WriterAgent", FailingAgent)
+
+    args = [
+        "automatikmodus",
+        "--title",
+        "Fehlgeschlagenes Briefing",
+        "--content",
+        "Ausgangstext",
+        "--text-type",
+        "Blog",
+        "--word-count",
+        "150",
+        "--llm-provider",
+        "openai",
+    ]
+
+    exit_code = main(args)
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Briefing-Antwort konnte nicht als JSON interpretiert werden." in captured.err
+    assert "LLM-Antwort (konnte nicht als JSON interpretiert werden):" in captured.err
+    assert raw_text in captured.err
+    assert "Gesamtlaufzeit" in captured.err
 
 
 def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

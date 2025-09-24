@@ -593,18 +593,30 @@ class WriterAgent:
             return draft
         except Exception as exc:
             run_error = exc
-            message = (
+            is_writer_error = isinstance(exc, WriterAgentError)
+            base_message = (
                 f"Automatikmodus konnte nicht abgeschlossen werden: {exc}"
-                if isinstance(exc, WriterAgentError)
+                if is_writer_error
                 else f"Automatikmodus unerwartet abgebrochen: {exc}"
             )
+            message = base_message
+            if is_writer_error and getattr(exc, "context", None):
+                raw_text_value = exc.context.get("raw_text")
+                if raw_text_value:
+                    raw_text = str(raw_text_value).rstrip()
+                    if raw_text:
+                        message = (
+                            f"{base_message}\n"
+                            "LLM-Antwort (konnte nicht als JSON interpretiert werden):\n"
+                            f"{raw_text}"
+                        )
             runtime_seconds = perf_counter() - self._run_started_at
             self._run_duration = runtime_seconds
             error_data = {
                 "error": str(exc),
                 "exception_type": exc.__class__.__name__,
             }
-            if isinstance(exc, WriterAgentError) and exc.context:
+            if is_writer_error and exc.context:
                 error_data.update(exc.context)
             error_data["runtime_seconds"] = runtime_seconds
             self._record_run_event(
