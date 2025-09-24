@@ -131,6 +131,7 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "| Abschnitt:" in prompts.COMPLIANCE_HINT_INSTRUCTION
     assert "[KLÄREN: …]" in prompts.BRIEFING_PROMPT
     assert "Ausgabeformat: genau ein Objekt" in prompts.BRIEFING_PROMPT
+    assert "kein Markdown, keine Codeblöcke" in prompts.BRIEFING_PROMPT
     assert "dominierende Sprache der Eingaben" in prompts.BRIEFING_PROMPT
     assert "handlungsleitende Formulierungen" in prompts.BRIEFING_PROMPT
     assert "Antwortstruktur" in prompts.IDEA_IMPROVEMENT_PROMPT
