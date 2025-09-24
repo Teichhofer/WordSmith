@@ -236,8 +236,10 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
         "1. Auftakt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext setzen.\n"
         "2. Strategiepfad (Rolle: Argument, Wortbudget: 140 Wörter) -> Entscheidung stützen."
     )
-    section_one = "Der Auftakt liefert vertrauliche Einblicke und schafft Klarheit."
-    section_two = "Der Strategiepfad benennt vertrauliche Kennzahlen und den Ausblick."
+    final_draft_text = (
+        "## 1. Auftakt\nDer Auftakt liefert vertrauliche Einblicke und schafft Klarheit.\n\n"
+        "## 2. Strategiepfad\nDer Strategiepfad benennt vertrauliche Kennzahlen und den Ausblick."
+    )
     text_type_check = "Keine Abweichungen festgestellt."
     compliance_note = "[COMPLIANCE-HINWEIS: Bitte Quellen final prüfen.]"
     revision_text = (
@@ -257,8 +259,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
             _llm_result(idea_text),
             _llm_result(outline_text),
             _llm_result(outline_text),
-            _llm_result(section_one),
-            _llm_result(section_two),
+            _llm_result(final_draft_text),
             _llm_result(text_type_check),
             _llm_result(revision_text),
             _llm_result(reflection_text),
@@ -376,8 +377,10 @@ def test_agent_can_omit_outline_headings(
         "1. Einstieg (Rolle: Hook, Wortbudget: 80 Wörter) -> Spannung erzeugen.\n"
         "2. Ausblick (Rolle: Fazit, Wortbudget: 120 Wörter) -> Nutzen zuspitzen."
     )
-    section_one = "## 1. Einstieg\nDer Auftakt führt ins Thema ein und bindet die Leser:innen direkt ein."
-    section_two = "## 2. Ausblick\nDer Ausblick formuliert klar den Mehrwert und ruft zur Aktion auf."
+    final_draft_text = (
+        "Der Auftakt führt ins Thema ein und bindet die Leser:innen direkt ein.\n\n"
+        "Der Ausblick formuliert klar den Mehrwert und ruft zur Aktion auf."
+    )
     text_type_check = "Keine Abweichungen festgestellt."
 
     responses = deque(
@@ -386,8 +389,7 @@ def test_agent_can_omit_outline_headings(
             _llm_result(idea_text),
             _llm_result(outline_text),
             _llm_result(outline_text),
-            _llm_result(section_one),
-            _llm_result(section_two),
+            _llm_result(final_draft_text),
             _llm_result(text_type_check),
         ]
     )
@@ -565,8 +567,10 @@ def test_agent_parses_briefing_from_code_block(
         "1. Einstieg (Rolle: Hook, Wortbudget: 90 Wörter) -> Interesse wecken.\n"
         "2. Vorteile (Rolle: Argument, Wortbudget: 190 Wörter) -> Nutzen erklären."
     )
-    section_one = "Der Einstieg adressiert bestehende Nutzer:innen und motiviert zum Weiterlesen."
-    section_two = "Im Vorteilsteil wird erläutert, wie Innovation den Alltag vereinfacht."
+    final_draft_text = (
+        "## 1. Einstieg\nDer Einstieg adressiert bestehende Nutzer:innen und motiviert zum Weiterlesen.\n\n"
+        "## 2. Vorteile\nIm Vorteilsteil wird erläutert, wie Innovation den Alltag vereinfacht."
+    )
     text_type_check = "Keine Abweichungen festgestellt."
 
     responses = deque(
@@ -575,8 +579,7 @@ def test_agent_parses_briefing_from_code_block(
             _llm_result(idea_text),
             _llm_result(outline_text),
             _llm_result(outline_text),
-            _llm_result(section_one),
-            _llm_result(section_two),
+            _llm_result(final_draft_text),
             _llm_result(text_type_check),
         ]
     )
@@ -611,6 +614,95 @@ def test_agent_parses_briefing_from_code_block(
     assert briefing_output["goal"] == briefing_payload["goal"]
     assert briefing_output["messages"] == briefing_payload["messages"]
     assert not responses
+
+
+def test_generate_draft_from_outline_uses_final_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 220)
+    config.llm_provider = "ollama"
+    config.llm_model = "mixtral:latest"
+
+    agent = WriterAgent(
+        topic="Kampagne planen",
+        word_count=220,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Rohideen zur Kampagne",
+        text_type="Artikel",
+        audience="Marketing-Team",
+        tone="aktiv",
+        register="Du",
+        variant="DE-AT",
+        constraints="Keine Preise nennen",
+        sources_allowed=True,
+        seo_keywords=["Innovation"],
+        include_outline_headings=False,
+    )
+
+    agent._idea_bullets = ["Nutzen klar benennen", "CTA vorbereiten"]
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Einstieg",
+            role="Hook",
+            budget=110,
+            deliverable="Kontext schaffen.",
+        ),
+        OutlineSection(
+            number="2",
+            title="Nutzen",
+            role="Argument",
+            budget=110,
+            deliverable="Vorteile belegen.",
+        ),
+    ]
+    briefing = {"goal": "Überzeugen", "messages": ["Nutzen zeigen"]}
+
+    captured: dict[str, Any] = {}
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: Mapping[str, Any] | None = None,
+    ) -> str:
+        captured.update(
+            {
+                "stage": stage,
+                "prompt_type": prompt_type,
+                "prompt": prompt,
+                "system_prompt": system_prompt,
+                "success_message": success_message,
+                "failure_message": failure_message,
+                "data": dict(data or {}),
+            }
+        )
+        return "Entwurf mit Struktur"
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    result = agent._generate_draft_from_outline(briefing, sections, "- Vorarbeit")
+
+    assert result == "Entwurf mit Struktur"
+    assert agent._llm_generation and agent._llm_generation["status"] == "success"
+    assert agent.steps and agent.steps[-1] == "llm_generation"
+    assert captured["stage"] == "final_draft_llm"
+    assert captured["prompt_type"] == "final_draft"
+    assert captured["system_prompt"] == prompts.FINAL_DRAFT_SYSTEM_PROMPT
+    assert sections[0].format_line() in captured["prompt"]
+    assert "Outline-Überschriften nicht als Markdown ausgeben" in captured["prompt"]
+    assert "- Nutzen klar benennen" in captured["prompt"]
+    assert "Innovation" in captured["prompt"]
+    assert captured["data"]["phase"] == "draft"
+    assert captured["data"]["target_words"] == agent.word_count
 
 
 
@@ -842,7 +934,7 @@ def test_text_type_fix_applied_when_needed(
     briefing_payload = {"goal": "Optimierung", "messages": ["CTA schärfen"]}
     idea_text = "- Fokus auf Nutzen"
     outline_text = "1. Fokus (Rolle: Hook, Wortbudget: 150 Wörter) -> Nutzen verdeutlichen."
-    section_text = "Der Abschnitt bleibt allgemein und verzichtet auf einen klaren CTA."
+    final_draft_text = "## 1. Fokus\nDer Abschnitt bleibt allgemein und verzichtet auf einen klaren CTA."
     check_report = "- Abschnitt 1: Kein klarer CTA am Ende."
     fix_response = "## 1. Fokus\nSchärferer Abschnitt mit klarem CTA zum Schluss."
 
@@ -852,7 +944,7 @@ def test_text_type_fix_applied_when_needed(
             _llm_result(idea_text),
             _llm_result(outline_text),
             _llm_result(outline_text),
-            _llm_result(section_text),
+            _llm_result(final_draft_text),
             _llm_result(check_report),
             _llm_result(fix_response),
         ]
