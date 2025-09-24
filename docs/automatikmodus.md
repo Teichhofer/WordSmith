@@ -139,9 +139,12 @@ zusätzlich die Outline, verwendeten Prompts, Parameter sowie Telemetrie
 
 `Config.adjust_for_word_count()` stellt sicher, dass Kontextlänge und
 Tokenlimit proportional zum Zielumfang wachsen (mindestens 8192 Tokens).
-Zudem werden deterministische Parameter gesetzt (`temperature=0.7`,
-`top_p=1.0`, `presence_penalty=0.05`, `frequency_penalty=0.05`, Seed 42).
-Falls verfügbar, wird `num_predict` auf das Tokenlimit gesetzt.
+Zudem werden deterministische Parameter vereinheitlicht
+(`presence_penalty=0.05`, `frequency_penalty=0.05`, Seed 42), während
+`temperature` und `top_p` die konfigurierten Werte behalten. Falls
+verfügbar, wird `num_predict` auf das Tokenlimit gesetzt, sofern kein
+eigener Wert vorgegeben ist. Ohne explizite Vorgabe liegt das Limit bei
+900 Tokens pro LLM-Aufruf.
 
 `WriterAgent._call_llm_stage()` lehnt Aufrufe ab, deren geschätzter
 Tokenbedarf 85 % des Limits überschreitet, und protokolliert Fehler oder
