@@ -236,10 +236,10 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
         "1. Auftakt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext setzen.\n"
         "2. Strategiepfad (Rolle: Argument, Wortbudget: 140 Wörter) -> Entscheidung stützen."
     )
-    final_draft_text = (
-        "## 1. Auftakt\nDer Auftakt liefert vertrauliche Einblicke und schafft Klarheit.\n\n"
-        "## 2. Strategiepfad\nDer Strategiepfad benennt vertrauliche Kennzahlen und den Ausblick."
-    )
+    section_texts = [
+        "## 1. Auftakt\nDer Auftakt liefert vertrauliche Einblicke und schafft Klarheit.",
+        "## 2. Strategiepfad\nDer Strategiepfad benennt vertrauliche Kennzahlen und den Ausblick.",
+    ]
     text_type_check = "Keine Abweichungen festgestellt."
     compliance_note = "[COMPLIANCE-HINWEIS: Bitte Quellen final prüfen.]"
     revision_text = (
@@ -259,7 +259,8 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
             _llm_result(idea_text),
             _llm_result(outline_text),
             _llm_result(outline_text),
-            _llm_result(final_draft_text),
+            _llm_result(section_texts[0]),
+            _llm_result(section_texts[1]),
             _llm_result(text_type_check),
             _llm_result(revision_text),
             _llm_result(reflection_text),
@@ -377,10 +378,10 @@ def test_agent_can_omit_outline_headings(
         "1. Einstieg (Rolle: Hook, Wortbudget: 80 Wörter) -> Spannung erzeugen.\n"
         "2. Ausblick (Rolle: Fazit, Wortbudget: 120 Wörter) -> Nutzen zuspitzen."
     )
-    final_draft_text = (
-        "Der Auftakt führt ins Thema ein und bindet die Leser:innen direkt ein.\n\n"
-        "Der Ausblick formuliert klar den Mehrwert und ruft zur Aktion auf."
-    )
+    section_texts = [
+        "Der Auftakt führt ins Thema ein und bindet die Leser:innen direkt ein.",
+        "Der Ausblick formuliert klar den Mehrwert und ruft zur Aktion auf.",
+    ]
     text_type_check = "Keine Abweichungen festgestellt."
 
     responses = deque(
@@ -389,7 +390,8 @@ def test_agent_can_omit_outline_headings(
             _llm_result(idea_text),
             _llm_result(outline_text),
             _llm_result(outline_text),
-            _llm_result(final_draft_text),
+            _llm_result(section_texts[0]),
+            _llm_result(section_texts[1]),
             _llm_result(text_type_check),
         ]
     )
@@ -567,10 +569,10 @@ def test_agent_parses_briefing_from_code_block(
         "1. Einstieg (Rolle: Hook, Wortbudget: 90 Wörter) -> Interesse wecken.\n"
         "2. Vorteile (Rolle: Argument, Wortbudget: 190 Wörter) -> Nutzen erklären."
     )
-    final_draft_text = (
-        "## 1. Einstieg\nDer Einstieg adressiert bestehende Nutzer:innen und motiviert zum Weiterlesen.\n\n"
-        "## 2. Vorteile\nIm Vorteilsteil wird erläutert, wie Innovation den Alltag vereinfacht."
-    )
+    section_texts = [
+        "## 1. Einstieg\nDer Einstieg adressiert bestehende Nutzer:innen und motiviert zum Weiterlesen.",
+        "## 2. Vorteile\nIm Vorteilsteil wird erläutert, wie Innovation den Alltag vereinfacht.",
+    ]
     text_type_check = "Keine Abweichungen festgestellt."
 
     responses = deque(
@@ -579,7 +581,8 @@ def test_agent_parses_briefing_from_code_block(
             _llm_result(idea_text),
             _llm_result(outline_text),
             _llm_result(outline_text),
-            _llm_result(final_draft_text),
+            _llm_result(section_texts[0]),
+            _llm_result(section_texts[1]),
             _llm_result(text_type_check),
         ]
     )
@@ -616,7 +619,7 @@ def test_agent_parses_briefing_from_code_block(
     assert not responses
 
 
-def test_generate_draft_from_outline_uses_final_prompt(
+def test_generate_draft_from_outline_compiles_sections(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config = _build_config(tmp_path, 220)
@@ -641,8 +644,6 @@ def test_generate_draft_from_outline_uses_final_prompt(
         include_outline_headings=False,
     )
 
-    agent._idea_bullets = ["Nutzen klar benennen", "CTA vorbereiten"]
-
     sections = [
         OutlineSection(
             number="1",
@@ -661,7 +662,13 @@ def test_generate_draft_from_outline_uses_final_prompt(
     ]
     briefing = {"goal": "Überzeugen", "messages": ["Nutzen zeigen"]}
 
-    captured: dict[str, Any] = {}
+    responses = deque(
+        [
+            "## 1. Einstieg\n\nDer Auftakt zieht Leser:innen hinein und zeichnet die Ausgangslage.",
+            "## 2. Nutzen\n\nDer zweite Abschnitt liefert greifbare Vorteile und bereitet den Abschluss vor.",
+        ]
+    )
+    captured_calls: list[dict[str, Any]] = []
 
     def fake_call_llm_stage(
         self,
@@ -674,7 +681,7 @@ def test_generate_draft_from_outline_uses_final_prompt(
         failure_message: str,
         data: Mapping[str, Any] | None = None,
     ) -> str:
-        captured.update(
+        captured_calls.append(
             {
                 "stage": stage,
                 "prompt_type": prompt_type,
@@ -685,24 +692,89 @@ def test_generate_draft_from_outline_uses_final_prompt(
                 "data": dict(data or {}),
             }
         )
-        return "Entwurf mit Struktur"
+        return responses.popleft()
 
     monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
 
     result = agent._generate_draft_from_outline(briefing, sections, "- Vorarbeit")
 
-    assert result == "Entwurf mit Struktur"
+    assert "Der Auftakt zieht Leser:innen hinein" in result
+    assert "Der zweite Abschnitt liefert" in result
+    assert result.count("Der") >= 2
+    assert len(captured_calls) == 2
+    first_call, second_call = captured_calls
+    assert first_call["stage"] == "section_01_llm"
+    assert first_call["prompt_type"] == "section"
+    assert first_call["system_prompt"] == prompts.SECTION_SYSTEM_PROMPT
+    assert "Noch kein Abschnitt verfasst." in first_call["prompt"]
+    assert sections[0].format_line() in first_call["prompt"]
+    assert "Outline-Überschriften: weglassen" in first_call["prompt"]
+    assert first_call["data"]["target_words"] == sections[0].budget
+    assert second_call["stage"] == "section_02_llm"
+    assert "Vorheriger Abschnitt 'Einstieg'" in second_call["prompt"]
+    assert sections[1].format_line() in second_call["prompt"]
     assert agent._llm_generation and agent._llm_generation["status"] == "success"
     assert agent.steps and agent.steps[-1] == "llm_generation"
-    assert captured["stage"] == "final_draft_llm"
-    assert captured["prompt_type"] == "final_draft"
-    assert captured["system_prompt"] == prompts.FINAL_DRAFT_SYSTEM_PROMPT
-    assert sections[0].format_line() in captured["prompt"]
-    assert "Outline-Überschriften nicht als Markdown ausgeben" in captured["prompt"]
-    assert "- Nutzen klar benennen" in captured["prompt"]
-    assert "Innovation" in captured["prompt"]
-    assert captured["data"]["phase"] == "draft"
-    assert captured["data"]["target_words"] == agent.word_count
+    assert agent._llm_generation["sections"][0]["number"] == "1"
+    assert agent._llm_generation["sections"][1]["word_count"] > 0
+
+
+def test_generate_draft_from_outline_handles_section_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 180)
+    config.llm_provider = "ollama"
+    config.llm_model = "mixtral:latest"
+
+    agent = WriterAgent(
+        topic="Kampagne planen",
+        word_count=180,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Rohideen",
+        text_type="Artikel",
+        audience="Marketing-Team",
+        tone="aktiv",
+        register="Du",
+        variant="DE-AT",
+        constraints="Keine Preise nennen",
+        sources_allowed=True,
+        include_outline_headings=True,
+    )
+
+    sections = [
+        OutlineSection("1", "Einstieg", "Hook", 90, "Kontext"),
+        OutlineSection("2", "Nutzen", "Argument", 90, "Belegen"),
+    ]
+
+    responses = deque(["Abschnitt eins Text", None])
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: Mapping[str, Any] | None = None,
+    ) -> str | None:
+        return responses.popleft()
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    result = agent._generate_draft_from_outline({"goal": "Überzeugen"}, sections, "- Ideenskizze")
+
+    assert result is None
+    assert agent._llm_generation and agent._llm_generation["status"] == "failed"
+    assert agent._llm_generation["failed_section"]["number"] == "2"
+    assert not agent.steps
+    assert agent._run_events
+    last_event = agent._run_events[-1]
+    assert last_event["step"] == "llm_generation"
+    assert last_event["status"] == "warning"
 
 
 
