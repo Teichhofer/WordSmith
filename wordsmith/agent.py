@@ -1055,50 +1055,125 @@ class WriterAgent:
         sections: Sequence[OutlineSection],
         idea_text: str,
     ) -> str | None:
-        prompt = self._build_initial_draft_prompt(
-            briefing=briefing,
-            sections=sections,
-            idea_text=idea_text,
-        )
-        draft = self._call_llm_stage(
-            stage="final_draft_llm",
-            prompt_type="final_draft",
-            prompt=prompt,
-            system_prompt=prompts.FINAL_DRAFT_SYSTEM_PROMPT,
-            success_message="Outline-basierter Entwurf generiert",
-            failure_message="Entwurfsgenerierung fehlgeschlagen",
-            data={"phase": "draft", "target_words": self.word_count},
-        )
-        if not draft:
+        if not sections:
             self._llm_generation = {
                 "status": "failed",
                 "provider": self.config.llm_provider,
                 "model": self.config.llm_model,
+                "failed_section": None,
             }
             self._record_run_event(
                 "llm_generation",
-                "Entwurf konnte nicht generiert werden.",
+                "Keine Outline-Abschnitte vorhanden.",
                 status="warning",
-                data={"sections": len(sections)},
+                data={"sections": 0},
             )
             return None
 
-        cleaned_draft = draft.strip()
+        compiled_sections: List[tuple[OutlineSection, str]] = []
+        formatted_sections: List[str] = []
+        section_summaries: List[dict[str, Any]] = []
+
+        for index, section in enumerate(sections, start=1):
+            prompt = self._build_section_prompt(
+                briefing=briefing,
+                sections=sections,
+                section=section,
+                idea_text=idea_text,
+                compiled_sections=compiled_sections,
+            )
+            stage_name = f"section_{index:02d}_llm"
+            section_data = {
+                "phase": "section",
+                "section": section.number,
+                "title": section.title,
+                "target_words": section.budget,
+            }
+            section_text = self._call_llm_stage(
+                stage=stage_name,
+                prompt_type="section",
+                prompt=prompt,
+                system_prompt=prompts.SECTION_SYSTEM_PROMPT,
+                success_message=f"Abschnitt {section.number} abgeschlossen",
+                failure_message=f"Abschnitt {section.number} fehlgeschlagen",
+                data=section_data,
+            )
+            if section_text is None:
+                self._llm_generation = {
+                    "status": "failed",
+                    "provider": self.config.llm_provider,
+                    "model": self.config.llm_model,
+                    "failed_section": {
+                        "number": section.number,
+                        "title": section.title,
+                    },
+                }
+                self._record_run_event(
+                    "llm_generation",
+                    f"Abschnitt {section.number} konnte nicht generiert werden.",
+                    status="warning",
+                    data={
+                        "sections": len(compiled_sections),
+                        "failed_section": section.number,
+                        "failed_title": section.title,
+                    },
+                )
+                return None
+
+            cleaned_section = self._normalise_section_text(section, section_text)
+            if not cleaned_section:
+                cleaned_section = (
+                    f"[KLÄREN: Abschnitt {section.number} \"{section.title}\" ausformulieren]"
+                )
+
+            compiled_sections.append((section, cleaned_section))
+            formatted_output = self._format_section_output(section, cleaned_section)
+            if formatted_output:
+                formatted_sections.append(formatted_output)
+
+            section_summaries.append(
+                {
+                    "number": section.number,
+                    "title": section.title,
+                    "word_count": self._count_words(cleaned_section),
+                    "characters": len(cleaned_section),
+                }
+            )
+
+        final_draft = "\n\n".join(part for part in formatted_sections if part.strip()).strip()
+        if not final_draft:
+            self._llm_generation = {
+                "status": "failed",
+                "provider": self.config.llm_provider,
+                "model": self.config.llm_model,
+                "failed_section": None,
+            }
+            self._record_run_event(
+                "llm_generation",
+                "Abschnittsweise Generierung lieferte keinen Text.",
+                status="warning",
+                data={"sections": len(section_summaries)},
+            )
+            return None
+
         self._llm_generation = {
             "status": "success",
             "provider": self.config.llm_provider,
             "model": self.config.llm_model,
-            "sections": len(sections),
-            "response_preview": cleaned_draft[:400],
+            "sections": section_summaries,
+            "response_preview": final_draft[:400],
         }
         self.steps.append("llm_generation")
         self._record_run_event(
             "llm_generation",
-            "Outline-basierter Entwurf abgeschlossen",
+            "Abschnittsweise Generierung abgeschlossen",
             status="info",
-            data={"sections": len(sections)},
+            data={
+                "sections": len(section_summaries),
+                "total_word_count": self._count_words(final_draft),
+            },
         )
-        return cleaned_draft
+        return final_draft
 
     def _normalise_section_text(self, section: OutlineSection, text: str) -> str:
         cleaned = text.strip()
