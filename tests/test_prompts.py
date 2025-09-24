@@ -135,6 +135,11 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "handlungsleitende Formulierungen" in prompts.BRIEFING_PROMPT
     assert "Antwortstruktur" in prompts.IDEA_IMPROVEMENT_PROMPT
     assert "[KLÄREN: …]" in prompts.IDEA_IMPROVEMENT_PROMPT
+    assert "Unterliste" in prompts.OUTLINE_PROMPT
+    assert "Stichpunkten" in prompts.OUTLINE_PROMPT
+    assert "Übergang & Belege" in prompts.OUTLINE_PROMPT
+    assert "Unterliste" in prompts.OUTLINE_IMPROVEMENT_PROMPT
+    assert "Timinghinweise" in prompts.OUTLINE_IMPROVEMENT_PROMPT
     assert "Fundstelle" in prompts.TEXT_TYPE_CHECK_PROMPT
     assert "Stütze jede Bewertung" in prompts.TEXT_TYPE_CHECK_PROMPT
     assert "Zielwortzahl" in prompts.SECTION_PROMPT
