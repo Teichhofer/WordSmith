@@ -299,7 +299,8 @@ def test_generate_draft_records_section_outputs(tmp_path: Path, monkeypatch: pyt
         agent._format_artifact_path(agent._stage_output_dir / "002_section_02_llm.txt"),
     ]
     assert agent._llm_generation["section_outputs"] == expected_paths
-    assert agent._llm_generation["combined_output"] == "current_text.txt"
+    assert agent._llm_generation["combined_output"] == draft
+    assert agent._llm_generation["combined_output_path"] == "current_text.txt"
 def test_load_json_object_handles_invalid_escape_sequences() -> None:
     malformed = '{"goal": "Test", "key\\_terms": ["KI"], "messages": ["Hinweis"]}'
 

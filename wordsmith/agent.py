@@ -1232,7 +1232,8 @@ class WriterAgent:
             "sections": section_summaries,
             "response_preview": final_draft[:400],
             "section_outputs": section_artifacts,
-            "combined_output": self._format_artifact_path(
+            "combined_output": final_draft,
+            "combined_output_path": self._format_artifact_path(
                 self.output_dir / "current_text.txt"
             ),
         }
