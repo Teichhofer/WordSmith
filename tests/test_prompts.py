@@ -153,6 +153,7 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Überarbeite den folgenden" in revision_template
     assert "Halte Format" in revision_template
     assert "dichte Übergänge" in revision_template
+    assert "WICHTIG: Gib ausschließlich den überarbeiteten Text zurück" in revision_template
     assert "Poliere" in prompts.REVISION_SYSTEM_PROMPT
     assert "Markdown" in prompts.REVISION_SYSTEM_PROMPT
     assert "Fassung" in prompts.REVISION_SYSTEM_PROMPT
@@ -163,6 +164,10 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Zielwortzahl: {target_words}" in final_template
     assert "{format_instruction}" in final_template
     assert "konkrete Handlungen" in prompts.REFLECTION_PROMPT
+    assert (
+        "WICHTIG: Gib ausschließlich den aktualisierten Text zurück"
+        in prompts.TEXT_TYPE_FIX_PROMPT
+    )
 
 
 def test_format_prompt_preserves_double_braced_tokens() -> None:
