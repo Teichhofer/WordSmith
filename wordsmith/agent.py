@@ -699,7 +699,8 @@ class WriterAgent:
     def _generate_briefing(self) -> dict:
         notes = (self.content or "").strip() or "[KLÄREN: Keine Notizen geliefert.]"
         seo_text = ", ".join(self.seo_keywords or [])
-        prompt = prompts.BRIEFING_PROMPT.format(
+        prompt = prompts.format_prompt(
+            prompts.BRIEFING_PROMPT,
             title=self.topic,
             text_type=self.text_type,
             word_count=self.word_count,
@@ -746,7 +747,9 @@ class WriterAgent:
         content = (self.content or "").strip()
         if not content:
             content = "[KLÄREN: Inhaltliches Briefing ergänzen]"
-        prompt = prompts.IDEA_IMPROVEMENT_PROMPT.format(content=content)
+        prompt = prompts.format_prompt(
+            prompts.IDEA_IMPROVEMENT_PROMPT, content=content
+        )
         return self._call_llm_stage(
             stage="idea_llm",
             prompt_type="idea_improvement",
@@ -777,7 +780,8 @@ class WriterAgent:
         return bullets
 
     def _create_outline_with_llm(self, briefing: dict) -> List[OutlineSection]:
-        prompt = prompts.OUTLINE_PROMPT.format(
+        prompt = prompts.format_prompt(
+            prompts.OUTLINE_PROMPT,
             text_type=self.text_type,
             title=self.topic,
             briefing_json=json.dumps(briefing, ensure_ascii=False, indent=2),
@@ -878,7 +882,9 @@ class WriterAgent:
         self, briefing: dict, sections: Sequence[OutlineSection]
     ) -> List[OutlineSection]:
         prompt = (
-            prompts.OUTLINE_IMPROVEMENT_PROMPT.format(word_count=self.word_count).strip()
+            prompts.format_prompt(
+                prompts.OUTLINE_IMPROVEMENT_PROMPT, word_count=self.word_count
+            ).strip()
             + "\n\nBriefing:\n"
             + json.dumps(briefing, ensure_ascii=False, indent=2)
             + "\n\nAktuelle Outline:\n"
@@ -1336,7 +1342,8 @@ class WriterAgent:
         style_guidelines = self._compose_style_guidelines()
 
         return (
-            prompts.SECTION_PROMPT.format(
+            prompts.format_prompt(
+                prompts.SECTION_PROMPT,
                 section_number=section.number,
                 section_title=section.title,
                 role=section.role,
@@ -1455,7 +1462,9 @@ class WriterAgent:
         sections: Sequence[OutlineSection],
     ) -> str:
         check_prompt = (
-            prompts.TEXT_TYPE_CHECK_PROMPT.format(text_type=self.text_type).strip()
+            prompts.format_prompt(
+                prompts.TEXT_TYPE_CHECK_PROMPT, text_type=self.text_type
+            ).strip()
             + "\n\nBriefing:\n"
             + json.dumps(briefing, ensure_ascii=False, indent=2)
             + "\n\nOutline:\n"

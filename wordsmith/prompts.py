@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Dict, Mapping
@@ -316,6 +317,42 @@ def _stringify_context(values: Mapping[str, Any]) -> Mapping[str, str]:
     return {key: "" if value is None else str(value) for key, value in values.items()}
 
 
+_DOUBLE_BRACE_PATTERN = re.compile(r"\{\{[^{}]+\}\}")
+
+
+def format_prompt(
+    template: str,
+    context: Mapping[str, Any] | None = None,
+    /,
+    **values: Any,
+) -> str:
+    """Safely format ``template`` while preserving double-braced tokens."""
+
+    preserved_tokens: dict[str, str] = {}
+
+    def _protect(match: re.Match[str]) -> str:
+        token = f"__DOUBLE_BRACE_{len(preserved_tokens)}__"
+        preserved_tokens[token] = match.group(0)
+        return token
+
+    protected_template = _DOUBLE_BRACE_PATTERN.sub(_protect, template)
+
+    combined_context: Dict[str, Any] = {}
+    if context:
+        combined_context.update(context)
+    if values:
+        combined_context.update(values)
+
+    formatted = protected_template.format_map(
+        _FormatDict(_stringify_context(combined_context))
+    )
+
+    for sentinel, original in preserved_tokens.items():
+        formatted = formatted.replace(sentinel, original)
+
+    return formatted
+
+
 def build_revision_prompt(
     include_compliance_hint: bool = False,
     *,
@@ -338,9 +375,7 @@ def build_revision_prompt(
     combined_context.setdefault("max_words", max_words)
 
     if prompt_template:
-        prompt = prompt_template.format_map(
-            _FormatDict(_stringify_context(combined_context))
-        )
+        prompt = format_prompt(prompt_template, combined_context)
     else:
         prompt = ""
 
@@ -439,7 +474,8 @@ def buildFinalDraftPrompt(
     target_words_value = _normalise_target_words(targetWords)
     format_instruction = _format_final_instruction(output_format)
 
-    prompt = FINAL_DRAFT_PROMPT.format(
+    prompt = format_prompt(
+        FINAL_DRAFT_PROMPT,
         title=cleaned_title,
         outline=cleaned_outline,
         style=cleaned_style,
