@@ -9,6 +9,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from wordsmith import llm
 from wordsmith.config import LLMParameters, OLLAMA_TIMEOUT_SECONDS
 
+import pytest
+
 
 class _DummyResponse:
     def __enter__(self):
@@ -166,3 +168,61 @@ def test_prepare_options_include_stop_and_num_predict_defaults() -> None:
 
     assert updated["num_predict"] == 256
     assert updated["stop"] == ["ENDE"]
+
+
+@pytest.mark.parametrize(
+    "prompt,system,expected_details",
+    [
+        (
+            "Bitte beachte {improvement_suggestions}.",
+            "System",
+            "prompt -> improvement_suggestions",
+        ),
+        (
+            "Hallo",
+            "Nutze {foo_bar} im System",
+            "system -> foo_bar",
+        ),
+        (
+            "{a}{b}",
+            "System",
+            "prompt -> a, prompt -> b",
+        ),
+    ],
+)
+def test_generate_text_hard_fails_on_unresolved_placeholders(
+    monkeypatch, caplog, prompt, system, expected_details
+):
+    def _fail_urlopen(*_args, **_kwargs):  # pragma: no cover - defensive
+        raise AssertionError("API call should not be attempted when placeholders exist")
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", _fail_urlopen)
+
+    parameters = LLMParameters()
+
+    with caplog.at_level("ERROR"):
+        with pytest.raises(llm.LLMGenerationError) as excinfo:
+            llm.generate_text(
+                provider="ollama",
+                model="mixtral",
+                prompt=prompt,
+                system_prompt=system,
+                parameters=parameters,
+            )
+
+    payload = {
+        "model": "mixtral",
+        "prompt": prompt,
+        "system": system,
+        "stream": False,
+        "context": [],
+        "options": llm._prepare_options(parameters),
+    }
+    payload_hash = llm._hash_payload(payload)
+
+    message = str(excinfo.value)
+    assert "unaufgelöster" in message.lower()
+    for detail in expected_details.split(", "):
+        assert detail in message
+    assert payload_hash in message
+    assert any(payload_hash in record.message for record in caplog.records)

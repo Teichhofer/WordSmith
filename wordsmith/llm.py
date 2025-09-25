@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 from .config import LLMParameters, OLLAMA_TIMEOUT_SECONDS
+
+
+_LOGGER = logging.getLogger(__name__)
+_PLACEHOLDER_PATTERN = re.compile(r"(?<!{){([^{}]+)}(?!})")
 
 
 @dataclass
@@ -19,6 +26,60 @@ class LLMResult:
 
 class LLMGenerationError(RuntimeError):
     """Raised when the configured LLM provider cannot generate text."""
+
+
+def _hash_payload(payload: Mapping[str, Any]) -> str:
+    """Return a deterministic SHA-256 hash for logging failed payloads."""
+
+    serialised = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(serialised.encode("utf-8")).hexdigest()
+
+
+def _sanitise_payload(payload: Mapping[str, Any]) -> None:
+    """Ensure the payload does not contain unresolved placeholders."""
+
+    unresolved: list[tuple[str, str]] = []
+
+    def _check(value: Any, path: str) -> None:
+        if isinstance(value, str):
+            for match in _PLACEHOLDER_PATTERN.finditer(value):
+                placeholder = match.group(1).strip()
+                if placeholder:
+                    unresolved.append((path or "<root>", placeholder))
+            return
+        if isinstance(value, Mapping):
+            for key, nested in value.items():
+                new_path = f"{path}.{key}" if path else str(key)
+                _check(nested, new_path)
+            return
+        if isinstance(value, Sequence) and not isinstance(
+            value, (bytes, bytearray)
+        ):
+            for index, item in enumerate(value):
+                new_path = f"{path}[{index}]" if path else f"[{index}]"
+                _check(item, new_path)
+
+    _check(payload, "")
+
+    if not unresolved:
+        return
+
+    payload_hash = _hash_payload(payload)
+    details = []
+    for context, placeholder in unresolved:
+        details.append(f"{context} -> {placeholder}")
+        _LOGGER.error(
+            "Unaufgelöster Platzhalter '%s' im Feld '%s' (Payload-Hash: %s)",
+            placeholder,
+            context,
+            payload_hash,
+        )
+
+    detail_text = ", ".join(details)
+    raise LLMGenerationError(
+        "API-Aufruf aufgrund unaufgelöster Platzhalter abgebrochen: "
+        f"{detail_text} (Payload-Hash: {payload_hash})"
+    )
 
 
 def _prepare_options(parameters: LLMParameters) -> Dict[str, Any]:
@@ -188,6 +249,7 @@ def _generate_with_ollama(
         "context": [],
         "options": _prepare_options(parameters),
     }
+    _sanitise_payload(payload)
     data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         url,
