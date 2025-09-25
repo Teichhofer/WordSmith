@@ -165,6 +165,17 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "konkrete Handlungen" in prompts.REFLECTION_PROMPT
 
 
+def test_format_prompt_preserves_double_braced_tokens() -> None:
+    """Formatting must keep double-braced placeholders intact for the LLM."""
+
+    template = "Abschnitt {{nummer}}: {title} – {{Titel}}"
+    result = prompts.format_prompt(template, title="Einleitung")
+
+    assert "Abschnitt {{nummer}}" in result
+    assert "– {{Titel}}" in result
+    assert "Einleitung" in result
+
+
 def test_build_final_draft_prompt_removes_meta_guidance() -> None:
     """The final draft prompt collapses to the requested minimalist form."""
 
