@@ -226,3 +226,13 @@ def test_generate_text_hard_fails_on_unresolved_placeholders(
         assert detail in message
     assert payload_hash in message
     assert any(payload_hash in record.message for record in caplog.records)
+
+
+def test_sanitise_payload_allows_braces_in_literal_text() -> None:
+    payload = {
+        "prompt": 'Gib ein JSON-Fragment {"anfang": "\"", "ende": "\""}.',
+        "system": "System",
+    }
+
+    # Must not raise despite braces that are part of literal content.
+    llm._sanitise_payload(payload)

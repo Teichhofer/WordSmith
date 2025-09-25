@@ -14,6 +14,7 @@ from .config import LLMParameters, OLLAMA_TIMEOUT_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 _PLACEHOLDER_PATTERN = re.compile(r"(?<!{){([^{}]+)}(?!})")
+_PLACEHOLDER_NAME_PATTERN = re.compile(r"[A-Za-z0-9_.-]+$")
 
 
 @dataclass
@@ -44,7 +45,7 @@ def _sanitise_payload(payload: Mapping[str, Any]) -> None:
         if isinstance(value, str):
             for match in _PLACEHOLDER_PATTERN.finditer(value):
                 placeholder = match.group(1).strip()
-                if placeholder:
+                if placeholder and _PLACEHOLDER_NAME_PATTERN.fullmatch(placeholder):
                     unresolved.append((path or "<root>", placeholder))
             return
         if isinstance(value, Mapping):
