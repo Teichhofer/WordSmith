@@ -236,3 +236,14 @@ def test_sanitise_payload_allows_braces_in_literal_text() -> None:
 
     # Must not raise despite braces that are part of literal content.
     llm._sanitise_payload(payload)
+
+
+def test_sanitise_payload_ignores_braces_with_names() -> None:
+    payload = {
+        "prompt": "Vorlage enthält {Name} und {Titel} als Beispieltext.",
+        "system": "System",
+    }
+
+    # Uppercase markers originate from Texteingaben und dürfen den Lauf
+    # nicht blockieren.
+    llm._sanitise_payload(payload)

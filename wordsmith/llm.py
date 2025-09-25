@@ -14,7 +14,18 @@ from .config import LLMParameters, OLLAMA_TIMEOUT_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 _PLACEHOLDER_PATTERN = re.compile(r"(?<!{){([^{}]+)}(?!})")
-_PLACEHOLDER_NAME_PATTERN = re.compile(r"[A-Za-z0-9_.-]+$")
+# Only treat lowercase placeholder tokens as unresolved template fields.
+#
+# Promptvorlagen nutzen konsequent ``snake_case``-Platzhalter (z. B.
+# ``{target_words}``). Anwendertexte oder LLM-Antworten können jedoch
+# geschweifte Klammern mit Eigennamen wie ``{Name}`` enthalten. Die
+# ursprüngliche Prüfung hat solche Inhalte fälschlich als nicht
+# ersetzte Platzhalter interpretiert und dadurch weitere Iterationen
+# blockiert. Wir beschränken den regulären Ausdruck deshalb auf
+# Kleinbuchstaben sowie die bekannten Trenner. Dadurch bleibt die
+# Validierung für reale Prompt-Platzhalter bestehen, während reguläre
+# Texte mit ``{Name}`` oder ``{Titel}`` nicht mehr beanstandet werden.
+_PLACEHOLDER_NAME_PATTERN = re.compile(r"[a-z0-9_.-]+$")
 
 
 @dataclass
