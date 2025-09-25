@@ -56,6 +56,26 @@ def test_generate_text_uses_configured_timeout(monkeypatch):
     assert captured["timeout"] == OLLAMA_TIMEOUT_SECONDS
 
 
+def test_generate_text_starts_with_empty_context(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return _DummyResponse()
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", fake_urlopen)
+
+    llm.generate_text(
+        provider="ollama",
+        model="mixtral",
+        prompt="Hallo",
+        system_prompt="System",
+        parameters=LLMParameters(),
+    )
+
+    assert captured["payload"].get("context") == []
+
+
 def test_generate_text_strips_context_from_raw_payload(monkeypatch):
     payload = {
         "response": "Antwort",

@@ -183,6 +183,9 @@ def _generate_with_ollama(
         "prompt": prompt,
         "system": system_prompt,
         "stream": False,
+        # Start every request with an empty context to avoid reusing previous
+        # conversations that Ollama might keep around implicitly.
+        "context": [],
         "options": _prepare_options(parameters),
     }
     data = json.dumps(payload).encode("utf-8")
