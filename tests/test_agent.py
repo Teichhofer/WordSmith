@@ -1031,6 +1031,7 @@ def test_revision_stage_is_stateless(
     assert prompt_text.startswith("Überarbeite den folgenden Memo")
     assert "Zielgruppe: Team" in prompt_text
     assert "\"goal\": \"Test\"" in prompt_text
+    assert "Verbesserungsfokus aus letzter Reflexion" in prompt_text
     assert "Text zur Überarbeitung:\nAktueller Text mit Kontext." in prompt_text
     assert prompts.REVISION_REFLECTION_HEADER not in prompt_text
     base_prompt = prompts.REVISION_SYSTEM_PROMPT.strip()
@@ -1096,6 +1097,7 @@ def test_revision_prompt_includes_reflection_suggestions(
     prompt_text = captured_prompt["prompt"]
     assert prompts.REVISION_REFLECTION_HEADER in prompt_text
     assert improvements in prompt_text
+    assert "verbindlichen Arbeitsauftrag" in prompt_text
     assert captured_prompt["prompt_type"] == "revision"
 
 
