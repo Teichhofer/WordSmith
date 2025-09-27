@@ -917,6 +917,84 @@ def test_generate_draft_from_outline_compiles_sections(
     assert agent._llm_generation["sections"][1]["word_count"] > 0
 
 
+def test_generate_draft_from_outline_truncates_multi_section_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 220)
+    config.llm_provider = "ollama"
+    config.llm_model = "mixtral:latest"
+
+    agent = WriterAgent(
+        topic="Mehrstufige Outline", 
+        word_count=220,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Vorarbeit",
+        text_type="Artikel",
+        audience="Marketing-Team",
+        tone="aktiv",
+        register="Du",
+        variant="DE-AT",
+        constraints="Keine Preise nennen",
+        sources_allowed=False,
+        seo_keywords=None,
+        include_outline_headings=True,
+    )
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Einstieg",
+            role="Hook",
+            budget=110,
+            deliverable="Kontext schaffen.",
+        ),
+        OutlineSection(
+            number="2",
+            title="Nutzen",
+            role="Argument",
+            budget=110,
+            deliverable="Vorteile belegen.",
+        ),
+    ]
+
+    responses = deque(
+        [
+            (
+                "## 1. Einstieg\n\n"
+                "Der Auftakt liefert einen prägnanten Einstieg.\n\n"
+                "## 2. Nutzen\n\n"
+                "Falscher Text für Abschnitt zwei."
+            ),
+            "## 2. Nutzen\n\nDer zweite Abschnitt liefert greifbare Vorteile.",
+        ]
+    )
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: Mapping[str, Any] | None = None,
+    ) -> str:
+        return responses.popleft()
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    result = agent._generate_draft_from_outline(
+        {"goal": "Überzeugen"}, sections, "- Kernaussagen"
+    )
+
+    assert "Falscher Text für Abschnitt zwei" not in result
+    assert result.count("## 2. Nutzen") == 1
+    assert not responses
+
+
 def test_generate_draft_from_outline_handles_section_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1146,10 +1146,12 @@ class WriterAgent:
         section_summaries: List[dict[str, Any]] = []
         section_artifacts: List[str] = []
 
-        for index, section in enumerate(sections, start=1):
+        section_list = list(sections)
+
+        for index, section in enumerate(section_list, start=1):
             prompt = self._build_section_prompt(
                 briefing=briefing,
-                sections=sections,
+                sections=section_list,
                 section=section,
                 idea_text=idea_text,
                 compiled_sections=compiled_sections,
@@ -1195,7 +1197,11 @@ class WriterAgent:
             artifact_path = self._last_stage_output_path
             if artifact_path is not None:
                 section_artifacts.append(self._format_artifact_path(artifact_path))
-            cleaned_section = self._normalise_section_text(section, section_text)
+            remaining_sections = section_list[index:]
+            trimmed_section = self._truncate_following_sections(
+                section_text, remaining_sections
+            )
+            cleaned_section = self._normalise_section_text(section, trimmed_section)
             if not cleaned_section:
                 cleaned_section = (
                     f"[KLÄREN: Abschnitt {section.number} \"{section.title}\" ausformulieren]"
@@ -1259,8 +1265,6 @@ class WriterAgent:
         cleaned = text.strip()
         if not cleaned:
             return ""
-        if self.include_outline_headings:
-            return cleaned
         return self._strip_section_heading(section, cleaned)
 
     @staticmethod
@@ -1362,6 +1366,54 @@ class WriterAgent:
             + "\n\nKernaussagen:\n"
             + idea_clean
         )
+
+    def _truncate_following_sections(
+        self,
+        text: str,
+        remaining_sections: Sequence[OutlineSection],
+    ) -> str:
+        if not remaining_sections:
+            return text
+
+        boundaries: list[int] = []
+        for other_section in remaining_sections:
+            for pattern in self._build_section_heading_patterns(other_section):
+                match = pattern.search(text)
+                if match:
+                    boundaries.append(match.start())
+        if not boundaries:
+            return text
+
+        cutoff = min(boundaries)
+        return text[:cutoff].rstrip()
+
+    def _build_section_heading_patterns(
+        self, section: OutlineSection
+    ) -> tuple[re.Pattern[str], ...]:
+        patterns: list[re.Pattern[str]] = []
+        number = section.number.strip()
+        title = section.title.strip()
+        if number:
+            escaped_number = re.escape(number)
+            number_boundary = rf"{escaped_number}(?:\s*[.:)\-–]|\b)"
+            patterns.append(
+                re.compile(rf"^\s*#{{1,6}}\s*{number_boundary}", re.MULTILINE)
+            )
+            patterns.append(re.compile(rf"^\s*{number_boundary}", re.MULTILINE))
+            patterns.append(
+                re.compile(
+                    rf"^\s*Abschnitt\s+{escaped_number}\b", re.IGNORECASE | re.MULTILINE
+                )
+            )
+        if title:
+            escaped_title = re.escape(title)
+            patterns.append(
+                re.compile(rf"^\s*#{{1,6}}\s*{escaped_title}\b", re.IGNORECASE | re.MULTILINE)
+            )
+            patterns.append(
+                re.compile(rf"^\s*{escaped_title}\b", re.IGNORECASE | re.MULTILINE)
+            )
+        return tuple(patterns)
 
     def _calculate_word_limits(self, budget: int) -> tuple[int, int]:
         tolerance = 0.1
