@@ -1422,3 +1422,71 @@ def test_run_compliance_keeps_note_when_enabled(tmp_path: Path) -> None:
     last_entry = agent._compliance_audit[-1]
     assert last_entry["compliance_note"] is True
     assert last_entry["compliance_note_text"] == "[COMPLIANCE-HINWEIS: Quellen prüfen.]"
+
+
+def test_truncate_following_sections_ignores_plain_title_prefix(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 200)
+    agent = WriterAgent(
+        topic="Test",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Artikel",
+        audience="Leser:innen",
+        tone="neutral",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    text = "Einleitung mit Beispielen.\n\nNutzen entstehen durch gemeinsame Arbeit."
+    remaining = [
+        OutlineSection(
+            number="2",
+            title="Nutzen",
+            role="Analyse",
+            budget=100,
+            deliverable="Ergebnisse darstellen",
+        )
+    ]
+
+    result = agent._truncate_following_sections(text, remaining)
+
+    assert result == text
+
+
+def test_truncate_following_sections_detects_heading(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 200)
+    agent = WriterAgent(
+        topic="Test",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Artikel",
+        audience="Leser:innen",
+        tone="neutral",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    text = "Einleitung mit Beispielen.\n\n## Nutzen\nWeitere Details folgen."
+    remaining = [
+        OutlineSection(
+            number="2",
+            title="Nutzen",
+            role="Analyse",
+            budget=100,
+            deliverable="Ergebnisse darstellen",
+        )
+    ]
+
+    result = agent._truncate_following_sections(text, remaining)
+
+    assert result == "Einleitung mit Beispielen."
