@@ -1287,6 +1287,33 @@ def test_revision_prompt_includes_reflection_suggestions(
     assert captured_prompt["prompt_type"] == "revision"
 
 
+def test_stage_parameters_use_configured_generation_limits(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 400)
+    config.llm.num_predict = 1234
+    config.llm.stop = ("<<END>>",)
+
+    agent = WriterAgent(
+        topic="Parameterkopie",
+        word_count=400,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Fachartikel",
+        audience="Profis",
+        tone="präzise",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    parameters = agent._build_stage_parameters("section")
+
+    assert parameters.num_predict == config.llm.num_predict
+    assert parameters.stop == config.llm.stop
+
+
 def test_call_llm_stage_enforces_token_reserve(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
