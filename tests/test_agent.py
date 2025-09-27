@@ -917,6 +917,114 @@ def test_generate_draft_from_outline_compiles_sections(
     assert agent._llm_generation["sections"][1]["word_count"] > 0
 
 
+def test_clean_outline_sections_assigns_missing_budgets(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 600)
+    agent = WriterAgent(
+        topic="Budget",  # pragma: no mutate - descriptive topic
+        word_count=600,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Blogartikel",
+        audience="Leser:innen",
+        tone="neutral",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Einleitung",
+            role="Hook",
+            budget=0,
+            deliverable="Interesse wecken",
+        ),
+        OutlineSection(
+            number="2",
+            title="Hauptteil",
+            role="Analyse",
+            budget=200,
+            deliverable="Kernaussagen erläutern",
+        ),
+        OutlineSection(
+            number="3",
+            title="Schluss",
+            role="Call-to-Action",
+            budget=0,
+            deliverable="Handlungsimpuls geben",
+        ),
+    ]
+
+    cleaned = agent._clean_outline_sections(sections)
+
+    assert [section.budget for section in cleaned] == [200, 200, 200]
+    assert sum(section.budget for section in cleaned) == 600
+
+
+def test_clean_outline_sections_rebalances_overflow(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 500)
+    agent = WriterAgent(
+        topic="Budget",
+        word_count=500,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Blogartikel",
+        audience="Leser:innen",
+        tone="neutral",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    sections = [
+        OutlineSection("1", "Eröffnung", "Hook", 300, "Rahmen setzen"),
+        OutlineSection("2", "Vertiefung", "Analyse", 300, "Details ausarbeiten"),
+        OutlineSection("3", "Ausblick", "Schluss", 0, "Nächste Schritte"),
+    ]
+
+    cleaned = agent._clean_outline_sections(sections)
+
+    assert sum(section.budget for section in cleaned) == 500
+    assert all(section.budget > 0 for section in cleaned)
+
+
+def test_clean_outline_sections_handles_all_zero_budgets(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 450)
+    agent = WriterAgent(
+        topic="Budget",
+        word_count=450,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Blogartikel",
+        audience="Leser:innen",
+        tone="neutral",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    sections = [
+        OutlineSection("1", "Eröffnung", "Hook", 0, "Rahmen setzen"),
+        OutlineSection("2", "Vertiefung", "Analyse", 0, "Details ausarbeiten"),
+        OutlineSection("3", "Ausblick", "Schluss", 0, "Nächste Schritte"),
+    ]
+
+    cleaned = agent._clean_outline_sections(sections)
+
+    assert sum(section.budget for section in cleaned) == 450
+    assert all(section.budget > 0 for section in cleaned)
+
+
 def test_generate_draft_from_outline_truncates_multi_section_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

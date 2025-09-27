@@ -925,6 +925,29 @@ class WriterAgent:
         if not cleaned:
             return []
 
+        positive_budget = sum(section.budget for section in cleaned if section.budget > 0)
+        missing_sections: List[OutlineSection] = [
+            section for section in cleaned if section.budget <= 0
+        ]
+
+        if len(missing_sections) == len(cleaned) or positive_budget <= 0:
+            average_budget = max(50, int(self.word_count / max(1, len(cleaned))))
+            for section in cleaned:
+                section.budget = average_budget
+        elif missing_sections:
+            remaining = self.word_count - positive_budget
+            if remaining <= 0:
+                remaining = len(missing_sections)
+            base_share = remaining // len(missing_sections)
+            base_share = max(base_share, 1)
+            remainder = remaining - base_share * len(missing_sections)
+            for index, section in enumerate(missing_sections):
+                allocation = base_share
+                if remainder > 0:
+                    allocation += 1
+                    remainder -= 1
+                section.budget = allocation
+
         total_budget = sum(section.budget for section in cleaned)
         if total_budget <= 0:
             average_budget = max(50, int(self.word_count / max(1, len(cleaned))))
@@ -934,7 +957,32 @@ class WriterAgent:
 
         difference = self.word_count - total_budget
         if difference != 0:
-            cleaned[-1].budget = max(0, cleaned[-1].budget + difference)
+            if difference > 0:
+                cleaned[-1].budget = max(0, cleaned[-1].budget + difference)
+            else:
+                deficit = -difference
+                index = len(cleaned) - 1
+                iterations = 0
+                while deficit > 0 and iterations < len(cleaned) * 2:
+                    section = cleaned[index]
+                    reducible = max(0, section.budget - 1)
+                    if reducible > 0:
+                        reduction = min(reducible, deficit)
+                        section.budget -= reduction
+                        deficit -= reduction
+                    index = (index - 1) % len(cleaned)
+                    iterations += 1
+                if deficit > 0:
+                    index = len(cleaned) - 1
+                    while deficit > 0 and index >= 0:
+                        section = cleaned[index]
+                        if section.budget <= 0:
+                            index -= 1
+                            continue
+                        reduction = min(section.budget, deficit)
+                        section.budget -= reduction
+                        deficit -= reduction
+                        index -= 1
 
         for section in cleaned:
             if not section.role:
