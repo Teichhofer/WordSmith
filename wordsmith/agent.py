@@ -1410,9 +1410,6 @@ class WriterAgent:
             patterns.append(
                 re.compile(rf"^\s*#{{1,6}}\s*{escaped_title}\b", re.IGNORECASE | re.MULTILINE)
             )
-            patterns.append(
-                re.compile(rf"^\s*{escaped_title}\b", re.IGNORECASE | re.MULTILINE)
-            )
         return tuple(patterns)
 
     def _calculate_word_limits(self, budget: int) -> tuple[int, int]:
