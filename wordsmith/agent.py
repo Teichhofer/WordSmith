@@ -2015,6 +2015,8 @@ class WriterAgent:
             presence_penalty=self.config.llm.presence_penalty,
             frequency_penalty=self.config.llm.frequency_penalty,
             seed=self.config.llm.seed,
+            num_predict=getattr(self.config.llm, "num_predict", None),
+            stop=getattr(self.config.llm, "stop", ()),
         )
         if hasattr(base, "num_predict"):
             base.num_predict = getattr(self.config.llm, "num_predict", None)
