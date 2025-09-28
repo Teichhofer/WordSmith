@@ -379,10 +379,14 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         "## Überarbeitung\n"
         "Die Revision blendet vertrauliche Hinweise aus und fokussiert Umsetzung."
     )
-    reflection_text = (
+    initial_reflection_text = (
         "1. Einstieg zuspitzen – Abschnitt 1.\n"
         "2. Umsetzung konkretisieren – Abschnitt 2.\n"
         "3. Schlussfolgerung schärfen – Abschluss."
+    )
+    reflection_text = (
+        "1. Ergebnisse präzisieren – Abschnitt 2.\n"
+        "2. Abschluss verdichten – Abschluss."
     )
     final_stage_text = (
         "## Überarbeitung\n"
@@ -405,6 +409,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
             _llm_result(section_one),
             _llm_result(section_two),
             _llm_result(text_type_check),
+            _llm_result(initial_reflection_text),
             _llm_result(revision_text),
             _llm_result(reflection_text),
             _llm_result(final_stage_text),
@@ -470,7 +475,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     assert runtime_match
     runtime_seconds_cli = float(runtime_match.group(1))
 
-    total_steps = 7 + iterations * 2
+    total_steps = 7 + iterations * 2 + (1 if iterations > 0 else 0)
     progress_lines = [line for line in stderr_lines if line.startswith("[")]
     assert progress_lines[0].startswith(f"[0/{total_steps}] Automatikmodus gestartet")
     assert any(
@@ -479,6 +484,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     )
 
     current_text = (output_dir / "current_text.txt").read_text(encoding="utf-8")
+    initial_reflection_output = (output_dir / "reflection_01.txt").read_text(encoding="utf-8").strip()
     reflection_output = (output_dir / "reflection_02.txt").read_text(encoding="utf-8").strip()
     assert captured.out.rstrip("\n") == current_text.rstrip("\n")
     final_files = list(output_dir.glob("Final-*.txt"))
@@ -486,7 +492,8 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
     compliance = json.loads((output_dir / "compliance.json").read_text(encoding="utf-8"))
 
     assert "[ENTFERNT: vertrauliche]" in current_text
-    assert "Einstieg zuspitzen" in reflection_output
+    assert "Einstieg zuspitzen" in initial_reflection_output
+    assert "Ergebnisse präzisieren" in reflection_output
     assert len(final_files) == 1
     final_file = final_files[0]
     assert re.fullmatch(r"Final-\d{8}-\d{6}\.txt", final_file.name)

@@ -445,10 +445,14 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
         "Die Revision fasst vertrauliche Erkenntnisse zusammen und bleibt konkret.\n\n"
         + compliance_note
     )
-    reflection_text = (
+    initial_reflection_text = (
         "1. Einleitung präzisieren – Abschnitt 1.\n"
         "2. Zahlenbeispiele ergänzen – Abschnitt 2.\n"
         "3. Abschluss verdichten – Schlussabsatz."
+    )
+    reflection_text = (
+        "1. Beispiele verifizieren – Abschnitt 2.\n"
+        "2. Schlussfolgerung verdeutlichen – Abschluss."
     )
     filler_sentence = (
         "Zusätzliche Analysen erweitern die [ENTFERNT: vertrauliche] Bewertung mit konkreten Beispielen "
@@ -469,6 +473,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
             _llm_result(section_texts[0]),
             _llm_result(section_texts[1]),
             _llm_result(text_type_check),
+            _llm_result(initial_reflection_text),
             _llm_result(revision_text),
             _llm_result(reflection_text),
             _llm_result(final_stage_text),
@@ -505,6 +510,9 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     iteration_output = (
         config.output_dir / "iteration_02.txt"
     ).read_text(encoding="utf-8")
+    first_reflection_output = (
+        config.output_dir / "reflection_01.txt"
+    ).read_text(encoding="utf-8").strip()
     reflection_output = (
         config.output_dir / "reflection_02.txt"
     ).read_text(encoding="utf-8").strip()
@@ -525,7 +533,8 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert all(not line.startswith("#") for line in iteration_output.splitlines())
     assert idea_output == idea_text
     assert "Strategiepfad" in outline_output
-    assert "Einleitung präzisieren" in reflection_output
+    assert "Einleitung präzisieren" in first_reflection_output
+    assert "Schlussfolgerung verdeutlichen" in reflection_output
     assert agent._count_words(final_output) >= int(config.word_count * 0.9)
     assert final_draft_file == final_output.strip()
     assert len(final_files) == 1
@@ -566,6 +575,11 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert agent._llm_generation and agent._llm_generation["status"] == "success"
     assert agent.runtime_seconds is not None
     assert agent.runtime_seconds >= 0
+    reflection_zero_event = next(
+        entry for entry in run_log_entries if entry["step"] == "reflection_00"
+    )
+    assert reflection_zero_event["status"] == "completed"
+    assert "reflection_01.txt" in reflection_zero_event["artifacts"]
     reflection_event = next(
         entry for entry in run_log_entries if entry["step"] == "reflection_01"
     )
@@ -1348,6 +1362,105 @@ def test_revision_prompt_includes_reflection_suggestions(
     assert "verbindlichen Arbeitsauftrag" in prompt_text
     assert captured_prompt["prompt_type"] == "revision"
 
+
+def test_run_applies_initial_reflection_to_first_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 150)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama2"
+
+    sections = [OutlineSection("1", "Einstieg", "Hook", 60, "Kontext schaffen")]
+
+    agent = WriterAgent(
+        topic="Reflexion nutzen",
+        word_count=150,
+        steps=[],
+        iterations=1,
+        config=config,
+        content="Ausgangssituation",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+        include_compliance_note=False,
+    )
+
+    monkeypatch.setattr(WriterAgent, "_generate_briefing", lambda self: {"goal": "Test"})
+    monkeypatch.setattr(WriterAgent, "_improve_idea_with_llm", lambda self: "Stichpunkte")
+    monkeypatch.setattr(WriterAgent, "_extract_idea_bullets", lambda self, text: [])
+    monkeypatch.setattr(WriterAgent, "_create_outline_with_llm", lambda self, briefing: sections)
+    monkeypatch.setattr(WriterAgent, "_refine_outline_with_llm", lambda self, briefing, secs: list(secs))
+    monkeypatch.setattr(WriterAgent, "_clean_outline_sections", lambda self, secs: list(secs))
+    monkeypatch.setattr(WriterAgent, "_perform_source_research", lambda self, secs: None)
+    monkeypatch.setattr(
+        WriterAgent,
+        "_generate_draft_from_outline",
+        lambda self, briefing, secs, idea_text: "Ausgangstext",
+    )
+    monkeypatch.setattr(
+        WriterAgent,
+        "_apply_text_type_review",
+        lambda self, draft, briefing, secs: draft,
+    )
+    monkeypatch.setattr(
+        WriterAgent,
+        "_run_compliance",
+        lambda self, stage, text, ensure_sources=False, annotation_label=None: text,
+    )
+    monkeypatch.setattr(
+        WriterAgent,
+        "_ensure_target_word_count",
+        lambda self, text, briefing, secs: (text, False),
+    )
+    def _fake_write_final_output(self: WriterAgent, text: str) -> Path:
+        path = self.output_dir / "Final-00000000-000000.txt"
+        self._write_text(path, text)
+        return path
+
+    monkeypatch.setattr(WriterAgent, "_write_final_output", _fake_write_final_output)
+    monkeypatch.setattr(WriterAgent, "_write_metadata", lambda self, text: None)
+    monkeypatch.setattr(WriterAgent, "_write_compliance_report", lambda self: None)
+    monkeypatch.setattr(WriterAgent, "_write_logs", lambda self, briefing, outline: None)
+
+    stage_outputs = {
+        "reflection_00_llm": "1. Einstieg zuspitzen – Abschnitt 1.",
+        "revision_01_llm": "Überarbeiteter Text",
+        "reflection_01_llm": "",
+    }
+    captured_prompts: dict[str, str] = {}
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: dict[str, object] | None = None,
+    ) -> str:
+        captured_prompts[stage] = prompt
+        return stage_outputs.get(stage, "OK")
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    final_text = agent.run()
+
+    assert final_text == "Überarbeiteter Text"
+    revision_prompt = captured_prompts["revision_01_llm"]
+    assert prompts.REVISION_REFLECTION_HEADER in revision_prompt
+    assert "Einstieg zuspitzen" in revision_prompt
+    initial_reflection_path = config.output_dir / "reflection_01.txt"
+    assert initial_reflection_path.exists()
+    assert (
+        "Einstieg zuspitzen"
+        in initial_reflection_path.read_text(encoding="utf-8").strip()
+    )
 
 def test_ensure_target_word_count_triggers_final_stage(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
