@@ -450,6 +450,15 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
         "2. Zahlenbeispiele ergänzen – Abschnitt 2.\n"
         "3. Abschluss verdichten – Schlussabsatz."
     )
+    filler_sentence = (
+        "Zusätzliche Analysen erweitern die [ENTFERNT: vertrauliche] Bewertung mit konkreten Beispielen "
+        "und klaren Handlungsempfehlungen."
+    )
+    final_stage_text = (
+        "## Überarbeitet\n"
+        "Die Revision fasst [ENTFERNT: vertrauliche] Erkenntnisse zusammen und bleibt konkret.\n\n"
+        + " ".join([filler_sentence] * 30)
+    )
 
     responses = deque(
         [
@@ -462,6 +471,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
             _llm_result(text_type_check),
             _llm_result(revision_text),
             _llm_result(reflection_text),
+            _llm_result(final_stage_text),
         ]
     )
 
@@ -498,6 +508,9 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     reflection_output = (
         config.output_dir / "reflection_02.txt"
     ).read_text(encoding="utf-8").strip()
+    final_draft_file = (
+        config.output_dir / "final_draft.txt"
+    ).read_text(encoding="utf-8").strip()
     final_files = list(config.output_dir.glob("Final-*.txt"))
     metadata = json.loads((config.output_dir / "metadata.json").read_text(encoding="utf-8"))
     compliance = json.loads((config.output_dir / "compliance.json").read_text(encoding="utf-8"))
@@ -513,6 +526,8 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert idea_output == idea_text
     assert "Strategiepfad" in outline_output
     assert "Einleitung präzisieren" in reflection_output
+    assert agent._count_words(final_output) >= int(config.word_count * 0.9)
+    assert final_draft_file == final_output.strip()
     assert len(final_files) == 1
     final_file = final_files[0]
     assert re.fullmatch(r"Final-\d{8}-\d{6}\.txt", final_file.name)
@@ -525,7 +540,7 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert metadata["source_research"] == []
     assert compliance["checks"]
     stages = {entry["stage"] for entry in compliance["checks"]}
-    assert stages == {"draft", "revision_01"}
+    assert stages == {"draft", "revision_01", "final_draft"}
     revision_entry = next(
         entry for entry in compliance["checks"] if entry["stage"] == "revision_01"
     )
@@ -533,12 +548,21 @@ def test_agent_generates_outputs_with_llm(tmp_path: Path, monkeypatch: pytest.Mo
     assert revision_entry["compliance_note_text"] == compliance_note
     draft_entry = next(entry for entry in compliance["checks"] if entry["stage"] == "draft")
     assert draft_entry["compliance_note_text"] == ""
+    final_entry = next(
+        entry for entry in compliance["checks"] if entry["stage"] == "final_draft"
+    )
+    assert final_entry["compliance_note_text"] == compliance_note
     assert compliance["latest_compliance_note"] == compliance_note
     metadata_revision_entry = next(
         entry for entry in metadata["compliance_checks"] if entry["stage"] == "revision_01"
     )
     assert metadata_revision_entry["compliance_note_text"] == compliance_note
+    assert any(
+        entry["stage"] == "final_draft" and entry["compliance_note_text"] == compliance_note
+        for entry in metadata["compliance_checks"]
+    )
     assert metadata["latest_compliance_note"] == compliance_note
+    assert "final_draft" in agent.steps
     assert agent._llm_generation and agent._llm_generation["status"] == "success"
     assert agent.runtime_seconds is not None
     assert agent.runtime_seconds >= 0
@@ -581,6 +605,19 @@ def test_agent_can_omit_outline_headings(
         "Der Ausblick formuliert klar den Mehrwert und ruft zur Aktion auf.",
     ]
     text_type_check = "Keine Abweichungen festgestellt."
+    filler_sentence = (
+        "Der Text vertieft den Blick auf die Ausgangssituation, nennt anschauliche Beispiele "
+        "und betont den unmittelbaren Mehrwert für Leser:innen."
+    )
+    final_stage_text = (
+        section_texts[0]
+        + " "
+        + " ".join([filler_sentence] * 12)
+        + "\n\n"
+        + section_texts[1]
+        + " "
+        + " ".join([filler_sentence] * 15)
+    )
 
     responses = deque(
         [
@@ -591,6 +628,7 @@ def test_agent_can_omit_outline_headings(
             _llm_result(section_texts[0]),
             _llm_result(section_texts[1]),
             _llm_result(text_type_check),
+            _llm_result(final_stage_text),
         ]
     )
 
@@ -621,9 +659,13 @@ def test_agent_can_omit_outline_headings(
     assert "##" not in final_output
     assert final_output.startswith("Der Auftakt führt")
     assert "Mehrwert" in final_output
+    assert agent._count_words(final_output) >= int(config.word_count * 0.9)
 
     current_text = (config.output_dir / "current_text.txt").read_text(encoding="utf-8").strip()
+    final_draft = (config.output_dir / "final_draft.txt").read_text(encoding="utf-8").strip()
     assert current_text == final_output.strip()
+    assert final_draft == final_output.strip()
+    assert "final_draft" in agent.steps
     assert not responses
 
 
@@ -772,6 +814,19 @@ def test_agent_parses_briefing_from_code_block(
         "## 2. Vorteile\nIm Vorteilsteil wird erläutert, wie Innovation den Alltag vereinfacht.",
     ]
     text_type_check = "Keine Abweichungen festgestellt."
+    filler_sentence = (
+        "Der Abschnitt führt die Innovation mit praxisnahen Beispielen aus und zeigt Schritt für Schritt den "
+        "einfachen Einstieg in die Nutzung."
+    )
+    final_stage_text = (
+        section_texts[0]
+        + "\n\n"
+        + " ".join([filler_sentence] * 15)
+        + "\n\n"
+        + section_texts[1]
+        + "\n\n"
+        + " ".join([filler_sentence] * 18)
+    )
 
     responses = deque(
         [
@@ -782,6 +837,7 @@ def test_agent_parses_briefing_from_code_block(
             _llm_result(section_texts[0]),
             _llm_result(section_texts[1]),
             _llm_result(text_type_check),
+            _llm_result(final_stage_text),
         ]
     )
 
@@ -810,10 +866,16 @@ def test_agent_parses_briefing_from_code_block(
     final_output = agent.run()
 
     briefing_output = json.loads((config.output_dir / "briefing.json").read_text(encoding="utf-8"))
+    final_draft_output = (
+        config.output_dir / "final_draft.txt"
+    ).read_text(encoding="utf-8").strip()
 
     assert "Innovation" in final_output
+    assert agent._count_words(final_output) >= int(config.word_count * 0.9)
+    assert final_draft_output == final_output.strip()
     assert briefing_output["goal"] == briefing_payload["goal"]
     assert briefing_output["messages"] == briefing_payload["messages"]
+    assert "final_draft" in agent.steps
     assert not responses
 
 
@@ -1287,6 +1349,80 @@ def test_revision_prompt_includes_reflection_suggestions(
     assert captured_prompt["prompt_type"] == "revision"
 
 
+def test_ensure_target_word_count_triggers_final_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 120)
+    config.llm_provider = "ollama"
+    config.llm_model = "llama2"
+
+    agent = WriterAgent(
+        topic="Längenprüfung",
+        word_count=120,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Memo",
+        audience="Team",
+        tone="klar",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    sections = [
+        OutlineSection("1", "Einstieg", "Hook", 60, "Kontext"),
+        OutlineSection("2", "Nutzen", "Argument", 60, "Beispiel"),
+    ]
+    briefing = {"goal": "Test"}
+
+    call_count = 0
+    captured: dict[str, Any] = {}
+    expanded_text = "Langer Text " + "Wort " * 150
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: Mapping[str, Any] | None = None,
+    ) -> str:
+        nonlocal call_count
+        call_count += 1
+        captured["stage"] = stage
+        captured["prompt_type"] = prompt_type
+        captured["prompt"] = prompt
+        captured["data"] = dict(data or {})
+        return expanded_text
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    short_text = "Zu kurzer Text."
+    result, adjusted = agent._ensure_target_word_count(short_text, briefing, sections)
+
+    assert adjusted is True
+    assert result == expanded_text
+    assert call_count == 1
+    assert captured["stage"] == "final_draft_llm"
+    assert captured["prompt_type"] == "final_draft"
+    assert '"goal": "Test"' in captured["prompt"]
+    assert captured["data"]["current_words"] == agent._count_words(short_text)
+    min_words, _ = agent._calculate_word_limits(agent.word_count)
+    assert captured["data"]["min_words"] == min_words
+
+    long_text = "Wort " * 130
+    result_long, adjusted_long = agent._ensure_target_word_count(long_text, briefing, sections)
+    assert adjusted_long is False
+    assert result_long.strip() == long_text.strip()
+    assert call_count == 1
+
+
 def test_stage_parameters_use_configured_generation_limits(tmp_path: Path) -> None:
     config = _build_config(tmp_path, 400)
     config.llm.num_predict = 1234
@@ -1422,6 +1558,17 @@ def test_text_type_fix_applied_when_needed(
     final_draft_text = "## 1. Fokus\nDer Abschnitt bleibt allgemein und verzichtet auf einen klaren CTA."
     check_report = "- Abschnitt 1: Kein klarer CTA am Ende."
     fix_response = "## 1. Fokus\nSchärferer Abschnitt mit klarem CTA zum Schluss."
+    final_stage_text = (
+        fix_response
+        + "\n\n"
+        + " ".join(
+            [
+                "Der Abschnitt liefert konkrete Beispiele, stärkt den Nutzen und endet mit einem klaren CTA, "
+                "der Leser:innen unmittelbar anspricht."
+            ]
+            * 20
+        )
+    )
 
     responses = deque(
         [
@@ -1432,6 +1579,7 @@ def test_text_type_fix_applied_when_needed(
             _llm_result(final_draft_text),
             _llm_result(check_report),
             _llm_result(fix_response),
+            _llm_result(final_stage_text),
         ]
     )
 
@@ -1459,12 +1607,16 @@ def test_text_type_fix_applied_when_needed(
     final_output = agent.run()
 
     fix_file = (config.output_dir / "text_type_fix.txt").read_text(encoding="utf-8").strip()
+    final_draft = (config.output_dir / "final_draft.txt").read_text(encoding="utf-8").strip()
     metadata = json.loads((config.output_dir / "metadata.json").read_text(encoding="utf-8"))
 
     assert "CTA" in final_output
-    assert final_output.strip() == fix_response
+    assert agent._count_words(final_output) >= int(config.word_count * 0.9)
+    assert final_output.strip() == final_stage_text
     assert fix_file == fix_response
     assert "text_type_fix" in agent.steps
+    assert "final_draft" in agent.steps
+    assert final_draft == final_output.strip()
     assert metadata["rubric_passed"] is True
     assert metadata["source_research"] == []
     assert not responses

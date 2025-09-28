@@ -384,6 +384,17 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
         "2. Umsetzung konkretisieren – Abschnitt 2.\n"
         "3. Schlussfolgerung schärfen – Abschluss."
     )
+    final_stage_text = (
+        "## Überarbeitung\n"
+        "Die Revision blendet [ENTFERNT: vertrauliche] Hinweise aus und fokussiert Umsetzung.\n\n"
+        + " ".join(
+            [
+                "Zusätzliche Analysen beleuchten die [ENTFERNT: vertrauliche] Umsetzung mit konkreten Beispielen "
+                "und klaren Handlungsempfehlungen."
+            ]
+            * 35
+        )
+    )
 
     responses = deque(
         [
@@ -396,6 +407,7 @@ def test_automatikmodus_runs_and_creates_outputs(tmp_path: Path, monkeypatch: py
             _llm_result(text_type_check),
             _llm_result(revision_text),
             _llm_result(reflection_text),
+            _llm_result(final_stage_text),
         ]
     )
 
@@ -704,6 +716,13 @@ def test_defaults_applied_for_missing_extended_arguments(tmp_path: Path, monkeyp
             _llm_result("1. Abschnitt (Rolle: Hook, Wortbudget: 80 Wörter) -> Kontext."),
             _llm_result("Der Text bleibt allgemein."),
             _llm_result("Keine Abweichungen festgestellt."),
+            _llm_result(
+                (
+                    "Der Text bleibt allgemein, wird aber um zahlreiche praxisnahe Beispiele ergänzt, die Schritt für Schritt "
+                    "die Vorteile erläutern und Leser:innen aktiv zum Handeln motivieren. "
+                )
+                * 20
+            ),
         ]
     )
 
