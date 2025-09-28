@@ -94,7 +94,7 @@ REVISION_SYSTEM_PROMPT: str = ""
 REFLECTION_SYSTEM_PROMPT: str = ""
 FINAL_DRAFT_SYSTEM_PROMPT: str = ""
 COMPLIANCE_HINT_INSTRUCTION: str = ""
-REVISION_REFLECTION_HEADER: str = "Verbesserungsfokus aus letzter Reflexion:"
+REVISION_REFLECTION_HEADER: str = "Arbeitsanweisungen aus letzter Reflexion:"
 
 
 def _read_prompt_config(
