@@ -342,7 +342,9 @@ class WriterAgent:
 
         self.steps = list(self.steps or [])
         self.seo_keywords = [kw.strip() for kw in (self.seo_keywords or []) if kw.strip()]
-        self.include_outline_headings = bool(self.include_outline_headings)
+        self.include_outline_headings = self._coerce_bool(
+            self.include_outline_headings, "include_outline_headings"
+        )
         self._apply_input_defaults()
         self.output_dir = Path(self.config.output_dir)
         self.logs_dir = Path(self.config.logs_dir)
@@ -380,6 +382,30 @@ class WriterAgent:
                 data=hint.get("data"),
             )
         self._pending_hints.clear()
+
+    @staticmethod
+    def _coerce_bool(value: Any, field_name: str) -> bool:
+        """Normalise boolean flags that may arrive as strings or numbers."""
+
+        if isinstance(value, bool):
+            return value
+
+        if isinstance(value, str):
+            normalised = value.strip().lower()
+            truthy = {"true", "1", "yes", "ja"}
+            falsy = {"false", "0", "no", "nein"}
+            if normalised in truthy:
+                return True
+            if normalised in falsy:
+                return False
+
+        if isinstance(value, int):
+            if value in (0, 1):
+                return bool(value)
+
+        raise WriterAgentError(
+            f"`{field_name}` muss boolesch sein (true/false, ja/nein oder 0/1)."
+        )
 
     def _apply_input_defaults(self) -> None:
         self.topic = self.topic.strip()

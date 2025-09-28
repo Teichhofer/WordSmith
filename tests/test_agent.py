@@ -683,6 +683,61 @@ def test_agent_can_omit_outline_headings(
     assert not responses
 
 
+def test_generate_draft_from_outline_accepts_string_outline_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 180)
+    agent = WriterAgent(
+        topic="String-Flag",  # pragma: no mutate - descriptive topic
+        word_count=180,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Artikel",
+        audience="Team",
+        tone="neutral",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+        include_outline_headings="false",
+    )
+
+    sections = [
+        OutlineSection("1", "Intro", "Hook", 90, "Kontext"),
+        OutlineSection("2", "Nutzen", "Argument", 90, "Belege"),
+    ]
+
+    outputs = deque([
+        "Erster Abschnitt beschreibt den Einstieg.",
+        "Zweiter Abschnitt liefert überzeugende Argumente.",
+    ])
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: Mapping[str, Any] | None = None,
+    ) -> str:
+        return outputs.popleft()
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    draft = agent._generate_draft_from_outline({"goal": "Überzeugen"}, sections, "- Ideenskizze")
+
+    assert agent.include_outline_headings is False
+    assert "##" not in draft
+    assert "Erster Abschnitt" in draft
+    assert "Zweiter Abschnitt" in draft
+    assert not outputs
+
+
 def test_perform_source_research_uses_outline_titles(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
