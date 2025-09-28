@@ -155,7 +155,7 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "dichte Übergänge" in revision_template
     assert "WICHTIG: Gib ausschließlich den überarbeiteten Text zurück" in revision_template
     assert (
-        "Verbesserungsfokus aus letzter Reflexion\" nur als interne To-do-Liste"
+        "Arbeitsanweisungen aus letzter Reflexion\" nur als interne To-do-Liste"
         in revision_template
     )
     assert "Poliere" in prompts.REVISION_SYSTEM_PROMPT
