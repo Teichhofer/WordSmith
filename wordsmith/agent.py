@@ -575,6 +575,9 @@ class WriterAgent:
             )
 
             pending_reflection: str | None = None
+            if self.iterations > 0:
+                initial_reflection = self._generate_reflection(draft, 0)
+                pending_reflection = self._store_reflection(0, initial_reflection)
 
             for iteration in range(1, self.iterations + 1):
                 revised = self._revise_with_llm(
@@ -607,19 +610,7 @@ class WriterAgent:
                 )
 
                 reflection = self._generate_reflection(draft, iteration)
-                if reflection:
-                    reflection_path = self.output_dir / f"reflection_{iteration + 1:02d}.txt"
-                    self._write_text(reflection_path, reflection)
-                    self.steps.append(f"reflection_{iteration:02d}")
-                    self._record_run_event(
-                        f"reflection_{iteration:02d}",
-                        f"Reflexion {iteration:02d} abgeschlossen",
-                        artifacts=[reflection_path],
-                        data={"iteration": iteration},
-                    )
-                    pending_reflection = reflection.strip() or None
-                else:
-                    pending_reflection = None
+                pending_reflection = self._store_reflection(iteration, reflection)
 
             previous_word_count = self._count_words(draft)
             draft, length_adjusted = self._ensure_target_word_count(
@@ -1827,6 +1818,25 @@ class WriterAgent:
             failure_message=f"Reflexion {iteration:02d} fehlgeschlagen",
             data={"iteration": iteration, "phase": "reflection", "target_words": self.word_count},
         )
+
+    def _store_reflection(self, iteration: int, reflection: str | None) -> str | None:
+        """Persist the reflection for ``iteration`` and return trimmed text."""
+
+        reflection_text = (reflection or "").strip()
+        if not reflection_text:
+            return None
+
+        reflection_path = self.output_dir / f"reflection_{iteration + 1:02d}.txt"
+        step_name = f"reflection_{iteration:02d}"
+        self._write_text(reflection_path, reflection_text)
+        self.steps.append(step_name)
+        self._record_run_event(
+            step_name,
+            f"Reflexion {iteration:02d} abgeschlossen",
+            artifacts=[reflection_path],
+            data={"iteration": iteration},
+        )
+        return reflection_text
 
     # ------------------------------------------------------------------
     # Compliance helpers
