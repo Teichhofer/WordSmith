@@ -621,6 +621,35 @@ class WriterAgent:
                 else:
                     pending_reflection = None
 
+            previous_word_count = self._count_words(draft)
+            draft, length_adjusted = self._ensure_target_word_count(
+                draft, briefing, outline_sections
+            )
+            if length_adjusted:
+                previous_note = self._compliance_note
+                if previous_note and previous_note not in draft:
+                    draft = f"{draft.rstrip()}\n\n{previous_note}"
+                draft = self._run_compliance(
+                    "final_draft",
+                    draft,
+                    ensure_sources=self.sources_allowed,
+                )
+                final_stage_path = self.output_dir / "final_draft.txt"
+                self._write_text(final_stage_path, draft)
+                self._write_text(self.output_dir / "current_text.txt", draft)
+                self.steps.append("final_draft")
+                self._record_run_event(
+                    "final_draft",
+                    "Finalen Entwurf auf Zielwortzahl erweitert",
+                    artifacts=[final_stage_path, self.output_dir / "current_text.txt"],
+                    data={
+                        "phase": "final_draft",
+                        "target_words": self.word_count,
+                        "previous_word_count": previous_word_count,
+                        "final_word_count": self._count_words(draft),
+                    },
+                )
+
             final_output_path = self._write_final_output(draft)
             final_word_count = self._count_words(draft)
             self._write_metadata(draft)
@@ -1721,6 +1750,67 @@ class WriterAgent:
             failure_message=f"Revision {iteration:02d} fehlgeschlagen",
             data={"iteration": iteration, "target_words": self.word_count},
         )
+
+    def _ensure_target_word_count(
+        self,
+        text: str,
+        briefing: Mapping[str, Any] | None,
+        sections: Sequence[OutlineSection],
+    ) -> tuple[str, bool]:
+        min_words, _ = self._calculate_word_limits(self.word_count)
+        current_words = self._count_words(text)
+        if current_words >= min_words:
+            return text, False
+
+        outline_text = self._format_outline_for_prompt(sections)
+        style_summary = self._compose_final_style_summary()
+        briefing_payload: Mapping[str, Any] = briefing or {}
+        try:
+            briefing_text = json.dumps(briefing_payload, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            briefing_text = json.dumps({}, ensure_ascii=False, indent=2)
+
+        base_prompt = prompts.buildFinalDraftPrompt(
+            title=self.topic,
+            outline=outline_text,
+            style=style_summary,
+            targetWords=self.word_count,
+            output_format="text-only",
+        )
+        expansion_prompt = (
+            f"{base_prompt}\n\n"
+            f"Der aktuelle Entwurf umfasst nur {current_words} Wörter und liegt unter dem Mindestziel von "
+            f"{min_words} Wörtern. Ergänze substanziellen Inhalt, erweitere Beispiele und beantworte offene Fragen, "
+            "ohne Abschnitte zu kürzen oder den Tonfall zu ändern. Nutze Briefing und Outline als verbindlichen Rahmen "
+            "und markiere unsichere Fakten weiterhin mit [KLÄREN: …].\n\n"
+            "Briefing:\n"
+            f"{briefing_text}\n\n"
+            "Aktueller Entwurf:\n"
+            f"{text.strip()}"
+        )
+
+        improved = self._call_llm_stage(
+            stage="final_draft_llm",
+            prompt_type="final_draft",
+            prompt=expansion_prompt,
+            system_prompt=prompts.FINAL_DRAFT_SYSTEM_PROMPT,
+            success_message="Finalen Entwurf erweitert",
+            failure_message="Finaler Entwurf konnte nicht erweitert werden",
+            data={
+                "phase": "final_draft",
+                "target_words": self.word_count,
+                "current_words": current_words,
+                "min_words": min_words,
+            },
+        )
+        if not improved:
+            return text, False
+
+        improved_words = self._count_words(improved)
+        if improved_words <= current_words:
+            return text, False
+
+        return improved, True
 
     def _generate_reflection(self, text: str, iteration: int) -> str | None:
         prompt = (
