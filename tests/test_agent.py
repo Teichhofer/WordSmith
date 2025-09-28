@@ -95,10 +95,71 @@ def test_generate_briefing_includes_word_count(
     assert captured["prompt_type"] == "briefing"
 
 
+def test_generate_reflection_includes_word_gap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 200)
+
+    agent = WriterAgent(
+        topic="Testthema",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Blogartikel",
+        audience="Zielgruppe",
+        tone="lebhaft",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    captured: dict[str, Any] = {}
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: dict[str, object] | None = None,
+    ) -> str:
+        captured["prompt"] = prompt
+        captured["data"] = data or {}
+        captured["stage"] = stage
+        captured["system_prompt"] = system_prompt
+        captured["prompt_type"] = prompt_type
+        return "1. Wortbudget schließen – Gesamttext."
+
+    monkeypatch.setattr(
+        WriterAgent,
+        "_call_llm_stage",
+        fake_call_llm_stage,
+    )
+
+    text = "Wort " * 120
+    reflection = agent._generate_reflection(text, 1)
+
+    assert "Zielwortzahl von 200 Wörtern" in captured["prompt"]
+    assert "aktuelle Länge (120 Wörter)" in captured["prompt"]
+    assert "fehlenden 80 Wörter" in captured["prompt"]
+    assert captured["prompt_type"] == "reflection"
+    assert captured["stage"] == "reflection_01_llm"
+    assert captured["system_prompt"] == prompts.REFLECTION_SYSTEM_PROMPT
+    assert captured["data"].get("current_words") == 120
+    assert captured["data"].get("word_gap") == 80
+    assert reflection == "1. Wortbudget schließen – Gesamttext."
+
+
 def test_section_prompt_includes_full_previous_text(tmp_path: Path) -> None:
     config = _build_config(tmp_path, 200)
     agent = WriterAgent(
-        topic="Serial", 
+        topic="Serial",
         word_count=200,
         steps=[],
         iterations=0,

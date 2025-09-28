@@ -1830,8 +1830,22 @@ class WriterAgent:
         return improved, True
 
     def _generate_reflection(self, text: str, iteration: int) -> str | None:
+        current_words = self._count_words(text)
+        word_gap = max(self.word_count - current_words, 0)
+        prompt_template = prompts.REFLECTION_PROMPT.strip()
+        if prompt_template:
+            prompt_body = prompts.format_prompt(
+                prompt_template,
+                {
+                    "target_words": self.word_count,
+                    "current_words": current_words,
+                    "word_gap": word_gap,
+                },
+            )
+        else:
+            prompt_body = ""
         prompt = (
-            prompts.REFLECTION_PROMPT.strip()
+            prompt_body
             + "\n\nText:\n"
             + text.strip()
         )
@@ -1842,7 +1856,13 @@ class WriterAgent:
             system_prompt=prompts.REFLECTION_SYSTEM_PROMPT,
             success_message=f"Reflexion {iteration:02d} generiert",
             failure_message=f"Reflexion {iteration:02d} fehlgeschlagen",
-            data={"iteration": iteration, "phase": "reflection", "target_words": self.word_count},
+            data={
+                "iteration": iteration,
+                "phase": "reflection",
+                "target_words": self.word_count,
+                "current_words": current_words,
+                "word_gap": word_gap,
+            },
         )
 
     def _store_reflection(self, iteration: int, reflection: str | None) -> str | None:
