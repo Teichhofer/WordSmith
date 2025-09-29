@@ -4,6 +4,7 @@ import json
 import re
 import sys
 from collections import deque
+import logging
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -2157,3 +2158,51 @@ def test_truncate_following_sections_detects_heading(tmp_path: Path) -> None:
     result = agent._truncate_following_sections(text, remaining)
 
     assert result == "Einleitung mit Beispielen."
+
+
+def test_record_run_event_emits_structured_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    agent = _build_agent(tmp_path, 150)
+
+    with caplog.at_level(logging.INFO):
+        agent._record_run_event(
+            "briefing",
+            "Briefing generiert",
+            status="warning",
+            data={"details": "example"},
+        )
+
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
+    log_record = caplog.records[-1]
+    assert "[WARNING] briefing" in log_record.getMessage()
+    event = getattr(log_record, "wordsmith_event")
+    assert event["step"] == "briefing"
+    assert event["data"]["details"] == "example"
+
+
+def test_call_llm_stage_logs_stage_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    agent = _build_agent(tmp_path, 150)
+    agent.config.llm_model = "dummy-model"
+
+    def fake_generate_text(**_: Any) -> llm.LLMResult:
+        return _llm_result("Antwort")
+
+    monkeypatch.setattr(llm, "generate_text", fake_generate_text)
+
+    with caplog.at_level(logging.DEBUG):
+        agent._call_llm_stage(
+            stage="section_01_llm",
+            prompt_type="section",
+            prompt="Prompt",
+            system_prompt="System",
+            success_message="OK",
+            failure_message="Fehler",
+            data={"phase": "section", "target_words": 75},
+        )
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("LLM-Phase section_01_llm gestartet" in message for message in messages)
+    assert any("LLM-Phase section_01_llm abgeschlossen" in message for message in messages)
