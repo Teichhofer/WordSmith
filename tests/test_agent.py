@@ -207,6 +207,7 @@ def test_section_prompt_includes_full_previous_text(tmp_path: Path) -> None:
         role="Drama",
         budget=100,
         deliverable="Konflikt zuspitzen",
+        notes=[("Storypunkt", "Der Konflikt spitzt sich zu."), ("", "Eine unerwartete Wendung erschüttert die Gruppe.")],
     )
 
     previous_text = "Der Auftakt legt die Welt dar und führt die Heldin ein."
@@ -224,6 +225,7 @@ def test_section_prompt_includes_full_previous_text(tmp_path: Path) -> None:
     context_block = section_block.split("\n\nBriefing:", 1)[0]
     assert previous_text in context_block
     assert context_block.count(previous_text) == 1
+    assert "Storypunkte:\n1. Storypunkt: Der Konflikt spitzt sich zu.\n2. Eine unerwartete Wendung erschüttert die Gruppe." in prompt
 
 
 def test_section_prompt_handles_missing_previous_sections(tmp_path: Path) -> None:
@@ -261,6 +263,7 @@ def test_section_prompt_handles_missing_previous_sections(tmp_path: Path) -> Non
     )
 
     assert "Noch kein Abschnitt verfasst." in prompt
+    assert "[KLÄREN: Storypunkte für Abschnitt 1 \"Einleitung\" definieren]" in prompt
 
 
 def test_section_prompt_prefers_extracted_idea_bullets(tmp_path: Path) -> None:
@@ -301,6 +304,50 @@ def test_section_prompt_prefers_extracted_idea_bullets(tmp_path: Path) -> None:
 
     assert "Kernaussagen:\n- Fakten klar strukturieren\n- Konkrete Beispiele nutzen" in prompt
     assert "Summary: sollte nicht erscheinen" not in prompt
+    assert "Storypunkte:\n[KLÄREN: Storypunkte für Abschnitt 1 \"Einblick\" definieren]" in prompt
+
+
+def test_section_prompt_lists_story_points(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 200)
+    agent = WriterAgent(
+        topic="Märchen",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Erzählung",
+        audience="Kinder",
+        tone="warm",
+        register="Du",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    section = OutlineSection(
+        number="3",
+        title="Auflösung",
+        role="Finale",
+        budget=200,
+        deliverable="Konflikt beenden",
+        notes=[
+            ("Storypunkt", "Die Heldin erkennt die verborgene Wahrheit."),
+            ("Emotion", "Alle feiern die neu gewonnene Freiheit."),
+            ("", "Ein letzter Blick in die Zukunft zeigt Hoffnung."),
+        ],
+    )
+
+    prompt = agent._build_section_prompt(
+        briefing={"goal": "Happy End"},
+        sections=[section],
+        section=section,
+        idea_text="- Hoffnung betonen",
+        compiled_sections=[],
+    )
+
+    story_block = "Storypunkte:\n1. Storypunkt: Die Heldin erkennt die verborgene Wahrheit.\n2. Emotion: Alle feiern die neu gewonnene Freiheit.\n3. Ein letzter Blick in die Zukunft zeigt Hoffnung."
+    assert story_block in prompt
 
 
 def test_section_normalisation_converts_lists_to_prose(tmp_path: Path) -> None:
@@ -1146,6 +1193,7 @@ def test_generate_draft_from_outline_compiles_sections(
             role="Hook",
             budget=110,
             deliverable="Kontext schaffen.",
+            notes=[("Storypunkt", "Leser:innen kennenlernen die Ausgangssituation."), ("", "Eine Frage öffnet den Spannungsbogen.")],
         ),
         OutlineSection(
             number="2",
@@ -1153,6 +1201,7 @@ def test_generate_draft_from_outline_compiles_sections(
             role="Argument",
             budget=110,
             deliverable="Vorteile belegen.",
+            notes=[("Storypunkt", "Belege machen den Mehrwert greifbar."), ("", "Ein Appell führt zum Ausblick."),],
         ),
     ]
     briefing = {"goal": "Überzeugen", "messages": ["Nutzen zeigen"]}
@@ -1204,11 +1253,13 @@ def test_generate_draft_from_outline_compiles_sections(
     assert "Noch kein Abschnitt verfasst." in first_call["prompt"]
     assert sections[0].format_line() in first_call["prompt"]
     assert "Abschnittsdetails:" in first_call["prompt"]
+    assert "Storypunkte:\n1. Storypunkt: Leser:innen kennenlernen die Ausgangssituation.\n2. Eine Frage öffnet den Spannungsbogen." in first_call["prompt"]
     assert "Outline-Überschriften: weglassen" in first_call["prompt"]
     assert first_call["data"]["target_words"] == sections[0].budget
     assert second_call["stage"] == "section_02_llm"
     assert "Vorheriger Abschnitt 'Einstieg'" in second_call["prompt"]
     assert sections[1].format_line() in second_call["prompt"]
+    assert "Storypunkte:\n1. Storypunkt: Belege machen den Mehrwert greifbar.\n2. Ein Appell führt zum Ausblick." in second_call["prompt"]
     assert agent._llm_generation and agent._llm_generation["status"] == "success"
     assert agent.steps and agent.steps[-1] == "llm_generation"
     assert agent._llm_generation["sections"][0]["number"] == "1"

@@ -1085,6 +1085,32 @@ class WriterAgent:
     ) -> str:
         return "\n\n".join(section.format_line() for section in sections)
 
+    def _extract_story_points(self, section: OutlineSection) -> List[str]:
+        story_points: List[str] = []
+        for label, value in section.notes:
+            text = value.strip()
+            if not text:
+                continue
+            label_clean = label.strip()
+            if label_clean:
+                story_points.append(f"{label_clean}: {text}")
+            else:
+                story_points.append(text)
+        return story_points
+
+    def _format_story_points_for_prompt(self, section: OutlineSection) -> str:
+        story_points = self._extract_story_points(section)
+        if story_points:
+            return "\n".join(
+                f"{index}. {point}" for index, point in enumerate(story_points, start=1)
+            )
+
+        number = (section.number or "").strip() or "?"
+        title = (section.title or "").strip() or "Abschnitt"
+        return (
+            f"[KLÄREN: Storypunkte für Abschnitt {number} \"{title}\" definieren]"
+        )
+
     def _refine_outline_with_llm(
         self, briefing: dict, sections: Sequence[OutlineSection]
     ) -> List[OutlineSection]:
@@ -1699,6 +1725,8 @@ class WriterAgent:
         recap = self._build_previous_section_recap(compiled_sections)
         previous_sections_text = previous_text or "Noch kein Abschnitt verfasst."
 
+        story_points_text = self._format_story_points_for_prompt(section)
+
         min_words, max_words = self._calculate_word_limits(section.budget)
         style_guidelines = self._compose_style_guidelines()
 
@@ -1722,6 +1750,8 @@ class WriterAgent:
             + self._format_outline_for_prompt(sections)
             + "\n\nAbschnittsdetails:\n"
             + section.format_line()
+            + "\n\nStorypunkte:\n"
+            + story_points_text
             + "\n\nKernaussagen:\n"
             + idea_clean
         )
