@@ -956,11 +956,12 @@ class WriterAgent:
     ) -> List[OutlineSection]:
         cleaned: List[OutlineSection] = []
         for section in sections:
+            number_value = (section.number or "").strip()
             role_value = (section.role or "").strip()
             deliverable_value = (section.deliverable or "").strip()
             title_value = (section.title or "").strip()
             cleaned_section = OutlineSection(
-                number=section.number,
+                number=number_value,
                 title=title_value or f"Abschnitt {section.number}",
                 role=role_value or "Abschnitt",
                 budget=max(section.budget, 0),
@@ -970,6 +971,26 @@ class WriterAgent:
 
         if not cleaned:
             return []
+
+        used_numbers: set[str] = set()
+        fallback_number = 1
+        for section in cleaned:
+            number_value = section.number.strip()
+            if number_value and number_value not in used_numbers:
+                section.number = number_value
+                used_numbers.add(number_value)
+                try:
+                    numeric_value = int(number_value)
+                except ValueError:
+                    continue
+                fallback_number = max(fallback_number, numeric_value + 1)
+                continue
+
+            while str(fallback_number) in used_numbers:
+                fallback_number += 1
+            section.number = str(fallback_number)
+            used_numbers.add(section.number)
+            fallback_number += 1
 
         positive_budget = sum(section.budget for section in cleaned if section.budget > 0)
         missing_sections: List[OutlineSection] = [
