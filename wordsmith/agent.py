@@ -6,6 +6,7 @@ import ast
 import json
 import math
 import re
+import logging
 from datetime import datetime
 from time import perf_counter
 from dataclasses import asdict, dataclass, field
@@ -27,6 +28,9 @@ from .defaults import (
     VALID_VARIANTS,
 )
 from .llm import LLMGenerationError
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 _COMPLIANCE_PLACEHOLDERS: tuple[str, ...] = (
@@ -2329,6 +2333,15 @@ class WriterAgent:
             event["data"] = data
         event["sequence"] = len(self._run_events)
         self._run_events.append(event)
+        status_normalised = str(status).lower()
+        if status_normalised in {"failed", "error"}:
+            log_level = logging.ERROR
+        elif status_normalised == "warning":
+            log_level = logging.WARNING
+        else:
+            log_level = logging.INFO
+        log_message = f"[{status_normalised.upper()}] {step}: {message}"
+        _LOGGER.log(log_level, log_message, extra={"wordsmith_event": dict(event)})
         if self.progress_callback is not None:
             self.progress_callback(dict(event))
 
@@ -2476,6 +2489,20 @@ class WriterAgent:
             target_words = int(raw_target_words)
         except (TypeError, ValueError):
             target_words = self.word_count
+        _LOGGER.debug(
+            "LLM-Phase %s gestartet (prompt_type=%s, required_tokens=%s, reserve_limit=%s/%s, iteration=%s, target_words=%s)",
+            stage,
+            prompt_type,
+            required_tokens,
+            reserve_limit,
+            token_limit,
+            iteration if isinstance(iteration, int) else None,
+            target_words,
+            extra={
+                "wordsmith_stage": stage,
+                "wordsmith_prompt_type": prompt_type,
+            },
+        )
         if required_tokens > reserve_limit:
             context = {
                 "stage": stage,
@@ -2483,6 +2510,17 @@ class WriterAgent:
                 "required_tokens": required_tokens,
                 "usable_tokens": reserve_limit,
             }
+            _LOGGER.warning(
+                "LLM-Phase %s blockiert: benötigte Tokens %s überschreiten Reservelimit %s (Tokenlimit %s)",
+                stage,
+                required_tokens,
+                reserve_limit,
+                token_limit,
+                extra={
+                    "wordsmith_stage": stage,
+                    "wordsmith_prompt_type": prompt_type,
+                },
+            )
             self._record_telemetry(
                 stage=stage,
                 prompt_type=prompt_type,
@@ -2596,6 +2634,7 @@ class WriterAgent:
             completion_tokens = (
                 int(raw_completion_tokens) if isinstance(raw_completion_tokens, int) else raw_completion_tokens
             )
+        word_count = self._count_words(text)
         self._record_telemetry(
             stage=stage,
             prompt_type=prompt_type,
@@ -2607,8 +2646,21 @@ class WriterAgent:
             status="success",
             prompt_tokens=prompt_tokens if isinstance(prompt_tokens, int) else prompt_tokens,
             completion_tokens=completion_tokens if isinstance(completion_tokens, int) else completion_tokens,
-            output_word_count=self._count_words(text),
+            output_word_count=word_count,
             tokens_per_second=tokens_per_second,
+        )
+        _LOGGER.debug(
+            "LLM-Phase %s abgeschlossen: %s Zeichen, %s Wörter, prompt_tokens=%s, completion_tokens=%s, tokens/s=%s",
+            stage,
+            len(text),
+            word_count,
+            prompt_tokens,
+            completion_tokens,
+            tokens_per_second,
+            extra={
+                "wordsmith_stage": stage,
+                "wordsmith_prompt_type": prompt_type,
+            },
         )
         return text
 
