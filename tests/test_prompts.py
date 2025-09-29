@@ -154,6 +154,7 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Halte Format" in revision_template
     assert "dichte Übergänge" in revision_template
     assert "WICHTIG: Gib ausschließlich den überarbeiteten Text zurück" in revision_template
+    assert "füge keinerlei Anweisungen" in revision_template
     assert (
         "Arbeitsanweisungen aus letzter Reflexion\" nur als interne To-do-Liste"
         in revision_template
@@ -161,6 +162,7 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Poliere" in prompts.REVISION_SYSTEM_PROMPT
     assert "Markdown" in prompts.REVISION_SYSTEM_PROMPT
     assert "Fassung" in prompts.REVISION_SYSTEM_PROMPT
+    assert "vermeide zusätzliche Anweisungen" in prompts.REVISION_SYSTEM_PROMPT
     final_template = prompts.FINAL_DRAFT_PROMPT
     assert "Titel: {title}" in final_template
     assert "Outline:\n{outline}" in final_template
