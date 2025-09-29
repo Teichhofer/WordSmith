@@ -861,57 +861,135 @@ class WriterAgent:
             body = match.group("body").strip()
 
             deliverable: str | None = None
+            role = "Abschnitt"
+            budget = 0
+            metadata_found = False
+
             title_source = body
-            if "(" not in title_source or ")" not in title_source:
-                # Skip enumerated meta items (e.g. Problemlisten) that are not
-                # actual outline entries following the required format.
-                continue
+
+            metadata_segments: list[str] = []
+
+            def _collect_metadata_segment(
+                source: str, delimiter: str
+            ) -> str:
+                left = source
+                while delimiter in left:
+                    before, after = left.split(delimiter, 1)
+                    if any(
+                        keyword in after.lower()
+                        for keyword in ("rolle", "funktion", "wort", "budget", "liefer")
+                    ):
+                        metadata_segments.append(after)
+                        left = before.strip()
+                    else:
+                        break
+                return left
+
             if "->" in body:
-                title_source, deliverable = [
+                title_source, deliverable_candidate = [
                     part.strip() for part in body.split("->", 1)
                 ]
+                for delimiter in (" – ", " — ", " - ", " | "):
+                    deliverable_candidate = _collect_metadata_segment(
+                        deliverable_candidate, delimiter
+                    )
+                if deliverable_candidate:
+                    deliverable = deliverable_candidate.strip()
+                    if deliverable:
+                        metadata_found = True
             else:
                 deliverable_match = re.search(
-                    r"(liefer\w*):\s*(?P<deliverable>[^,;]+)",
+                    r"(liefer\w*):\s*(?P<deliverable>[^,;|]+)",
                     body,
                     flags=re.IGNORECASE,
                 )
                 if deliverable_match:
                     deliverable = deliverable_match.group("deliverable").strip()
+                    metadata_found = True
 
-            detail_text = ""
-            title = title_source
-            detail_match = re.search(r"\((?P<details>[^)]*)\)", title_source)
-            if not detail_match:
-                # Outline entries must include metadata in parentheses;
-                # otherwise we treat the line as non-structural noise.
-                continue
+            for delimiter in (" – ", " — ", " - ", " | "):
+                title_source = _collect_metadata_segment(title_source, delimiter)
 
-            detail_text = detail_match.group("details")
-            title = (
-                title_source[: detail_match.start()]
-                + title_source[detail_match.end():]
-            ).strip()
+            colon_index = title_source.find(":")
+            first_paren_index = title_source.find("(")
+            if (
+                colon_index != -1
+                and (first_paren_index == -1 or colon_index < first_paren_index)
+            ):
+                colon_split = re.split(r"\s*:\s*", title_source, maxsplit=1)
+                if len(colon_split) == 2 and any(
+                    keyword in colon_split[1].lower()
+                    for keyword in ("rolle", "funktion", "wort", "budget", "liefer")
+                ):
+                    metadata_segments.append(colon_split[1])
+                    title_source = colon_split[0].strip()
 
-            role = "Abschnitt"
-            budget = 0
-            if detail_text:
-                for part in re.split(r"[;,]", detail_text):
-                    key, _, value = part.partition(":")
-                    if not _:
+            parenthetical_matches = list(re.finditer(r"\((?P<details>[^)]*)\)", title_source))
+            for match in parenthetical_matches:
+                metadata_segments.append(match.group("details"))
+            title = re.sub(r"\([^)]*\)", "", title_source).strip()
+
+            def _parse_metadata(text: str) -> None:
+                nonlocal role, budget, deliverable, metadata_found
+                normalised = (
+                    text.replace(" – ", ";")
+                    .replace(" — ", ";")
+                    .replace(" - ", ";")
+                )
+                for part in re.split(r"[;|•]", normalised):
+                    cleaned = part.strip()
+                    if not cleaned:
                         continue
-                    key_lower = key.strip().lower()
-                    value = value.strip()
-                    if "rolle" in key_lower or "funktion" in key_lower:
-                        if value:
-                            role = value
-                    elif "wort" in key_lower:
-                        number_match = re.search(r"\d+", value)
-                        if number_match:
+                    key, sep, value = cleaned.partition(":")
+                    if sep:
+                        key_lower = key.strip().lower()
+                        value = value.strip()
+                        if ("rolle" in key_lower or "funktion" in key_lower) and value:
+                            role = value.strip().strip(" .;:,–—|-")
+                            metadata_found = True
+                        elif ("wort" in key_lower or "budget" in key_lower) and value:
+                            number_match = re.search(r"\d+", value)
+                            if number_match:
+                                budget = int(number_match.group())
+                                metadata_found = True
+                        elif "liefer" in key_lower and value:
+                            deliverable = value.strip()
+                            metadata_found = True
+                    else:
+                        number_match = re.search(r"\d+", cleaned)
+                        if number_match and budget == 0:
                             budget = int(number_match.group())
-                    elif "liefer" in key_lower and not deliverable:
-                        if value:
-                            deliverable = value
+                            metadata_found = True
+
+            for segment in metadata_segments:
+                _parse_metadata(segment)
+
+            if not metadata_segments:
+                _parse_metadata(body)
+
+            title = re.sub(
+                r"\b(?:rolle|funktion|wort\w*|budget|liefer\w*)\s*[:=]\s*[^|•,;]+",
+                "",
+                title,
+                flags=re.IGNORECASE,
+            )
+            title = re.sub(r"[|•]", " ", title)
+            title = re.sub(r"\s{2,}", " ", title).strip(" -–—|:;.,")
+
+            if deliverable:
+                deliverable = re.sub(
+                    r"\b(?:rolle|funktion|wort\w*|budget)\b.*$",
+                    "",
+                    deliverable,
+                    flags=re.IGNORECASE,
+                ).strip()
+                deliverable = re.sub(r"\s{2,}", " ", deliverable).strip(" .;:,–—|-)")
+
+            role = role.strip() or "Abschnitt"
+
+            if not metadata_found and deliverable is None and budget == 0:
+                # Skip headings that do not contain any structural metadata.
+                continue
 
             if not title:
                 title = f"Abschnitt {number}"
@@ -929,6 +1007,7 @@ class WriterAgent:
             )
 
         return sections
+
     def _format_outline_for_prompt(
         self, sections: Sequence[OutlineSection]
     ) -> str:
