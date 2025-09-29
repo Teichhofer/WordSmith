@@ -825,6 +825,17 @@ class WriterAgent:
                         bullets.append(cleaned)
         return bullets
 
+    def _format_idea_context(self, fallback_text: str) -> str:
+        bullets = [bullet.strip() for bullet in self._idea_bullets if bullet.strip()]
+        if bullets:
+            return "\n".join(f"- {bullet}" for bullet in bullets)
+
+        cleaned = fallback_text.strip()
+        if cleaned:
+            return cleaned
+
+        return "[KLÄREN: Idee ergänzen]"
+
     def _create_outline_with_llm(self, briefing: dict) -> List[OutlineSection]:
         prompt = prompts.format_prompt(
             prompts.OUTLINE_PROMPT,
@@ -1542,7 +1553,7 @@ class WriterAgent:
             self._format_section_output(prev_section, text)
             for prev_section, text in compiled_sections
         ).strip()
-        idea_clean = idea_text.strip() or "[KLÄREN: Idee ergänzen]"
+        idea_clean = self._format_idea_context(idea_text)
         recap = self._build_previous_section_recap(compiled_sections)
         previous_sections_text = previous_text or "Noch kein Abschnitt verfasst."
 
