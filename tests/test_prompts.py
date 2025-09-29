@@ -167,7 +167,9 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Stil: {style}" in final_template
     assert "Zielwortzahl: {target_words}" in final_template
     assert "{format_instruction}" in final_template
-    assert "konkrete Handlungen" in prompts.REFLECTION_PROMPT
+    assert "wichtigsten nächsten Arbeitsauftrag" in prompts.REFLECTION_PROMPT
+    assert "nummerierten Markdown-Punkt" in prompts.REFLECTION_PROMPT
+    assert "2–3 präzise Sätze" in prompts.REFLECTION_PROMPT
     assert "Zielwortzahl" in prompts.REFLECTION_PROMPT
     assert "{current_words}" in prompts.REFLECTION_PROMPT
     assert "{target_words}" in prompts.REFLECTION_PROMPT

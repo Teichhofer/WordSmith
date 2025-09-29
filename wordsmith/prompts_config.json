@@ -84,7 +84,7 @@
         },
         "reflection": {
             "system_prompt": "Du bist eine reflektierte Schreibmentor:in. Du identifizierst die wirksamsten nächsten Verbesserungen fokussiert, priorisierst nach Wirkung und lieferst klare Handlungsaufforderungen.",
-            "prompt": "Nenne die 3 wirksamsten nächsten Verbesserungen als priorisierte Markdown-Liste (1 = höchste Wirkung).\nJeder Punkt: maximal 15 Wörter, klar umsetzbar, mit Hinweis auf den betroffenen Abschnitt oder Absatz.\nFokussiere auf konkrete Handlungen, keine Allgemeinplätze.\nFalls die aktuelle Länge ({current_words} Wörter) unter der Zielwortzahl von {target_words} Wörtern liegt, beginne mit einem Punkt, der präzise erklärt, wie die fehlenden {word_gap} Wörter inhaltlich gefüllt werden.\n",
+            "prompt": "Formuliere nur den wichtigsten nächsten Arbeitsauftrag als nummerierten Markdown-Punkt (1 = höchste Wirkung).\nSchreibe 2–3 präzise Sätze mit klarer Anleitung: benenne betroffene Abschnitte, konkrete Ergänzungen oder Streichungen, Tonalität und gewünschte Wirkung.\nVermeide Allgemeinplätze, bleibe handlungsleitend und füge keine weiteren Punkte hinzu.\nFalls die aktuelle Länge ({current_words} Wörter) unter der Zielwortzahl von {target_words} Wörtern liegt, integriere im Arbeitsauftrag genau, wie die fehlenden {word_gap} Wörter gefüllt werden sollen.\n",
             "parameters": {
                 "temperature": 0.7,
                 "top_p": 1.0,
