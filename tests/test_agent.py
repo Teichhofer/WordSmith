@@ -1247,6 +1247,35 @@ def test_clean_outline_sections_handles_all_zero_budgets(tmp_path: Path) -> None
     assert all(section.budget > 0 for section in cleaned)
 
 
+def test_clean_outline_sections_ensures_unique_numbers(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 300)
+    agent = WriterAgent(
+        topic="Nummern",
+        word_count=300,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Blogartikel",
+        audience="Leser:innen",
+        tone="neutral",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    sections = [
+        OutlineSection("1", "Einleitung", "Hook", 100, "Rahmen setzen"),
+        OutlineSection("1", "Vertiefung", "Analyse", 100, "Details liefern"),
+        OutlineSection("", "Schluss", "Fazit", 100, "Abschluss formulieren"),
+    ]
+
+    cleaned = agent._clean_outline_sections(sections)
+
+    assert [section.number for section in cleaned] == ["1", "2", "3"]
+
+
 def test_generate_draft_from_outline_truncates_multi_section_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
