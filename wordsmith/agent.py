@@ -53,6 +53,10 @@ _DUCKDUCKGO_API_URL = "https://api.duckduckgo.com/"
 _DUCKDUCKGO_TIMEOUT = 10
 _MAX_DUCKDUCKGO_RESULTS = 5
 
+_LIST_ITEM_PATTERN = re.compile(
+    r"^(?:[-*•]|\d+[.)]|[A-Za-z][.)])\s+(?P<content>.+)$"
+)
+
 
 def _extract_json_object(text: str, start_index: int = 0) -> tuple[str, int] | None:
     """Return the next balanced JSON object substring and end position.
@@ -1539,7 +1543,86 @@ class WriterAgent:
         cleaned = text.strip()
         if not cleaned:
             return ""
-        return self._strip_section_heading(section, cleaned)
+        stripped = self._strip_section_heading(section, cleaned)
+        if self._looks_like_list_output(stripped):
+            return self._convert_list_to_prose(stripped)
+        return stripped
+
+    def _looks_like_list_output(self, text: str) -> bool:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if len(lines) < 2:
+            return False
+
+        bullet_lines = sum(1 for line in lines if _LIST_ITEM_PATTERN.match(line))
+        if bullet_lines >= 2:
+            return True
+        if bullet_lines and any(line.endswith(":") for line in lines[:2]):
+            return True
+        return False
+
+    def _convert_list_to_prose(self, text: str) -> str:
+        lines = text.splitlines()
+        paragraphs: List[str] = []
+        current_header: str | None = None
+        current_sentences: List[str] = []
+
+        def flush() -> None:
+            nonlocal current_header, current_sentences
+            if current_header or current_sentences:
+                paragraph = self._compose_list_paragraph(current_header, current_sentences)
+                if paragraph:
+                    paragraphs.append(paragraph)
+            current_header = None
+            current_sentences = []
+
+        for raw_line in lines:
+            stripped = raw_line.strip()
+            if not stripped:
+                flush()
+                continue
+
+            match = _LIST_ITEM_PATTERN.match(stripped)
+            if match:
+                content = match.group("content").strip()
+                if content:
+                    current_sentences.append(self._ensure_sentence_end(content))
+                continue
+
+            if stripped.endswith(":") and not _LIST_ITEM_PATTERN.match(stripped[:-1].strip()):
+                flush()
+                current_header = stripped[:-1].strip()
+                continue
+
+            if current_sentences or current_header:
+                current_sentences.append(self._ensure_sentence_end(stripped))
+            else:
+                current_header = stripped
+
+        flush()
+        return " ".join(paragraph for paragraph in paragraphs if paragraph.strip()).strip()
+
+    @staticmethod
+    def _ensure_sentence_end(text: str) -> str:
+        stripped = text.strip()
+        if not stripped:
+            return ""
+        if stripped.endswith((".", "!", "?", "…")):
+            return stripped
+        return f"{stripped}."
+
+    @staticmethod
+    def _compose_list_paragraph(
+        header: str | None, sentences: Sequence[str]
+    ) -> str:
+        sentence_text = " ".join(sentence.strip() for sentence in sentences if sentence.strip())
+        header_text = (header or "").strip()
+        if header_text and sentence_text:
+            if not header_text.endswith(":"):
+                header_text = f"{header_text}:"
+            return f"{header_text} {sentence_text}".strip()
+        if sentence_text:
+            return sentence_text
+        return header_text
 
     @staticmethod
     def _normalise_heading_token(value: str) -> str:
