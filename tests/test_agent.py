@@ -1187,6 +1187,24 @@ def test_parse_outline_sections_ignores_outline_feedback_block(tmp_path: Path) -
     assert sections[1].budget == 360
 
 
+def test_parse_outline_sections_supports_inline_metadata(tmp_path: Path) -> None:
+    agent = _build_agent(tmp_path, 600)
+    outline_text = (
+        "1. Einstieg – Rolle: Hook | Wortbudget: 120 Wörter | Liefergegenstand: Leser:innen fesseln\n"
+        "2. Hauptteil - Rolle: Analyse - Wortbudget: 360 Wörter - Liefergegenstand: Nutzen belegen\n"
+        "3. Schluss -> Handlungsimpuls geben – Rolle: Abschluss – Wortbudget: 120 Wörter\n"
+    )
+
+    sections = agent._parse_outline_sections(outline_text)
+
+    assert [section.number for section in sections] == ["1", "2", "3"]
+    assert sections[0].title == "Einstieg"
+    assert sections[0].role == "Hook"
+    assert sections[0].budget == 120
+    assert sections[1].deliverable == "Nutzen belegen"
+    assert sections[2].deliverable == "Handlungsimpuls geben"
+
+
 def test_clean_outline_sections_rebalances_overflow(tmp_path: Path) -> None:
     config = _build_config(tmp_path, 500)
     agent = WriterAgent(
