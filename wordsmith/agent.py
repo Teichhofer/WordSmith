@@ -2272,10 +2272,16 @@ class WriterAgent:
             frequency_penalty=self.config.llm.frequency_penalty,
             seed=self.config.llm.seed,
             num_predict=getattr(self.config.llm, "num_predict", None),
+            num_ctx=getattr(self.config.llm, "num_ctx", None),
             stop=getattr(self.config.llm, "stop", ()),
         )
         if hasattr(base, "num_predict"):
             base.num_predict = getattr(self.config.llm, "num_predict", None)
+        if hasattr(base, "num_ctx"):
+            if self.config.llm.has_override("num_ctx"):
+                base.num_ctx = getattr(self.config.llm, "num_ctx", None)
+            else:
+                base.num_ctx = int(self.config.context_length)
         overrides = prompts.STAGE_PROMPT_PARAMETERS.get(prompt_type, {})
         for key, value in overrides.items():
             if key in {"temperature", "top_p"} and self.config.llm.has_override(key):

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
@@ -42,6 +42,7 @@ class LLMParameters:
     frequency_penalty: float = 0.05
     seed: Optional[int] = 42
     num_predict: Optional[int] = 900
+    num_ctx: Optional[int] = None
     stop: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -49,15 +50,44 @@ class LLMParameters:
         if not hasattr(self, "_overrides"):
             self._overrides: set[str] = set()
         self.stop = self._normalise_stop(self.stop)
+        self._record_initial_overrides()
+
+    def _record_initial_overrides(self) -> None:
+        """Mark constructor arguments that differ from defaults as overrides."""
+
+        for field_definition in fields(self):
+            name = field_definition.name
+            if name.startswith("_"):
+                continue
+            default = field_definition.default
+            if default is MISSING and field_definition.default_factory is not MISSING:
+                default = field_definition.default_factory()
+            if default is MISSING:
+                # No sensible default available (should not occur for our fields).
+                continue
+            current = getattr(self, name)
+            if current != default:
+                self._overrides.add(name)
 
     def update(self, values: Dict[str, Any]) -> None:
         """Update the stored parameters with validated values."""
 
         for key, value in values.items():
-            normalised_key = "num_predict" if key == "max_tokens" else key
+            if key == "max_tokens":
+                normalised_key = "num_predict"
+            elif key in {"context_length", "num_ctx"}:
+                normalised_key = "num_ctx"
+            else:
+                normalised_key = key
             if not hasattr(self, normalised_key):
                 raise ConfigError(f"Unbekannter LLM-Parameter: {key}")
-            if normalised_key in {"seed", "num_predict"}:
+            if normalised_key == "seed":
+                setattr(
+                    self,
+                    normalised_key,
+                    None if value is None else int(value),
+                )
+            elif normalised_key in {"num_predict", "num_ctx"}:
                 setattr(
                     self,
                     normalised_key,
@@ -118,6 +148,8 @@ class Config:
         self.prompt_config_path = Path(self.prompt_config_path)
         self.ensure_directories()
         self._apply_minimum_limits()
+        if hasattr(self.llm, "num_ctx") and not self.llm.has_override("num_ctx"):
+            self.llm.num_ctx = self.context_length
         if self.source_search_query_count < 0:
             raise ConfigError("`source_search_query_count` darf nicht negativ sein.")
 
@@ -143,6 +175,8 @@ class Config:
             self.llm.seed = 42
         if hasattr(self.llm, "num_predict") and not self.llm.has_override("num_predict"):
             self.llm.num_predict = self.token_limit
+        if hasattr(self.llm, "num_ctx") and not self.llm.has_override("num_ctx"):
+            self.llm.num_ctx = self.context_length
 
     def ensure_directories(self) -> None:
         """Create output and log directories if they do not exist."""
@@ -166,6 +200,8 @@ class Config:
 
         self.context_length = max(MIN_CONTEXT_LENGTH, int(self.context_length))
         self.token_limit = max(MIN_TOKEN_LIMIT, int(self.token_limit))
+        if hasattr(self.llm, "num_ctx") and not self.llm.has_override("num_ctx"):
+            self.llm.num_ctx = self.context_length
 
 
 def _update_config_from_dict(config: Config, data: Dict[str, Any]) -> None:

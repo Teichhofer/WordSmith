@@ -41,6 +41,7 @@ def test_adjust_for_word_count_scales_limits_and_sets_determinism():
     assert config.word_count == 600
     assert config.context_length == 8192
     assert config.token_limit == 8192
+    assert config.llm.num_ctx == config.context_length
     assert config.llm.temperature == 0.58
     assert config.llm.top_p == 0.65
     assert config.llm.presence_penalty == 0.05
@@ -65,6 +66,7 @@ def test_config_enforces_minimum_windows_on_initialisation(tmp_path):
 
     assert config.context_length == MIN_CONTEXT_LENGTH
     assert config.token_limit == MIN_TOKEN_LIMIT
+    assert config.llm.num_ctx == MIN_CONTEXT_LENGTH
 
 
 def test_loading_config_enforces_minimum_windows(tmp_path):
@@ -83,6 +85,7 @@ def test_loading_config_enforces_minimum_windows(tmp_path):
 
     assert config.context_length == MIN_CONTEXT_LENGTH
     assert config.token_limit == MIN_TOKEN_LIMIT
+    assert config.llm.num_ctx == MIN_CONTEXT_LENGTH
 
 
 def test_cleanup_temporary_outputs_removes_previous_run_files(tmp_path: Path) -> None:
@@ -153,6 +156,23 @@ def test_llm_parameters_support_max_tokens_alias_and_stop_normalisation() -> Non
     assert params.stop == ("ENDE", "Schluss")
 
 
+def test_llm_parameters_support_context_length_alias() -> None:
+    params = LLMParameters()
+
+    params.update({"context_length": 4096})
+
+    assert params.num_ctx == 4096
+    assert params.has_override("num_ctx")
+
+
+def test_llm_parameters_constructor_marks_overrides() -> None:
+    params = LLMParameters(num_predict=512, num_ctx=2048)
+
+    assert params.has_override("num_predict")
+    assert params.has_override("num_ctx")
+    assert not LLMParameters().has_override("num_ctx")
+
+
 def test_adjust_for_word_count_respects_num_predict_override() -> None:
     config = Config()
     config.llm.update({"num_predict": 1200})
@@ -160,3 +180,13 @@ def test_adjust_for_word_count_respects_num_predict_override() -> None:
     config.adjust_for_word_count(600)
 
     assert config.llm.num_predict == 1200
+    assert config.llm.num_ctx == config.context_length
+
+
+def test_config_respects_num_ctx_override(tmp_path: Path) -> None:
+    config = Config(output_dir=tmp_path / "out", logs_dir=tmp_path / "logs")
+    config.llm.update({"num_ctx": 2048})
+
+    config.adjust_for_word_count(600)
+
+    assert config.llm.num_ctx == 2048
