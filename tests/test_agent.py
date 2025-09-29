@@ -262,6 +262,46 @@ def test_section_prompt_handles_missing_previous_sections(tmp_path: Path) -> Non
     assert "Noch kein Abschnitt verfasst." in prompt
 
 
+def test_section_prompt_prefers_extracted_idea_bullets(tmp_path: Path) -> None:
+    config = _build_config(tmp_path, 200)
+    agent = WriterAgent(
+        topic="Feature",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Reportage",
+        audience="Team",
+        tone="informativ",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+    section = OutlineSection(
+        number="1",
+        title="Einblick",
+        role="Abschnitt",
+        budget=200,
+        deliverable="Überblick geben",
+    )
+
+    agent._idea_bullets = ["Fakten klar strukturieren", "Konkrete Beispiele nutzen"]
+
+    prompt = agent._build_section_prompt(
+        briefing={"goal": "Test"},
+        sections=[section],
+        section=section,
+        idea_text="Summary: sollte nicht erscheinen",
+        compiled_sections=[],
+    )
+
+    assert "Kernaussagen:\n- Fakten klar strukturieren\n- Konkrete Beispiele nutzen" in prompt
+    assert "Summary: sollte nicht erscheinen" not in prompt
+
+
 def test_call_llm_stage_stores_raw_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = _build_config(tmp_path, 150)
     config.llm_model = "dummy-model"
