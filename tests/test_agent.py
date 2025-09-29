@@ -302,6 +302,51 @@ def test_section_prompt_prefers_extracted_idea_bullets(tmp_path: Path) -> None:
     assert "Summary: sollte nicht erscheinen" not in prompt
 
 
+def test_section_normalisation_converts_lists_to_prose(tmp_path: Path) -> None:
+    agent = _build_agent(tmp_path, 200)
+    section = OutlineSection(
+        number="1",
+        title="Akte",
+        role="Szene",
+        budget=120,
+        deliverable="Plot voranbringen",
+    )
+
+    list_text = (
+        "Roles:\n"
+        "1. Narrator (reads dialogue written by other team members)\n"
+        "2. Scriptwriter (writes dialogue for narrator)\n\n"
+        "Tasks:\n"
+        "- Research and gather information on AI technology, its potential applications, and current limitations.\n"
+        "- Brainstorm ideas for a storyline that incorporates AI technology in an interesting way."
+    )
+
+    result = agent._normalise_section_text(section, list_text)
+
+    assert "Roles:" in result
+    assert "Narrator (reads dialogue written by other team members)." in result
+    assert "Scriptwriter (writes dialogue for narrator)." in result
+    assert ". Tasks:" in result
+    assert "Brainstorm ideas for a storyline" in result
+    assert not re.search(r"^\s*(?:[-*•]|\d+[.)])", result, re.MULTILINE)
+
+
+def test_section_normalisation_keeps_existing_prose(tmp_path: Path) -> None:
+    agent = _build_agent(tmp_path, 200)
+    section = OutlineSection(
+        number="1",
+        title="Akte",
+        role="Szene",
+        budget=120,
+        deliverable="Plot voranbringen",
+    )
+
+    prose = "Die Szene führt die Heldin ein und beschreibt die neue Umgebung mit Spannung."
+    result = agent._normalise_section_text(section, prose)
+
+    assert result == prose
+
+
 def test_call_llm_stage_stores_raw_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = _build_config(tmp_path, 150)
     config.llm_model = "dummy-model"

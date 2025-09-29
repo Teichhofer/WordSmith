@@ -149,6 +149,8 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "Zielwortzahl" in prompts.SECTION_PROMPT
     assert "Mindestlänge" in prompts.SECTION_PROMPT
     assert "Stil:" in prompts.SECTION_PROMPT
+    assert "Fließtext" in prompts.SECTION_PROMPT
+    assert "keine Listen" in prompts.SECTION_PROMPT
     assert "Qualitätscheck" in prompts.SECTION_PROMPT
     assert "unverkennbar dem im Briefing definierten Texttyp" in prompts.SECTION_PROMPT
     assert "Verknüpfe sichtbar" in prompts.SECTION_PROMPT
