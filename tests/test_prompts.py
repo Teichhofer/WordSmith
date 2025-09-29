@@ -136,19 +136,23 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "handlungsleitende Formulierungen" in prompts.BRIEFING_PROMPT
     assert "Antwortstruktur" in prompts.IDEA_IMPROVEMENT_PROMPT
     assert "[KLÄREN: …]" in prompts.IDEA_IMPROVEMENT_PROMPT
+    assert "Formuliere Kernaussagen" in prompts.IDEA_IMPROVEMENT_PROMPT
     assert "Unterliste" in prompts.OUTLINE_PROMPT
     assert "Stichpunkten" in prompts.OUTLINE_PROMPT
     assert "Übergang & Belege" in prompts.OUTLINE_PROMPT
+    assert "Briefing (siehe Block" in prompts.OUTLINE_PROMPT
     assert "Unterliste" in prompts.OUTLINE_IMPROVEMENT_PROMPT
     assert "Timinghinweise" in prompts.OUTLINE_IMPROVEMENT_PROMPT
     assert "Fundstelle" in prompts.TEXT_TYPE_CHECK_PROMPT
     assert "Stütze jede Bewertung" in prompts.TEXT_TYPE_CHECK_PROMPT
+    assert "Blöcken `Briefing`, `Outline` und `Text`" in prompts.TEXT_TYPE_CHECK_PROMPT
     assert "Zielwortzahl" in prompts.SECTION_PROMPT
     assert "Mindestlänge" in prompts.SECTION_PROMPT
     assert "Stil:" in prompts.SECTION_PROMPT
     assert "Qualitätscheck" in prompts.SECTION_PROMPT
     assert "unverkennbar dem im Briefing definierten Texttyp" in prompts.SECTION_PROMPT
     assert "Verknüpfe sichtbar" in prompts.SECTION_PROMPT
+    assert "Informationsblöcke" in prompts.SECTION_PROMPT
     revision_template = prompts.REVISION_PROMPT.strip()
     assert "Überarbeite den folgenden" in revision_template
     assert "Halte Format" in revision_template
@@ -159,15 +163,19 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
         "Arbeitsanweisungen aus letzter Reflexion\" nur als interne To-do-Liste"
         in revision_template
     )
+    assert "angehängten Briefing-" in revision_template
     assert "Poliere" in prompts.REVISION_SYSTEM_PROMPT
     assert "Markdown" in prompts.REVISION_SYSTEM_PROMPT
     assert "Fassung" in prompts.REVISION_SYSTEM_PROMPT
     assert "vermeide zusätzliche Anweisungen" in prompts.REVISION_SYSTEM_PROMPT
     final_template = prompts.FINAL_DRAFT_PROMPT
     assert "Titel: {title}" in final_template
-    assert "Outline:\n{outline}" in final_template
-    assert "Stil: {style}" in final_template
+    assert "Outline (bereinigt" in final_template
+    assert "{outline}" in final_template
+    assert "Stil- und Kontextrahmen: {style}" in final_template
     assert "Zielwortzahl: {target_words}" in final_template
+    assert "Hinweise:" in final_template
+    assert "Halte dich strikt" in final_template
     assert "{format_instruction}" in final_template
     assert "wichtigsten nächsten Arbeitsauftrag" in prompts.REFLECTION_PROMPT
     assert "nummerierten Markdown-Punkt" in prompts.REFLECTION_PROMPT
@@ -177,6 +185,10 @@ def test_prompt_templates_emphasize_quality_controls() -> None:
     assert "{target_words}" in prompts.REFLECTION_PROMPT
     assert (
         "WICHTIG: Gib ausschließlich den aktualisierten Text zurück"
+        in prompts.TEXT_TYPE_FIX_PROMPT
+    )
+    assert (
+        "Blöcke `Briefing`, `Outline`, `Abweichungen` und `Text`"
         in prompts.TEXT_TYPE_FIX_PROMPT
     )
 
@@ -208,11 +220,12 @@ def test_build_final_draft_prompt_removes_meta_guidance() -> None:
     )
 
     assert prompt_text.startswith("Titel: Erfolgsgeschichte")
-    assert "Outline:\n1. Auftakt" in prompt_text
+    assert "Outline (bereinigt" in prompt_text
+    assert "1. Auftakt" in prompt_text
     assert "Rolle" not in prompt_text
     assert "Budget" not in prompt_text
     assert "->" not in prompt_text
-    assert "Stil: Ton: inspirierend; Register: Du" in prompt_text
+    assert "Stil- und Kontextrahmen: Ton: inspirierend; Register: Du" in prompt_text
     assert "Zielwortzahl: 500" in prompt_text
     assert prompt_text.endswith("Gib nur den Fließtext zurück.")
 
