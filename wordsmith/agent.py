@@ -1113,12 +1113,14 @@ class WriterAgent:
             role_value = (section.role or "").strip()
             deliverable_value = (section.deliverable or "").strip()
             title_value = (section.title or "").strip()
+            notes_value = list(section.notes)
             cleaned_section = OutlineSection(
                 number=number_value,
                 title=title_value or f"Abschnitt {section.number}",
                 role=role_value or "Abschnitt",
                 budget=max(section.budget, 0),
                 deliverable=deliverable_value or "Liefergegenstand definieren.",
+                notes=notes_value,
             )
             cleaned.append(cleaned_section)
 

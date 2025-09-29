@@ -1217,6 +1217,29 @@ def test_clean_outline_sections_assigns_missing_budgets(tmp_path: Path) -> None:
     assert sum(section.budget for section in cleaned) == 600
 
 
+def test_clean_outline_sections_preserves_notes(tmp_path: Path) -> None:
+    agent = _build_agent(tmp_path, 300)
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Einleitung",
+            role="Hook",
+            budget=300,
+            deliverable="Interesse wecken",
+            notes=[
+                ("Fokus", "Problem darstellen"),
+                ("Belege", "Zahlen, Studien"),
+            ],
+        )
+    ]
+
+    cleaned = agent._clean_outline_sections(sections)
+
+    assert cleaned[0].notes == sections[0].notes
+    assert cleaned[0].notes is not sections[0].notes
+
+
 def test_parse_outline_sections_ignores_outline_feedback_block(tmp_path: Path) -> None:
     agent = _build_agent(tmp_path, 600)
     improved_outline = """1. Probleme & Risiken:\n- Wortbudget ungleichmäßig verteilt.\n- Übergänge zwischen Mittelteil und Abschluss fehlen.\n2. Optimierte Outline:\n1. Einleitung (Rolle: Hook; Wortbudget: 120 Wörter; Liefergegenstand: Leser fesseln.)\n    - Fokus: Bedürfnisschärfung\n    - Inhalte: Ausgangslage, Nutzenversprechen, Vorschau\n    - Übergang & Belege: Leitfrage formulieren\n2. Hauptteil (Rolle: Mehrwert; Wortbudget: 360 Wörter; Liefergegenstand: Nutzen belegen.)\n    - Fokus: Kernargumente\n    - Inhalte: Fallbeispiel, Kennzahlen, Expertenzitat\n    - Übergang & Belege: Überleitung zur Handlungsaufforderung\nGesamt: 600 Wörter (Rundung: +0)\n"""
