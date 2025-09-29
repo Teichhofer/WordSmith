@@ -275,14 +275,33 @@ class OutlineSection:
     role: str
     budget: int
     deliverable: str
+    notes: list[tuple[str, str]] = field(default_factory=list)
 
     def format_line(self) -> str:
         """Return the textual representation stored on disk."""
 
-        return (
+        header = (
             f"{self.number}. {self.title} (Rolle: {self.role}, Budget: {self.budget} "
             f"Wörter) -> {self.deliverable}"
         )
+        if not self.notes:
+            return header
+
+        bullet_lines = []
+        for label, value in self.notes:
+            label_clean = label.strip()
+            value_clean = value.strip()
+            if not value_clean:
+                continue
+            if label_clean:
+                bullet_lines.append(f"    - {label_clean}: {value_clean}")
+            else:
+                bullet_lines.append(f"    - {value_clean}")
+
+        if not bullet_lines:
+            return header
+
+        return "\n".join([header, *bullet_lines])
 
 
 class WriterAgentError(Exception):
@@ -859,15 +878,28 @@ class WriterAgent:
         return sections
 
     def _parse_outline_sections(self, outline_text: str) -> List[OutlineSection]:
-        lines = [line.strip() for line in outline_text.splitlines() if line.strip()]
+        raw_lines = [line.rstrip() for line in outline_text.splitlines()]
         sections: List[OutlineSection] = []
         number_pattern = re.compile(
             r"^\s*(?:[-*•]\s*)?(?P<number>\d+(?:\.\d+)*)[\)\.:\-\s]+(?P<body>.+)$"
         )
-        for line in lines:
+        bullet_pattern = re.compile(
+            r"^\s*[-*•]\s*(?:(?P<label>[^:]+):\s*)?(?P<value>.+)$"
+        )
+
+        index = 0
+        total_lines = len(raw_lines)
+        while index < total_lines:
+            line = raw_lines[index].strip()
+            if not line:
+                index += 1
+                continue
+
             match = number_pattern.match(line)
             if not match:
+                index += 1
                 continue
+
             number = match.group("number").strip()
             body = match.group("body").strip()
 
@@ -999,13 +1031,33 @@ class WriterAgent:
             role = role.strip() or "Abschnitt"
 
             if not metadata_found and deliverable is None and budget == 0:
-                # Skip headings that do not contain any structural metadata.
+                index += 1
                 continue
 
             if not title:
                 title = f"Abschnitt {number}"
             if not deliverable:
                 deliverable = "Liefergegenstand definieren."
+
+            index += 1
+            notes: list[tuple[str, str]] = []
+            while index < total_lines:
+                note_candidate = raw_lines[index].strip()
+                if not note_candidate:
+                    index += 1
+                    continue
+                if number_pattern.match(note_candidate):
+                    break
+
+                bullet_match = bullet_pattern.match(note_candidate)
+                if bullet_match:
+                    label = (bullet_match.group("label") or "").strip()
+                    value = bullet_match.group("value").strip()
+                    if value:
+                        notes.append((label, value))
+                else:
+                    notes.append(("", note_candidate))
+                index += 1
 
             sections.append(
                 OutlineSection(
@@ -1014,6 +1066,7 @@ class WriterAgent:
                     role=role,
                     budget=budget,
                     deliverable=deliverable,
+                    notes=notes,
                 )
             )
 
@@ -1022,7 +1075,7 @@ class WriterAgent:
     def _format_outline_for_prompt(
         self, sections: Sequence[OutlineSection]
     ) -> str:
-        return "\n".join(section.format_line() for section in sections)
+        return "\n\n".join(section.format_line() for section in sections)
 
     def _refine_outline_with_llm(
         self, briefing: dict, sections: Sequence[OutlineSection]
@@ -1578,6 +1631,8 @@ class WriterAgent:
             + json.dumps(briefing, ensure_ascii=False, indent=2)
             + "\n\nOutline:\n"
             + self._format_outline_for_prompt(sections)
+            + "\n\nAbschnittsdetails:\n"
+            + section.format_line()
             + "\n\nKernaussagen:\n"
             + idea_clean
         )

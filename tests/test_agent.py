@@ -1157,6 +1157,7 @@ def test_generate_draft_from_outline_compiles_sections(
     assert first_call["system_prompt"] == prompts.SECTION_SYSTEM_PROMPT
     assert "Noch kein Abschnitt verfasst." in first_call["prompt"]
     assert sections[0].format_line() in first_call["prompt"]
+    assert "Abschnittsdetails:" in first_call["prompt"]
     assert "Outline-Überschriften: weglassen" in first_call["prompt"]
     assert first_call["data"]["target_words"] == sections[0].budget
     assert second_call["stage"] == "section_02_llm"
@@ -1225,6 +1226,16 @@ def test_parse_outline_sections_ignores_outline_feedback_block(tmp_path: Path) -
     assert [section.number for section in sections] == ["1", "2"]
     assert sections[0].title == "Einleitung"
     assert sections[1].budget == 360
+    assert sections[0].notes[:3] == [
+        ("Fokus", "Bedürfnisschärfung"),
+        ("Inhalte", "Ausgangslage, Nutzenversprechen, Vorschau"),
+        ("Übergang & Belege", "Leitfrage formulieren"),
+    ]
+    assert sections[1].notes[:3] == [
+        ("Fokus", "Kernargumente"),
+        ("Inhalte", "Fallbeispiel, Kennzahlen, Expertenzitat"),
+        ("Übergang & Belege", "Überleitung zur Handlungsaufforderung"),
+    ]
 
 
 def test_parse_outline_sections_supports_inline_metadata(tmp_path: Path) -> None:
