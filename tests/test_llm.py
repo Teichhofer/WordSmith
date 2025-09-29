@@ -51,7 +51,7 @@ def test_generate_text_uses_configured_timeout(monkeypatch):
         model="mixtral",
         prompt="Hallo",
         system_prompt="System",
-        parameters=LLMParameters(),
+        parameters=LLMParameters(num_ctx=4096),
     )
 
     assert result.text == "Antwort"
@@ -72,10 +72,45 @@ def test_generate_text_starts_with_empty_context(monkeypatch):
         model="mixtral",
         prompt="Hallo",
         system_prompt="System",
-        parameters=LLMParameters(),
+        parameters=LLMParameters(num_ctx=4096),
     )
 
     assert captured["payload"].get("context") == []
+
+
+def test_generate_text_includes_context_and_length_options(monkeypatch):
+    captured = {}
+
+    params = LLMParameters(
+        temperature=0.42,
+        top_p=0.9,
+        presence_penalty=0.15,
+        frequency_penalty=0.05,
+        num_predict=512,
+        num_ctx=3072,
+    )
+
+    def fake_urlopen(request, timeout):
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        return _DummyResponse()
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", fake_urlopen)
+
+    llm.generate_text(
+        provider="ollama",
+        model="mixtral",
+        prompt="Hallo",
+        system_prompt="System",
+        parameters=params,
+    )
+
+    options = captured["payload"].get("options", {})
+    assert options["temperature"] == pytest.approx(0.42)
+    assert options["top_p"] == pytest.approx(0.9)
+    assert options["presence_penalty"] == pytest.approx(0.15)
+    assert options["frequency_penalty"] == pytest.approx(0.05)
+    assert options["num_predict"] == 512
+    assert options["num_ctx"] == 3072
 
 
 def test_generate_text_strips_context_from_raw_payload(monkeypatch):
@@ -110,7 +145,7 @@ def test_generate_text_strips_context_from_raw_payload(monkeypatch):
         model="mixtral",
         prompt="Hallo",
         system_prompt="System",
-        parameters=LLMParameters(),
+        parameters=LLMParameters(num_ctx=4096),
     )
 
     assert result.text == "Antwort"
@@ -142,7 +177,7 @@ def test_generate_text_handles_streaming_payload(monkeypatch):
         model="mixtral",
         prompt="Hallo",
         system_prompt="System",
-        parameters=LLMParameters(),
+        parameters=LLMParameters(num_ctx=4096),
     )
 
     assert result.text == "Erster Teil und zweiter Abschnitt."
@@ -155,12 +190,13 @@ def test_generate_text_handles_streaming_payload(monkeypatch):
 
 
 def test_prepare_options_include_stop_and_num_predict_defaults() -> None:
-    params = LLMParameters()
+    params = LLMParameters(num_ctx=2048)
 
     options = llm._prepare_options(params)
 
     assert options["num_predict"] == 900
     assert options["stop"] == []
+    assert options["num_ctx"] == 2048
 
     params.update({"num_predict": 256, "stop": ["ENDE"]})
 
@@ -168,6 +204,7 @@ def test_prepare_options_include_stop_and_num_predict_defaults() -> None:
 
     assert updated["num_predict"] == 256
     assert updated["stop"] == ["ENDE"]
+    assert updated["num_ctx"] == 2048
 
 
 @pytest.mark.parametrize(

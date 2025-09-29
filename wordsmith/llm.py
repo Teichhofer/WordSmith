@@ -105,6 +105,8 @@ def _prepare_options(parameters: LLMParameters) -> Dict[str, Any]:
         options["seed"] = parameters.seed
     if getattr(parameters, "num_predict", None) is not None:
         options["num_predict"] = int(parameters.num_predict)
+    if getattr(parameters, "num_ctx", None) is not None:
+        options["num_ctx"] = int(parameters.num_ctx)
     stop_sequences = getattr(parameters, "stop", ())
     if stop_sequences is None:
         options["stop"] = []
