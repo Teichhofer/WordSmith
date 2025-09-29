@@ -861,9 +861,15 @@ class WriterAgent:
             body = match.group("body").strip()
 
             deliverable: str | None = None
-            title_part = body
+            title_source = body
+            if "(" not in title_source or ")" not in title_source:
+                # Skip enumerated meta items (e.g. Problemlisten) that are not
+                # actual outline entries following the required format.
+                continue
             if "->" in body:
-                title_part, deliverable = [part.strip() for part in body.split("->", 1)]
+                title_source, deliverable = [
+                    part.strip() for part in body.split("->", 1)
+                ]
             else:
                 deliverable_match = re.search(
                     r"(liefer\w*):\s*(?P<deliverable>[^,;]+)",
@@ -872,16 +878,20 @@ class WriterAgent:
                 )
                 if deliverable_match:
                     deliverable = deliverable_match.group("deliverable").strip()
-                    title_part = body[: deliverable_match.start()].strip()
 
             detail_text = ""
-            title = title_part
-            detail_match = re.search(r"\((?P<details>[^)]*)\)", title_part)
-            if detail_match:
-                detail_text = detail_match.group("details")
-                title = (title_part[: detail_match.start()] + title_part[detail_match.end():]).strip()
-            else:
-                title = title_part.strip()
+            title = title_source
+            detail_match = re.search(r"\((?P<details>[^)]*)\)", title_source)
+            if not detail_match:
+                # Outline entries must include metadata in parentheses;
+                # otherwise we treat the line as non-structural noise.
+                continue
+
+            detail_text = detail_match.group("details")
+            title = (
+                title_source[: detail_match.start()]
+                + title_source[detail_match.end():]
+            ).strip()
 
             role = "Abschnitt"
             budget = 0

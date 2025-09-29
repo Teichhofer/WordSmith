@@ -27,6 +27,25 @@ def _build_config(tmp_path: Path, word_count: int) -> Config:
     return config
 
 
+def _build_agent(tmp_path: Path, word_count: int) -> WriterAgent:
+    config = _build_config(tmp_path, word_count)
+    return WriterAgent(
+        topic="Thema",
+        word_count=word_count,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="",
+        text_type="Artikel",
+        audience="Publikum",
+        tone="sachlich",
+        register="Sie",
+        variant="DE-DE",
+        constraints="",
+        sources_allowed=False,
+    )
+
+
 _DEFAULT_RAW_RESPONSE: dict[str, Any] = {
     "prompt_eval_count": 30,
     "eval_count": 60,
@@ -1155,6 +1174,17 @@ def test_clean_outline_sections_assigns_missing_budgets(tmp_path: Path) -> None:
 
     assert [section.budget for section in cleaned] == [200, 200, 200]
     assert sum(section.budget for section in cleaned) == 600
+
+
+def test_parse_outline_sections_ignores_outline_feedback_block(tmp_path: Path) -> None:
+    agent = _build_agent(tmp_path, 600)
+    improved_outline = """1. Probleme & Risiken:\n- Wortbudget ungleichmäßig verteilt.\n- Übergänge zwischen Mittelteil und Abschluss fehlen.\n2. Optimierte Outline:\n1. Einleitung (Rolle: Hook; Wortbudget: 120 Wörter; Liefergegenstand: Leser fesseln.)\n    - Fokus: Bedürfnisschärfung\n    - Inhalte: Ausgangslage, Nutzenversprechen, Vorschau\n    - Übergang & Belege: Leitfrage formulieren\n2. Hauptteil (Rolle: Mehrwert; Wortbudget: 360 Wörter; Liefergegenstand: Nutzen belegen.)\n    - Fokus: Kernargumente\n    - Inhalte: Fallbeispiel, Kennzahlen, Expertenzitat\n    - Übergang & Belege: Überleitung zur Handlungsaufforderung\nGesamt: 600 Wörter (Rundung: +0)\n"""
+
+    sections = agent._parse_outline_sections(improved_outline)
+
+    assert [section.number for section in sections] == ["1", "2"]
+    assert sections[0].title == "Einleitung"
+    assert sections[1].budget == 360
 
 
 def test_clean_outline_sections_rebalances_overflow(tmp_path: Path) -> None:
