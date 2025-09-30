@@ -1266,6 +1266,94 @@ def test_generate_draft_from_outline_compiles_sections(
     assert agent._llm_generation["sections"][1]["word_count"] > 0
 
 
+def test_generate_section_sequence_builds_coherent_sections(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _build_config(tmp_path, 200)
+
+    agent = WriterAgent(
+        topic="Kampagne planen",
+        word_count=200,
+        steps=[],
+        iterations=0,
+        config=config,
+        content="Rohideen zur Kampagne",
+        text_type="Artikel",
+        audience="Marketing-Team",
+        tone="aktiv",
+        register="Du",
+        variant="DE-AT",
+        constraints="Keine Preise nennen",
+        sources_allowed=True,
+        seo_keywords=["Innovation"],
+        include_outline_headings=True,
+    )
+
+    sections = [
+        OutlineSection(
+            number="1",
+            title="Einstieg",
+            role="Hook",
+            budget=100,
+            deliverable="Kontext schaffen.",
+            notes=[("Storypunkt", "Leser:innen kennenlernen."), ("", "Eine Frage öffnet."),],
+        ),
+        OutlineSection(
+            number="2",
+            title="Nutzen",
+            role="Argument",
+            budget=100,
+            deliverable="Vorteile belegen.",
+            notes=[("Storypunkt", "Belege machen Mehrwert greifbar."),],
+        ),
+    ]
+
+    responses = deque(
+        [
+            "## 1. Einstieg\n\nErster Abschnitt führt ein.\n\n## 2. Nutzen\n\nDieser Teil gehört zum nächsten Abschnitt.",
+            "## 2. Nutzen\n\nZweiter Abschnitt knüpft an den ersten an.",
+        ]
+    )
+
+    captured_prompts: list[str] = []
+
+    def fake_call_llm_stage(
+        self,
+        *,
+        stage: str,
+        prompt_type: str,
+        prompt: str,
+        system_prompt: str,
+        success_message: str,
+        failure_message: str,
+        data: Mapping[str, Any] | None = None,
+    ) -> str:
+        captured_prompts.append(prompt)
+        return responses.popleft()
+
+    monkeypatch.setattr(WriterAgent, "_call_llm_stage", fake_call_llm_stage)
+
+    outcome = agent._generate_section_sequence(
+        {"goal": "Überzeugen"}, sections, "- Ideenskizze"
+    )
+
+    assert outcome.success is True
+    assert len(outcome.sections) == 2
+    first_section = outcome.sections[0]
+    second_section = outcome.sections[1]
+    assert first_section.outline is sections[0]
+    assert "Erster Abschnitt" in first_section.text
+    assert "Zweiter Abschnitt" in second_section.text
+    assert first_section.prompt == captured_prompts[0]
+    assert second_section.prompt == captured_prompts[1]
+    assert "Noch kein Abschnitt verfasst." in captured_prompts[0]
+    assert "Vorheriger Abschnitt 'Einstieg'" in captured_prompts[1]
+
+    combined_text = agent._combine_section_texts(outcome.sections)
+    assert combined_text.startswith("## 1. Einstieg")
+    assert "Zweiter Abschnitt knüpft" in combined_text
+
+
 def test_clean_outline_sections_assigns_missing_budgets(tmp_path: Path) -> None:
     config = _build_config(tmp_path, 600)
     agent = WriterAgent(

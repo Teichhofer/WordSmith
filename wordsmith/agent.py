@@ -312,6 +312,26 @@ class OutlineSection:
         return "\n".join([header, *bullet_lines])
 
 
+@dataclass
+class GeneratedSection:
+    """Represents the cleaned text output for a single outline section."""
+
+    outline: OutlineSection
+    text: str
+    prompt: str
+
+
+@dataclass
+class SectionGenerationOutcome:
+    """Container for the result of generating all outline sections."""
+
+    success: bool
+    sections: list[GeneratedSection]
+    summaries: list[dict[str, Any]]
+    artifacts: list[str]
+    failed_section: OutlineSection | None = None
+
+
 class WriterAgentError(Exception):
     """Raised when the writer agent cannot complete its work."""
 
@@ -1445,10 +1465,85 @@ class WriterAgent:
             )
             return None
 
+        outcome = self._generate_section_sequence(briefing, sections, idea_text)
+        if not outcome.success:
+            failed = outcome.failed_section
+            self._llm_generation = {
+                "status": "failed",
+                "provider": self.config.llm_provider,
+                "model": self.config.llm_model,
+                "failed_section": (
+                    {"number": failed.number, "title": failed.title}
+                    if failed
+                    else None
+                ),
+            }
+            self._record_run_event(
+                "llm_generation",
+                (
+                    f"Abschnitt {failed.number} konnte nicht generiert werden."
+                    if failed
+                    else "Abschnittsgenerierung abgebrochen."
+                ),
+                status="warning",
+                data={
+                    "sections": len(outcome.sections),
+                    "failed_section": getattr(failed, "number", None),
+                    "failed_title": getattr(failed, "title", None),
+                },
+            )
+            return None
+
+        final_draft = self._combine_section_texts(outcome.sections)
+        if not final_draft:
+            self._llm_generation = {
+                "status": "failed",
+                "provider": self.config.llm_provider,
+                "model": self.config.llm_model,
+                "failed_section": None,
+            }
+            self._record_run_event(
+                "llm_generation",
+                "Abschnittsweise Generierung lieferte keinen Text.",
+                status="warning",
+                data={"sections": len(outcome.sections)},
+            )
+            return None
+
+        self._llm_generation = {
+            "status": "success",
+            "provider": self.config.llm_provider,
+            "model": self.config.llm_model,
+            "sections": outcome.summaries,
+            "response_preview": final_draft[:400],
+            "section_outputs": outcome.artifacts,
+            "combined_output": final_draft,
+            "combined_output_path": self._format_artifact_path(
+                self.output_dir / "current_text.txt"
+            ),
+        }
+        self.steps.append("llm_generation")
+        self._record_run_event(
+            "llm_generation",
+            "Abschnittsweise Generierung abgeschlossen",
+            status="info",
+            data={
+                "sections": len(outcome.sections),
+                "total_word_count": self._count_words(final_draft),
+            },
+        )
+        return final_draft
+
+    def _generate_section_sequence(
+        self,
+        briefing: Mapping[str, Any],
+        sections: Sequence[OutlineSection],
+        idea_text: str,
+    ) -> SectionGenerationOutcome:
         compiled_sections: List[tuple[OutlineSection, str]] = []
-        formatted_sections: List[str] = []
-        section_summaries: List[dict[str, Any]] = []
-        section_artifacts: List[str] = []
+        generated_sections: list[GeneratedSection] = []
+        summaries: list[dict[str, Any]] = []
+        artifacts: list[str] = []
 
         section_list = list(sections)
 
@@ -1477,30 +1572,18 @@ class WriterAgent:
                 data=section_data,
             )
             if section_text is None:
-                self._llm_generation = {
-                    "status": "failed",
-                    "provider": self.config.llm_provider,
-                    "model": self.config.llm_model,
-                    "failed_section": {
-                        "number": section.number,
-                        "title": section.title,
-                    },
-                }
-                self._record_run_event(
-                    "llm_generation",
-                    f"Abschnitt {section.number} konnte nicht generiert werden.",
-                    status="warning",
-                    data={
-                        "sections": len(compiled_sections),
-                        "failed_section": section.number,
-                        "failed_title": section.title,
-                    },
+                return SectionGenerationOutcome(
+                    success=False,
+                    sections=generated_sections,
+                    summaries=summaries,
+                    artifacts=artifacts,
+                    failed_section=section,
                 )
-                return None
 
             artifact_path = self._last_stage_output_path
             if artifact_path is not None:
-                section_artifacts.append(self._format_artifact_path(artifact_path))
+                artifacts.append(self._format_artifact_path(artifact_path))
+
             remaining_sections = section_list[index:]
             trimmed_section = self._truncate_following_sections(
                 section_text, remaining_sections
@@ -1512,11 +1595,10 @@ class WriterAgent:
                 )
 
             compiled_sections.append((section, cleaned_section))
-            formatted_output = self._format_section_output(section, cleaned_section)
-            if formatted_output:
-                formatted_sections.append(formatted_output)
-
-            section_summaries.append(
+            generated_sections.append(
+                GeneratedSection(outline=section, text=cleaned_section, prompt=prompt)
+            )
+            summaries.append(
                 {
                     "number": section.number,
                     "title": section.title,
@@ -1525,45 +1607,24 @@ class WriterAgent:
                 }
             )
 
-        final_draft = "\n\n".join(part for part in formatted_sections if part.strip()).strip()
-        if not final_draft:
-            self._llm_generation = {
-                "status": "failed",
-                "provider": self.config.llm_provider,
-                "model": self.config.llm_model,
-                "failed_section": None,
-            }
-            self._record_run_event(
-                "llm_generation",
-                "Abschnittsweise Generierung lieferte keinen Text.",
-                status="warning",
-                data={"sections": len(section_summaries)},
-            )
-            return None
-
-        self._llm_generation = {
-            "status": "success",
-            "provider": self.config.llm_provider,
-            "model": self.config.llm_model,
-            "sections": section_summaries,
-            "response_preview": final_draft[:400],
-            "section_outputs": section_artifacts,
-            "combined_output": final_draft,
-            "combined_output_path": self._format_artifact_path(
-                self.output_dir / "current_text.txt"
-            ),
-        }
-        self.steps.append("llm_generation")
-        self._record_run_event(
-            "llm_generation",
-            "Abschnittsweise Generierung abgeschlossen",
-            status="info",
-            data={
-                "sections": len(section_summaries),
-                "total_word_count": self._count_words(final_draft),
-            },
+        return SectionGenerationOutcome(
+            success=True,
+            sections=generated_sections,
+            summaries=summaries,
+            artifacts=artifacts,
         )
-        return final_draft
+
+    def _combine_section_texts(
+        self, generated_sections: Sequence[GeneratedSection]
+    ) -> str:
+        formatted_sections: list[str] = []
+        for generated in generated_sections:
+            formatted_output = self._format_section_output(
+                generated.outline, generated.text
+            )
+            if formatted_output:
+                formatted_sections.append(formatted_output)
+        return "\n\n".join(part for part in formatted_sections if part.strip()).strip()
 
     def _normalise_section_text(self, section: OutlineSection, text: str) -> str:
         cleaned = text.strip()
